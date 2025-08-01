@@ -30,6 +30,9 @@ importers:
       '@sveltejs/adapter-auto':
         specifier: ^6.0.0
         version: 6.0.1(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))
+      '@sveltejs/adapter-netlify':
+        specifier: ^5.1.0
+        version: 5.1.0(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))
       '@sveltejs/kit':
         specifier: ^2.22.0
         version: 2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0))
@@ -315,6 +318,9 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
+  '@iarna/toml@2.2.5':
+    resolution: {integrity: sha512-trnsAYxU3xnS1gPHPyU961coFyLkh4gAD/0zQ5mymY4yOZ+CYvsPqUbOFSw0aDM4y0tV7tiFxL/1XfXPNC6IPg==}
+
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
@@ -495,6 +501,11 @@ packages:
     resolution: {integrity: sha512-mcWud3pYGPWM2Pphdj8G9Qiq24nZ8L4LB7coCUckUEy5Y7wOWGJ/enaZ4AtJTcSm5dNK1rIkBRoqt+ae4zlxcQ==}
     peerDependencies:
       '@sveltejs/kit': ^2.0.0
+
+  '@sveltejs/adapter-netlify@5.1.0':
+    resolution: {integrity: sha512-Nj9rA9eluknNX5UftRFVLbsFSHsn2O2L+GNrQ5ivW+Xc6++1FyemK3eVEhkRArwCq+Zh8wqgxsWHRUWOLolHAA==}
+    peerDependencies:
+      '@sveltejs/kit': ^2.4.0
 
   '@sveltejs/kit@2.25.1':
     resolution: {integrity: sha512-8H+fxDEp7Xq6tLFdrGdS5fLu6ONDQQ9DgyjboXpChubuFdfH9QoFX09ypssBpyNkJNZFt9eW3yLmXIc9CesPCA==}
@@ -1769,6 +1780,8 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
+  '@iarna/toml@2.2.5': {}
+
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
@@ -1932,6 +1945,13 @@ snapshots:
   '@sveltejs/adapter-auto@6.0.1(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))':
     dependencies:
       '@sveltejs/kit': 2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0))
+
+  '@sveltejs/adapter-netlify@5.1.0(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))':
+    dependencies:
+      '@iarna/toml': 2.2.5
+      '@sveltejs/kit': 2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0))
+      esbuild: 0.25.6
+      set-cookie-parser: 2.7.1
 
   '@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0)))(svelte@5.36.8)(vite@7.0.5(@types/node@24.0.14)(jiti@1.21.7)(yaml@2.8.0))':
     dependencies:
