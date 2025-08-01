@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { invalidate } from '$app/navigation'
-
+  import "../app.css";
   export let data
 
   $: ({ supabase, session } = data)
@@ -17,12 +17,13 @@
   })
 </script>
 
-<nav>
+<nav class="bg-slate-800 text-slate-200 p-4 flex flex-row gap-8">
+  <h1 class="text-xl basis-3/4">Rock Party</h1>
   {#if session}
     <p>Welcome, {session.user.email}</p>
     <button on:click={() => supabase.auth.signOut()}>Sign Out</button>
   {:else}
-    <a href="/login">Sign In</a>
+    <a href="/login" class="font-bold basis-1/4 text-right">Sign In</a>
   {/if}
 </nav>
 
