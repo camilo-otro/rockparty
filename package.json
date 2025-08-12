@@ -42,6 +42,7 @@
 		]
 	},
 	"dependencies": {
+		"@lucide/svelte": "^0.539.0",
 		"@supabase/auth-ui-svelte": "^0.2.9",
 		"@supabase/supabase-js": "^2.52.0",
 		"date-fns": "^4.1.0",

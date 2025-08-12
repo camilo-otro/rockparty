@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { invalidate } from '$app/navigation'
+  import { User } from 'lucide-svelte';
   import "../app.css";
   export let data
 
@@ -22,6 +23,7 @@
   {#if session}
     <p>Welcome, {session.user.email}</p>
     <button on:click={() => supabase.auth.signOut()}>Sign Out</button>
+    <User />
   {:else}
     <a href="/login" class="font-bold basis-1/4 text-right">Sign In</a>
   {/if}
