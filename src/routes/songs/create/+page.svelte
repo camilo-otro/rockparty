@@ -6,6 +6,7 @@
     import { fetchSongTitles, fetchArtistNames } from '$lib/musicbrainz';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
+    import { page } from '$app/state';
     let submitting = false;
     export let form;
     let title = '';
@@ -15,9 +16,14 @@
     let titleTimeout: any = null;
     let artistTimeout: any = null;
     let userId: string | null = null;
+    let fromPerformance = false;
+    let partyId: string | null = null;
 
     onMount(() => {
         userId = get(user)?.id ?? null;
+        const params = page.url.searchParams;
+        fromPerformance = params.get('from') === 'performance';
+        partyId = params.get('partyId');
     });
 
     function onTitleInput(e: Event) {
@@ -55,6 +61,13 @@
         return async ({ update }) => {
           await update();
           submitting = false;
+          if (form?.success) {
+            if (fromPerformance && partyId) {
+              window.location.href = `/performance/create?partyId=${partyId}`;
+            } else {
+              window.location.href = '/songs';
+            }
+          }
         };
       }}>
     <input type="hidden" name="added_by" value={userId} />

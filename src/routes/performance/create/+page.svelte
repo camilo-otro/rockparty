@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
     import { enhance } from '$app/forms';
-    import { fade, fly } from 'svelte/transition';
+    import { fly } from 'svelte/transition';
     import { onMount } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
     import { page } from '$app/state';
@@ -30,8 +30,7 @@
     });
 </script>
 <div class="bg-slate-400 p-4 flex-row">
-    <h2>AGREGAR NUEVA PERFORMANCE {partyId}</h2>
-    <p>Currently at {page.params.length}</p>
+    <h2>AGREGAR NUEVA PERFORMANCE</h2>
     <a href="/parties" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
 {#if !form?.success && !form?.error}
@@ -41,6 +40,9 @@
         return async ({ update }) => {
           await update();
           submitting = false;
+          if (form?.success && partyId) {
+            window.location.href = `/parties/${partyId}`;
+          }
         };
       }}>
     <input type="hidden" name="party" value={partyId} />
@@ -68,6 +70,9 @@
         {submitting ? 'Creando...' : 'Crear Performance'}
     </button>
 </form>
+<p class="mt-6 text-center text-slate-700">
+  ¿No encuentras la canción en la lista? <a href="/songs/create?from=performance&partyId={partyId}" class="text-blue-600 underline">Agrega una nueva canción aquí</a>.
+</p>
 {/if}
 {#if form?.success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>

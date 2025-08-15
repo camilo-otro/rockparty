@@ -8,6 +8,8 @@
   let party: any = null;
   let venue: any = null;
   let performances: any[] = [];
+  let songs: any[] = [];
+  let users: any[] = [];
   let loading = true;
   let error: string | null = null;
   let loadingPerformances = true;
@@ -32,11 +34,27 @@
         errorPerformances = perfErr.message;
       } else {
         performances = perfData ?? [];
+        // Fetch all songs and users referenced in performances
+        const songIds = [...new Set(performances.map(p => p.song))];
+        const userIds = [...new Set(performances.map(p => p.suggested_by))];
+        const { data: songData } = await supabase.from('song').select('id, title').in('id', songIds);
+        const { data: userData } = await supabase.from('user').select('id, nickname').in('id', userIds);
+        songs = songData ?? [];
+        users = userData ?? [];
       }
       loadingPerformances = false;
     }
     loading = false;
   });
+
+  function getSongTitle(songId: number) {
+    const song = songs.find(s => s.id === songId);
+    return song ? song.title : 'Sin título';
+  }
+  function getUserNickname(userId: number) {
+    const user = users.find(u => u.id === userId);
+    return user ? user.nickname : 'Sin nombre';
+  }
 </script>
 
 <div class="max-w-xl mx-auto mt-8">
@@ -62,7 +80,7 @@
         <ul class="mb-4">
           {#each performances as perf}
             <li class="mb-2 p-2 bg-slate-200 rounded">
-              Canción ID: {perf.song} | Sugerido por: {perf.suggested_by} | Tonalidad: {perf.key}
+              Canción: {getSongTitle(perf.song)} | Sugerido por: {getUserNickname(perf.suggested_by)} | Tonalidad: {perf.key}
               {#if perf.ref_link}
                 | <a href={perf.ref_link} target="_blank" class="text-blue-600 underline">Referencia</a>
               {/if}
