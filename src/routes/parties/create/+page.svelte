@@ -14,7 +14,7 @@
     let userId: string | null = null;
 
     onMount(async () => {
-        userId = get(user)?.id;
+        userId = get(user)?.id ?? null;
         const { data, error } = await supabase.from('venue').select('id, name');
         if (error) {
             errorVenues = error.message;

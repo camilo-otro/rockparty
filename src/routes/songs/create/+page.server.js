@@ -1,12 +1,14 @@
 import { fail } from '@sveltejs/kit';
 import { supabase } from '$lib/supabaseClient.js';
+import { sanitizeFormData } from '$lib/sanitize.js';
 export const actions = {
   default: async ({ request }) => {
     const formData = await request.formData();
-    const title = formData.get('title');
-    const artist = formData.get('artist');
-    const key = formData.get('key');
-    const reflink = formData.get('reflink');
+    const sanitized = sanitizeFormData(formData);
+    const title = sanitized.title;
+    const artist = sanitized.artist;
+    const key = sanitized.key;
+    const reflink = sanitized.reflink;
     if (!title || !artist) {
       return fail(400, { error: 'Title and artist are required.', success: false });
     }

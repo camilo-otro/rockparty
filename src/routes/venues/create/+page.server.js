@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { supabase } from '$lib/supabaseClient.js';
+import { sanitizeFormData } from '$lib/sanitize.js';
 // This `actions` object is a special SvelteKit feature.
 // It contains functions that handle form submissions.
 export const actions = {
@@ -7,10 +8,11 @@ export const actions = {
   default: async ({ request }) => {
     // Get the form data from the incoming request.
     const formData = await request.formData();
-    const name = formData.get('name');
-    const address = formData.get('address');
-    const contactName = formData.get('contact_name');
-    const contactInfo = formData.get('contact');
+    const sanitized = sanitizeFormData(formData);
+    const name = sanitized.name;
+    const address = sanitized.address;
+    const contactName = sanitized.contact_name;
+    const contactInfo = sanitized.contact;
     // --- Basic Validation ---
     if (!name || !address || !contactName || !contactInfo) {
       return fail(400, { error: 'All fields are required.', success: false });

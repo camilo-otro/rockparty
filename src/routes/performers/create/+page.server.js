@@ -1,10 +1,12 @@
 import { fail } from '@sveltejs/kit';
 import { supabase } from '$lib/supabaseClient.js';
+import { sanitizeFormData } from '$lib/sanitize.js';
 export const actions = {
   default: async ({ request }) => {
     const formData = await request.formData();
-    const nickname = formData.get('nickname');
-    const role = formData.get('role');
+    const sanitized = sanitizeFormData(formData);
+    const nickname = sanitized.nickname;
+    const role = sanitized.role;
     if (!nickname || !role) {
       return fail(400, { error: 'All fields are required.', success: false });
     }

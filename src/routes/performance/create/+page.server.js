@@ -1,13 +1,15 @@
 import { fail } from '@sveltejs/kit';
 import { supabase } from '$lib/supabaseClient.js';
+import { sanitizeFormData } from '$lib/sanitize.js';
 export const actions = {
   default: async ({ request }) => {
     const formData = await request.formData();
-    const party = formData.get('party');
-    const song = formData.get('song');
-    const suggested_by = formData.get('suggested_by');
-    const ref_link = formData.get('ref_link');
-    const key = formData.get('key');
+    const sanitized = sanitizeFormData(formData);
+    const party = sanitized.party;
+    const song = sanitized.song;
+    const suggested_by = sanitized.suggested_by;
+    const ref_link = sanitized.ref_link;
+    const key = sanitized.key;
     if (!party || !song || !suggested_by) {
       return fail(400, { error: 'Party, song, and suggested_by are required.', success: false });
     }
