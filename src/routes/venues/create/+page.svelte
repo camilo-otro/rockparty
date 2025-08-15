@@ -7,7 +7,7 @@
 </script>
 <div class="bg-slate-400 p-4 flex-row">
     <h2>AGREGAR NUEVO LOCAL</h2>
-    <a href="/venues" class="text-lg text-bold text-slate-700">-<ArrowLeft/>-</a>
+    <a href="/venues" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
 {#if !form?.success && !form?.error}
 <form method="POST"
