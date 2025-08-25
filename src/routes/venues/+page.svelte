@@ -3,18 +3,27 @@
     import { supabase } from '$lib/supabaseClient';
 
     let venues: any[] = [];
+    let parties: any[] = [];
     let loading = true;
     let error: string | null = null;
 
     onMount(async () => {
-        const { data, error: err } = await supabase.from('venue').select('*');
-        if (err) {
-            error = err.message;
+        const { data: venueData, error: venueErr } = await supabase.from('venue').select('*');
+        const { data: partyData, error: partyErr } = await supabase.from('party').select('id, date, venue');
+        if (venueErr || partyErr) {
+            error = venueErr?.message ?? partyErr?.message ?? null;
         } else {
-            venues = data ?? [];
+            venues = venueData ?? [];
+            parties = partyData ?? [];
         }
         loading = false;
     });
+
+    function getUpcomingPartyCount(venueId: number) {
+        const now = new Date();
+        const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return parties.filter(p => p.venue === venueId && new Date(p.date) >= now && new Date(p.date) <= thirtyDays).length;
+    }
 </script>
 <div class="flex flex-col items-left gap-6">
     <section>
@@ -29,9 +38,14 @@
             <ul class="space-y-2">
                 {#each venues as venue}
                     <a href={`/venues/${venue.id}`} class="block">
-                        <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
-                            <div class="font-semibold">{venue.name}</div>
-                            <div class="text-sm text-slate-600">{venue.address}</div>
+                        <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition flex justify-between items-center">
+                            <div>
+                                <div class="font-semibold">{venue.name}</div>
+                                <div class="text-sm text-slate-600">{venue.address}</div>
+                            </div>
+                            <div class="text-right text-slate-700">
+                                {getUpcomingPartyCount(venue.id)} fiestas cercanas
+                            </div>
                         </li>
                     </a>
                 {/each}

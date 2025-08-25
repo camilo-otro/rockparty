@@ -18,10 +18,10 @@
   })
 </script>
 
-<nav class="bg-slate-800 text-slate-200 p-4 flex flex-row gap-8">
-  <h1 class="text-xl basis-3/4">Rock Party</h1>
+<nav class="bg-slate-800 text-slate-200 p-4 flex flex-row gap-4">
+  <a href="/" class="text-xl basis-3/4 font-bold">Rock Party</a>
   {#if session}
-    <p>Welcome, {session.user.email}</p>
+    <p>{session.user.email}</p>
     <button on:click={() => supabase.auth.signOut()}>Sign Out</button>
     <User />
   {:else}

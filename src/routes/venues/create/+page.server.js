@@ -1,11 +1,11 @@
 import { fail } from '@sveltejs/kit';
-import { supabase } from '$lib/supabaseClient.js';
+import { createAuthenticatedSupabaseClient } from '$lib/supabaseClient.js';
 import { sanitizeFormData } from '$lib/sanitize.js';
 // This `actions` object is a special SvelteKit feature.
 // It contains functions that handle form submissions.
 export const actions = {
   // The `default` action is used when the form doesn't specify a named action.
-  default: async ({ request }) => {
+  default: async ({ request, locals }) => {
     // Get the form data from the incoming request.
     const formData = await request.formData();
     const sanitized = sanitizeFormData(formData);
@@ -17,17 +17,12 @@ export const actions = {
     if (!name || !address || !contactName || !contactInfo) {
       return fail(400, { error: 'All fields are required.', success: false });
     }
-
-    // Prepare the data for your API endpoint.
-    const apiRequestBody = {
-        name: name.toString(),
-        address: address.toString(),
-        contactName: contactName.toString(),
-        contactInfo: contactInfo.toString()
-    };
-
-    console.log('Sending to external API:', apiRequestBody);
-
+    const supabase = locals.session ? 
+      createAuthenticatedSupabaseClient(locals.session.access_token) :
+      null;
+    if (!supabase) {
+      return fail(401, { error: 'Authentication required.', success: false });
+    }
     // --- API Call ---
     try {
         // Insert the venue into the "venues" table in Supabase
@@ -43,7 +38,7 @@ export const actions = {
         }
 
         // If the insertion is successful, return a success response.
-        return { success: true, message: 'Venue {name} created successfully', venue: { name, address, contactName, contactInfo } };
+        return { success: true, message: `Venue ${name} created successfully`, venue: { name, address, contactName, contactInfo } };
     } catch (e) {
       // Handle network errors or other exceptions.
       console.error('Network or other error:', e);

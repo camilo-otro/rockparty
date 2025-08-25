@@ -1,17 +1,19 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
-    import { enhance } from '$app/forms';
     import { fade, fly } from 'svelte/transition';
     import { onMount } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
-    export let form;
     let submitting = false;
     let venues: any[] = [];
     let loadingVenues = true;
     let errorVenues: string | null = null;
     let userId: string | null = null;
+    let date = '';
+    let selectedVenue = '';
+    let success = false;
+    let error = '';
 
     onMount(async () => {
         userId = get(user)?.id ?? null;
@@ -23,31 +25,53 @@
         }
         loadingVenues = false;
     });
+
+    async function handleSubmit() {
+        if (!date || !selectedVenue) {
+            error = 'All fields are required.';
+            return;
+        }
+        
+        submitting = true;
+        error = '';
+        
+        try {
+            const { data, error: dbError } = await supabase
+                .from('party')
+                .insert([{ date, venue: selectedVenue, suggested_by: userId }])
+                .select();
+                
+            if (dbError) {
+                error = `Database error: ${dbError.message}`;
+            } else {
+                success = true;
+                setTimeout(() => {
+                    window.location.href = '/parties';
+                }, 1000);
+            }
+        } catch (e) {
+            error = 'Could not connect to the server.';
+        }
+        
+        submitting = false;
+    }
 </script>
 <div class="bg-slate-400 p-4 flex-row">
     <h2>AGREGAR NUEVA FIESTA</h2>
     <a href="/parties" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
-{#if !form?.success && !form?.error}
-<form method="POST"
-      use:enhance={() => {
-        submitting = true;
-        return async ({ update }) => {
-          await update();
-          submitting = false;
-        };
-      }}>
-    <input type="hidden" name="suggested_by" value={userId} />
+{#if !success && !error}
+<form on:submit|preventDefault={handleSubmit}>
     <div class="flex flex-col w-3/4 p-5 mb-4">
         <label for="date" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Fecha</label>
-        <input id="date" type="date" name="date" required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
+        <input id="date" type="date" bind:value={date} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
         <label for="venue" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Venue</label>
         {#if loadingVenues}
           <div class="text-slate-600">Cargando venues...</div>
         {:else if errorVenues}
           <div class="text-red-600">Error: {errorVenues}</div>
         {:else}
-          <select id="venue" name="venue" required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }}>
+          <select id="venue" bind:value={selectedVenue} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }}>
             <option value="" disabled selected>Selecciona un venue</option>
             {#each venues as venue}
               <option value={venue.id}>{venue.name}</option>
@@ -60,13 +84,13 @@
     </button>
 </form>
 {/if}
-{#if form?.success}
+{#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
     Nueva Fiesta Creada!
     </div>
 {/if}
-{#if form?.error}
+{#if error}
     <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
-    Error: {form.error}
+    Error: {error}
     </div>
 {/if}

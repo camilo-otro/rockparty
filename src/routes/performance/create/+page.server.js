@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit';
-import { supabase } from '$lib/supabaseClient.js';
+import { createAuthenticatedSupabaseClient } from '$lib/supabaseClient.js';
 import { sanitizeFormData } from '$lib/sanitize.js';
 export const actions = {
-  default: async ({ request }) => {
+  default: async ({ request, locals }) => {
     const formData = await request.formData();
     const sanitized = sanitizeFormData(formData);
     const party = sanitized.party;
@@ -12,6 +12,12 @@ export const actions = {
     const key = sanitized.key;
     if (!party || !song || !suggested_by) {
       return fail(400, { error: 'Party, song, and suggested_by are required.', success: false });
+    }
+    const supabase = locals.session ? 
+      createAuthenticatedSupabaseClient(locals.session.access_token) :
+      null;
+    if (!supabase) {
+      return fail(401, { error: 'Authentication required.', success: false });
     }
     try {
       const { data, error: dbError } = await supabase

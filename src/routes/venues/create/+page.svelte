@@ -1,35 +1,63 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
-    import { enhance } from '$app/forms';
     import { fade, fly } from 'svelte/transition';
-    export let form;
     let submitting = false;
+    let name = '';
+    let address = '';
+    let contactName = '';
+    let contact = '';
+    let success = false;
+    let error = '';
+
+    async function handleSubmit() {
+        if (!name || !address || !contactName || !contact) {
+            error = 'Todos los campos son obligatorios.';
+            return;
+        }
+        
+        submitting = true;
+        error = '';
+        
+        try {
+            const { supabase } = await import('$lib/supabaseClient');
+            const { data, error: dbError } = await supabase
+                .from('venue')
+                .insert([{ name, address, contact_name: contactName, contact }])
+                .select();
+                
+            if (dbError) {
+                error = `Error de base de datos: ${dbError.message}`;
+            } else {
+                success = true;
+                setTimeout(() => {
+                    window.location.href = '/venues';
+                }, 1000);
+            }
+        } catch (e) {
+            error = 'No se pudo conectar con el servidor.';
+        }
+        
+        submitting = false;
+    }
 </script>
 <div class="bg-slate-400 p-4 flex-row">
     <h2>AGREGAR NUEVO LOCAL</h2>
     <a href="/venues" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
-{#if !form?.success && !form?.error}
-<form method="POST"
-      use:enhance={() => {
-        submitting = true;
-        return async ({ update }) => {
-          await update();
-          submitting = false;
-        };
-      }}>
+{#if !success && !error}
+<form on:submit|preventDefault={handleSubmit}>
     <div class="flex flex-col w-3/4 p-5 mb-4">
         <label for="name" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Nombre del Local</label>
-        <input id="name" type="text" name="name" required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
+        <input id="name" type="text" bind:value={name} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
     
         <label for="address" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Dirección</label>
-        <input id="address" type="text" name="address" class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }} />
+        <input id="address" type="text" bind:value={address} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }} />
     
         <label for="contact_name" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Persona de contacto</label>
-        <input id="contact_name" type="text" name="contact_name" required class="p-2 border rounded"  in:fly={{ y: -30, duration: 400, delay: 100 }} />
+        <input id="contact_name" type="text" bind:value={contactName} required class="p-2 border rounded"  in:fly={{ y: -30, duration: 400, delay: 100 }} />
 
         <label for="contact" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Info de contacto</label>
-        <input id="contact" type="text" name="contact" required class="p-2 border rounded" placeholder="telefono, correo, instagram" in:fly={{ y: -30, duration: 400, delay: 150 }}/>
+        <input id="contact" type="text" bind:value={contact} required class="p-2 border rounded" placeholder="telefono, correo, instagram" in:fly={{ y: -30, duration: 400, delay: 150 }}/>
     </div>
     
     <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
@@ -37,14 +65,13 @@
     </button>
 </form>
 {/if}
-{#if form?.success}
+{#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nuevo Local {form.venue?.name} Creado!
+    Nuevo Local Creado!
     </div>
 {/if}
-
-{#if form?.error}
+{#if error}
     <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
-    Error: {form.error}
+    Error: {error}
     </div>
 {/if}

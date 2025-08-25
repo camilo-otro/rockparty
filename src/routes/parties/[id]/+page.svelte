@@ -69,26 +69,30 @@
     <div class="p-6 bg-slate-100 rounded shadow">
       <h2 class="text-2xl font-bold mb-2">{party.date}</h2>
       <div class="mb-2 text-slate-700">Venue: {venue ? venue.name : 'Cargando...'}</div>
-      <h3 class="text-lg font-semibold mt-4 mb-2">Performances</h3>
+      <h3 class="text-lg font-semibold mt-4 mb-2">Setlist</h3>
       {#if loadingPerformances}
-        <div>Cargando performances...</div>
+        <div>Cargando Setlist...</div>
       {:else if errorPerformances}
         <div class="text-red-500">Error: {errorPerformances}</div>
       {:else if performances.length === 0}
-        <div>No hay performances para esta fiesta.</div>
+        <div>No hay canciones en el Setlist.</div>
       {:else}
-        <ul class="mb-4">
+        <ul class="mb-4 grid grid-cols-1 gap-4">
           {#each performances as perf}
-            <li class="mb-2 p-2 bg-slate-200 rounded">
-              Canción: {getSongTitle(perf.song)} | Sugerido por: {getUserNickname(perf.suggested_by)} | Tonalidad: {perf.key}
+            <li class="bg-white rounded shadow p-4">
+              <h4 class="text-xl font-bold mb-1">{getSongTitle(perf.song)}</h4>
+              <div class="text-xs text-slate-500 mb-2">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
+              {#if perf.key}
+                <div class="mb-1">Tonalidad: {perf.key}</div>
+              {/if}
               {#if perf.ref_link}
-                | <a href={perf.ref_link} target="_blank" class="text-blue-600 underline">Referencia</a>
+                <div><a href={perf.ref_link} target="_blank" class="text-blue-600 underline">Referencia</a></div>
               {/if}
             </li>
           {/each}
         </ul>
       {/if}
-      <a href={`/performance/create?partyId=${party.id}`} class="bg-slate-700 text-slate-200 rounded p-2 px-4 inline-block mt-2">Sugerir performance</a>
+      <a href={`/performance/create?partyId=${party.id}`} class="bg-slate-700 text-slate-200 rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
       <a href="/parties" class="text-blue-600 hover:underline block mt-4">&larr; Volver a la lista</a>
     </div>
   {/if}
