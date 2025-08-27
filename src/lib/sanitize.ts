@@ -1,5 +1,5 @@
 // Basic string sanitization to prevent code injection and SQL injection
-export function sanitizeString(input: any): string {
+export function sanitizeString(input: string): string {
   if (typeof input !== 'string') {
     return '';
   }
@@ -22,7 +22,12 @@ export function sanitizeFormData(formData: FormData): { [key: string]: string } 
   const sanitized: { [key: string]: string } = {};
   
   for (const [key, value] of formData.entries()) {
-    sanitized[key] = sanitizeString(value);
+    if (typeof value === 'string') {
+      sanitized[key] = sanitizeString(value);
+    } else {
+      // If value is a File, you may want to handle it differently or skip
+      sanitized[key] = '';
+    }
   }
   
   return sanitized;

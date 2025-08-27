@@ -1,9 +1,9 @@
 export type UserRecord = {
   id?: string;
   email: string;
-  role?: any;
-  nickname?: any;
-  auth_id: any;
+  role?: string;
+  nickname?: string;
+  auth_id: string;
 };
 
 import { writable } from 'svelte/store';

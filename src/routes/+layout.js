@@ -2,7 +2,7 @@ import { supabase } from '$lib/supabaseClient';
 import { user as userStore } from '$lib/stores/user';
 import { redirect } from '@sveltejs/kit';
 
-export const load = async ({ fetch, data, depends, url }) => {
+export const load = async ({ depends, url }) => {
   depends('supabase:auth');
   const { data: { session } } = await supabase.auth.getSession();
   let userRecord = null;
