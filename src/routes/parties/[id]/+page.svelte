@@ -80,14 +80,13 @@
         <ul class="mb-4 grid grid-cols-1 gap-4">
           {#each performances as perf}
             <li class="bg-white rounded shadow p-4">
-              <h4 class="text-xl font-bold mb-1">{getSongTitle(perf.song)}</h4>
-              <div class="text-xs text-slate-500 mb-2">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
-              {#if perf.key}
-                <div class="mb-1">Tonalidad: {perf.key}</div>
-              {/if}
-              {#if perf.ref_link}
-                <div><a href={perf.ref_link} target="_blank" class="text-blue-600 underline">Referencia</a></div>
-              {/if}
+              <a href={`/performance/${perf.id}`} class="block">
+                <h4 class="text-xl font-bold mb-1">{getSongTitle(perf.song)}</h4>
+                <div class="text-xs text-slate-500 mb-2">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
+                {#if perf.key}
+                  <div class="mb-1">Tonalidad: {perf.key}</div>
+                {/if}
+              </a>
             </li>
           {/each}
         </ul>

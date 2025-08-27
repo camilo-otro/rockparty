@@ -27,7 +27,7 @@
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('user')
-                .insert([{ nickname, auth_id: authId, email }])
+                .insert([{ nickname, auth_id: authId }])
                 .select();
                 
             if (dbError) {
