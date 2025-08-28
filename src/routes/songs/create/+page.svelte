@@ -21,9 +21,13 @@
     let partyId: string | null = null;
     let success = false;
     let error = '';
+    let isAuthenticated = false;
+    let titleInput = '';
+    let artistInput = '';
 
     onMount(() => {
         userId = get(user)?.id ?? null;
+        isAuthenticated = !!userId;
         const params = get(page).url.searchParams;
         fromPerformance = params.get('from') === 'performance';
         partyId = params.get('partyId');
@@ -91,45 +95,47 @@
     <h2>AGREGAR NUEVA CANCIÓN</h2>
     <a href="/songs" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
-{#if !success && !error}
-<form on:submit|preventDefault={handleSubmit}>
-    <input type="hidden" name="added_by" value={userId} />
-    <div class="flex flex-col w-3/4 p-5 mb-4">
-        <label for="title" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Título</label>
-        <input id="title" type="text" name="title" required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} value={title} on:input={onTitleInput} autocomplete="off" />
-        {#if titleSuggestions.length > 0}
-          <ul class="bg-white border rounded shadow p-2 mt-1">
-            {#each titleSuggestions as suggestion}
-              <li class="cursor-pointer hover:bg-slate-200 p-1" on:click={() => { title = suggestion; titleSuggestions = []; }}>{suggestion}</li>
-            {/each}
-          </ul>
-        {/if}
-        <label for="artist" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Artista</label>
-        <input id="artist" type="text" name="artist" required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }} value={artist} on:input={onArtistInput} autocomplete="off" />
-        {#if artistSuggestions.length > 0}
-          <ul class="bg-white border rounded shadow p-2 mt-1">
-            {#each artistSuggestions as suggestion}
-              <li class="cursor-pointer hover:bg-slate-200 p-1" on:click={() => { artist = suggestion; artistSuggestions = []; }}>{suggestion}</li>
-            {/each}
-          </ul>
-        {/if}
-        <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Tonalidad</label>
-        <input id="key" type="text" name="key" bind:value={key} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 100 }} />
-        <label for="reflink" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Referencia</label>
-        <input id="reflink" type="text" name="reflink" bind:value={reflink} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 150 }} />
-    </div>
-    <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
-        {submitting ? 'Creando...' : 'Crear Canción'}
-    </button>
-</form>
-{/if}
-{#if success}
+{#if !isAuthenticated}
+  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
+    Debes <a href="/login" class="text-blue-600 underline">iniciar sesión</a> para crear una canción.
+  </div>
+{:else}
+  {#if !success && !error}
+    <form on:submit|preventDefault={handleSubmit}>
+        <input type="hidden" name="added_by" value={userId} />
+        <div class="flex flex-col w-3/4 p-5 mb-4">
+            <label for="title" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Título</label>
+            <input id="title" list="title-list" bind:value={titleInput} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} on:input={onTitleInput} autocomplete="off" />
+            <datalist id="title-list">
+              {#each titleSuggestions as suggestion}
+                <option value={suggestion} />
+              {/each}
+            </datalist>
+            <label for="artist" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Artista</label>
+            <input id="artist" list="artist-list" bind:value={artistInput} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }} on:input={onArtistInput} autocomplete="off" />
+            <datalist id="artist-list">
+              {#each artistSuggestions as suggestion}
+                <option value={suggestion} />
+              {/each}
+            </datalist>
+            <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Tonalidad</label>
+            <input id="key" type="text" name="key" bind:value={key} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 100 }} />
+            <label for="reflink" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Referencia</label>
+            <input id="reflink" type="text" name="reflink" bind:value={reflink} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 150 }} />
+        </div>
+        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
+            {submitting ? 'Creando...' : 'Crear Canción'}
+        </button>
+    </form>
+  {/if}
+  {#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
     Nueva Canción Creada!
     </div>
-{/if}
-{#if error}
+  {/if}
+  {#if error}
     <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
     Error: {error}
     </div>
+  {/if}
 {/if}

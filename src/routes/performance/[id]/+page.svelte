@@ -94,7 +94,7 @@
 
 <div class="max-w-xl mx-auto mt-8">
   <div class="mb-4">
-    <a href="/parties" class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
+    <a href={performance?.party ? `/parties/${performance.party}` : '/parties'} class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
   </div>
   {#if loading}
     <div>Cargando...</div>
@@ -133,8 +133,9 @@
           <li class="text-slate-500">Nadie se ha anotado aún.</li>
         {/if}
       </ul>
-      <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={openModal}>Anotarse para tocar</button>
-      <a href="/parties" class="text-blue-600 hover:underline">&larr; Volver a la lista</a>
+      <div class="w-full flex justify-center">
+        <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
+      </div>
     </div>
   {/if}
 </div>

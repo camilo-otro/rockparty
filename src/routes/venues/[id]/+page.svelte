@@ -8,6 +8,7 @@
   let parties: any[] = [];
   let loading = true;
   let error: string | null = null;
+  let activeTab = 'upcoming';
 
   onMount(async () => {
     const id = get(page).params.id;
@@ -42,28 +43,40 @@
       <h2 class="text-2xl font-bold mb-2">{venue.name}</h2>
       <div class="mb-2 text-slate-700">Dirección: {venue.address}</div>
       <div class="mb-2 text-slate-700">Contacto: {venue.contact_name} ({venue.contact})</div>
-      <h3 class="text-lg font-semibold mt-6 mb-2">Próximas fiestas</h3>
-      <ul class="mb-4">
-        {#each getUpcomingParties() as party}
-          <li class="mb-2 p-2 bg-green-100 rounded">
-            <a href={`/parties/${party.id}`} class="text-blue-700 underline">{party.date}</a>
-          </li>
-        {/each}
+      <h3 class="text-lg font-semibold mt-6 mb-2">Fiestas en este local</h3>
+      <div class="flex gap-4 mb-4">
+        <button class="px-4 py-2 rounded border-b-2" class:font-bold={activeTab === 'upcoming'} class:border-slate-700={activeTab === 'upcoming'} on:click={() => activeTab = 'upcoming'}>Próximas fiestas</button>
+        <button class="px-4 py-2 rounded border-b-2" class:font-bold={activeTab === 'past'} class:border-slate-700={activeTab === 'past'} on:click={() => activeTab = 'past'}>Fiestas pasadas</button>
+      </div>
+      {#if activeTab === 'upcoming'}
         {#if getUpcomingParties().length === 0}
-          <li class="text-slate-500">No hay próximas fiestas.</li>
+          <div>No hay próximas fiestas registradas.</div>
+        {:else}
+          <ul class="space-y-2">
+            {#each getUpcomingParties() as party}
+              <a href={`/parties/${party.id}`} class="block">
+                <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
+                  <div class="font-semibold">{party.date}</div>
+                </li>
+              </a>
+            {/each}
+          </ul>
         {/if}
-      </ul>
-      <h3 class="text-lg font-semibold mt-6 mb-2">Fiestas pasadas</h3>
-      <ul class="mb-4">
-        {#each getPastParties() as party}
-          <li class="mb-2 p-2 bg-gray-100 rounded">
-            <a href={`/parties/${party.id}`} class="text-blue-700 underline">{party.date}</a>
-          </li>
-        {/each}
+      {:else if activeTab === 'past'}
         {#if getPastParties().length === 0}
-          <li class="text-slate-500">No hay fiestas pasadas.</li>
+          <div>No hay fiestas pasadas registradas.</div>
+        {:else}
+          <ul class="space-y-2">
+            {#each getPastParties() as party}
+              <a href={`/parties/${party.id}`} class="block">
+                <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
+                  <div class="font-semibold">{party.date}</div>
+                </li>
+              </a>
+            {/each}
+          </ul>
         {/if}
-      </ul>
+      {/if}
       <a href="/venues" class="text-blue-600 hover:underline">&larr; Volver a la lista</a>
     </div>
   {/if}

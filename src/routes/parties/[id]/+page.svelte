@@ -23,7 +23,7 @@
     } else {
       party = data;
       if (party?.venue) {
-        const { data: venueData, error: venueErr } = await supabase.from('venue').select('name').eq('id', party.venue).single();
+        const { data: venueData, error: venueErr } = await supabase.from('venue').select('name, address').eq('id', party.venue).single();
         if (!venueErr) {
           venue = venueData;
         }
@@ -57,18 +57,20 @@
   }
 </script>
 
-<div class="max-w-xl mx-auto mt-8">
-  <div class="mb-4">
-    <a href="/parties" class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
+<div class="max-w-xl mx-auto mt-2">
+  <div class="flex flex-row items-center">
+    <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
   </div>
   {#if loading}
     <div>Cargando...</div>
   {:else if error}
     <div class="text-red-500">Error: {error}</div>
   {:else if party}
-    <div class="p-6 bg-slate-100 rounded shadow">
-      <h2 class="text-2xl font-bold mb-2">{party.date}</h2>
-      <div class="mb-2 text-slate-700">Venue: {venue ? venue.name : 'Cargando...'}</div>
+    <div class="px-6 p-2 bg-slate-100 rounded shadow">
+      <h2 class="text-2xl font-bold mb-2">{party.title}</h2>
+      <div class="mb-2 text-slate-700">{party.description}</div>
+      <div class="mb-2 text-slate-700">Fecha: {party.date}</div>
+      <div class="mb-2 text-slate-700">Lugar: {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
       <h3 class="text-lg font-semibold mt-4 mb-2">Setlist</h3>
       {#if loadingPerformances}
         <div>Cargando Setlist...</div>
@@ -77,12 +79,12 @@
       {:else if performances.length === 0}
         <div>No hay canciones en el Setlist.</div>
       {:else}
-        <ul class="mb-4 grid grid-cols-1 gap-4">
+        <ul class="mb-4 grid grid-cols-1 gap-2">
           {#each performances as perf}
-            <li class="bg-white rounded shadow p-4">
+            <li class="bg-white rounded shadow px-4 p-2">
               <a href={`/performance/${perf.id}`} class="block">
-                <h4 class="text-xl font-bold mb-1">{getSongTitle(perf.song)}</h4>
-                <div class="text-xs text-slate-500 mb-2">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
+                <h4 class="text-lg font-semibold mb-1">{getSongTitle(perf.song)}</h4>
+                <div class="text-xs text-slate-500 mb-1">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
                 {#if perf.key}
                   <div class="mb-1">Tonalidad: {perf.key}</div>
                 {/if}
@@ -92,7 +94,9 @@
         </ul>
       {/if}
       <a href={`/performance/create?partyId=${party.id}`} class="bg-slate-700 text-slate-200 rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
-      <a href="/parties" class="text-blue-600 hover:underline block mt-4">&larr; Volver a la lista</a>
+    </div>
+    <div class="flex flex-row items-center">
+      <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
     </div>
   {/if}
 </div>

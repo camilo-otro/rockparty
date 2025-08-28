@@ -22,7 +22,7 @@
         <a href="/" class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
     </div>
     <section>
-        <h2 class="text-lg font-bold mb-2">Canciones</h2>
+        <h2 class="text-lg font-bold mb-2 px-4 p-3">Canciones</h2>
         {#if loading}
             <div>Cargando...</div>
         {:else if error}
@@ -42,5 +42,7 @@
             </ul>
         {/if}
     </section>
-    <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-1/3 p-6 rounded" href="/songs/create">Agregar una canción</a>
+    <div class="flex justify-center">
+        <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-6 rounded" href="/songs/create">Agregar una canción</a>
+    </div>
 </div>

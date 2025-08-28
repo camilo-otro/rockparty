@@ -35,12 +35,12 @@
         return parties.filter(p => new Date(p.date) < now).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
 </script>
-<div class="flex flex-col items-left gap-6">
-    <div class="mb-4">
-        <a href="/" class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
+<div class="flex flex-col items-left">
+    <div class="flex flex-row items-center">
+        <a href="/" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
     </div>
     <section>
-        <h2 class="text-lg font-bold mb-2">Rock Parties</h2>
+        <h2 class="text-lg font-bold mb-2 px-4 p-3">Rock Parties</h2>
         <div class="flex gap-4 mb-4">
             <button class="px-4 py-2 rounded border-b-2" class:font-bold={activeTab === 'upcoming'} class:border-slate-700={activeTab === 'upcoming'} on:click={() => activeTab = 'upcoming'}>Próximas fiestas</button>
             <button class="px-4 py-2 rounded border-b-2" class:font-bold={activeTab === 'past'} class:border-slate-700={activeTab === 'past'} on:click={() => activeTab = 'past'}>Fiestas pasadas</button>
@@ -57,7 +57,8 @@
                     {#each getUpcomingParties() as party}
                         <a href={`/parties/${party.id}`} class="block">
                             <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
-                                <div class="font-semibold">{party.date}</div>
+                                <div class="font-semibold">{party.title}</div>
+                                <div class="text-sm text-slate-600">{party.date}</div>
                                 <div class="text-sm text-slate-600">{getVenueName(party.venue)}</div>
                             </li>
                         </a>
@@ -72,7 +73,9 @@
                     {#each getPastParties() as party}
                         <a href={`/parties/${party.id}`} class="block">
                             <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
-                                <div class="font-semibold">{party.date}</div>
+                                <div class="font-semibold">{party.title}</div>
+                                <div class="text-sm text-slate-600">{party.description}</div>
+                                <div class="text-sm text-slate-600">{party.date}</div>
                                 <div class="text-sm text-slate-600">{getVenueName(party.venue)}</div>
                             </li>
                         </a>
@@ -81,5 +84,7 @@
             {/if}
         {/if}
     </section>
-    <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-1/3 p-6 rounded" href="/parties/create">Agregar una fiesta</a>
+    <div class="flex justify-center p-4">
+      <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-4 rounded" href="/parties/create">Organizar Fiesta</a>
+    </div>
 </div>
