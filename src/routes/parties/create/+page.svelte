@@ -59,6 +59,12 @@
         
         submitting = false;
     }
+
+    function loginWithGoogle() {
+      import('$lib/supabaseClient').then(({ supabase }) => {
+        supabase.auth.signInWithOAuth({ provider: 'google' });
+      });
+    }
 </script>
 <div class="bg-slate-400 p-4 flex-row">
     <h2>AGREGAR NUEVA FIESTA</h2>
@@ -66,7 +72,7 @@
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
-    Debes <a href="/login" class="text-blue-600 underline">iniciar sesión</a> para crear una fiesta.
+    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una fiesta.
   </div>
 {:else}
   {#if !success && !error}

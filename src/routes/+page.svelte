@@ -38,7 +38,7 @@
   }
 </script>
 
-<p class="bg-slate-200 p-2 px-4">Plan your next Rock Party!</p>
+<p class="bg-slate-200 p-2 px-4">Planea tu proxima Rock Party!</p>
 <div class="max-w-2xl mx-auto mt-8 flex flex-col gap-8">
   <section>
     <h2 class="text-xl font-bold m-4 mb-4">Próximas fiestas</h2>

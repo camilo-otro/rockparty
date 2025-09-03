@@ -3,7 +3,8 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft } from 'lucide-svelte';
+  import { ArrowLeft, GripHorizontal } from 'lucide-svelte';
+  import { user } from '$lib/stores/user';
 
   let party: any = null;
   let venue: any = null;
@@ -14,8 +15,67 @@
   let error: string | null = null;
   let loadingPerformances = true;
   let errorPerformances: string | null = null;
+  let draggedIndex: number | null = null;
+  let dragOverIndex: number | null = null;
+  let currentUserId: string | null = null;
+
+  function handleDragStart(e: DragEvent, index: number) {
+    draggedIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', '');
+    }
+  }
+
+  function handleDragOver(e: DragEvent, index: number) {
+    e.preventDefault();
+    dragOverIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  function handleDragLeave() {
+    dragOverIndex = null;
+  }
+
+  function handleDrop(e: DragEvent, dropIndex: number) {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      draggedIndex = null;
+      dragOverIndex = null;
+      return;
+    }
+
+    // Reorder the performances array
+    const newPerformances = [...performances];
+    const draggedItem = newPerformances[draggedIndex];
+    newPerformances.splice(draggedIndex, 1);
+    newPerformances.splice(dropIndex, 0, draggedItem);
+    
+    performances = newPerformances;
+
+    // Update order in database
+    updatePerformanceOrder();
+
+    draggedIndex = null;
+    dragOverIndex = null;
+  }
+
+  async function updatePerformanceOrder(performanceList = performances) {
+    for (let i = 0; i < performanceList.length; i++) {
+      if (performanceList[i].order !== i) {
+        performanceList[i].order = i;
+        await supabase
+          .from('performance')
+          .update({ order: i })
+          .eq('id', performanceList[i].id);
+      }
+    }
+  }
 
   onMount(async () => {
+    currentUserId = get(user)?.id ?? null;
     const id = get(page).params.id;
     const { data, error: err } = await supabase.from('party').select('*').eq('id', id).single();
     if (err) {
@@ -29,11 +89,26 @@
         }
       }
       // Fetch performances for this party
-      const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key').eq('party', id);
+      const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', id);
       if (perfErr) {
         errorPerformances = perfErr.message;
       } else {
-        performances = perfData ?? [];
+        let performanceList = perfData ?? [];
+        
+        // Check if any performance has a null or undefined order
+        const hasNullOrder = performanceList.some(perf => perf.order === null || perf.order === undefined);
+        
+        if (hasNullOrder) {
+          // Assign initial order values
+          performanceList.forEach((perf, index) => {
+            perf.order = index;
+          });
+          // Update database with initial order
+          await updatePerformanceOrder(performanceList);
+        }
+        
+        // Sort by order after assigning values
+        performances = performanceList.sort((a, b) => (a.order || 0) - (b.order || 0));
         // Fetch all songs and users referenced in performances
         const songIds = [...new Set(performances.map(p => p.song))];
         const userIds = [...new Set(performances.map(p => p.suggested_by))];
@@ -80,14 +155,29 @@
         <div>No hay canciones en el Setlist.</div>
       {:else}
         <ul class="mb-4 grid grid-cols-1 gap-2">
-          {#each performances as perf}
-            <li class="bg-white rounded shadow px-4 p-2">
+          {#each performances as perf, index}
+            <li 
+              class="bg-white rounded shadow px-4 p-2 transition-all duration-200 {dragOverIndex === index ? 'border-2 border-blue-400 bg-blue-50' : ''} {draggedIndex === index ? 'opacity-50' : ''} {party?.created_by === currentUserId ? 'cursor-move' : ''}"
+              draggable={party?.created_by === currentUserId}
+              on:dragstart={party?.created_by === currentUserId ? (e) => handleDragStart(e, index) : undefined}
+              on:dragover={party?.created_by === currentUserId ? (e) => handleDragOver(e, index) : undefined}
+              on:dragleave={party?.created_by === currentUserId ? handleDragLeave : undefined}
+              on:drop={party?.created_by === currentUserId ? (e) => handleDrop(e, index) : undefined}
+            >
               <a href={`/performance/${perf.id}`} class="block">
-                <h4 class="text-lg font-semibold mb-1">{getSongTitle(perf.song)}</h4>
-                <div class="text-xs text-slate-500 mb-1">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
-                {#if perf.key}
-                  <div class="mb-1">Tonalidad: {perf.key}</div>
-                {/if}
+                <div class="flex items-center gap-2">
+                  <span class="text-gray-400 text-sm font-mono">{index + 1}.</span>
+                  <div class="flex-1">
+                    <h4 class="text-md font-semibold mb-1">{getSongTitle(perf.song)}</h4>
+                    <div class="text-xs text-slate-500 mb-1">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
+                    {#if perf.key}
+                      <div class="mb-1">Tonalidad: {perf.key}</div>
+                    {/if}
+                  </div>
+                  {#if party?.created_by === currentUserId}
+                    <GripHorizontal class="text-gray-400" />
+                  {/if}
+                </div>
               </a>
             </li>
           {/each}

@@ -7,6 +7,7 @@
     import { get } from 'svelte/store';
     import { page } from '$app/stores';
     import { supabase } from '$lib/supabaseClient';
+    import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
     let submitting = false;
     let title = '';
     let artist = '';
@@ -22,8 +23,6 @@
     let success = false;
     let error = '';
     let isAuthenticated = false;
-    let titleInput = '';
-    let artistInput = '';
 
     onMount(() => {
         userId = get(user)?.id ?? null;
@@ -67,8 +66,8 @@
         submitting = false;
     }
 
-    function onTitleInput(e: Event) {
-        title = (e.target as HTMLInputElement).value;
+    function onTitleInput(value: string) {
+        title = value;
         if (titleTimeout) clearTimeout(titleTimeout);
         if (title.length >= 4) {
             titleTimeout = setTimeout(async () => {
@@ -79,8 +78,8 @@
         }
     }
 
-    function onArtistInput(e: Event) {
-        artist = (e.target as HTMLInputElement).value;
+    function onArtistInput(value: string) {
+        artist = value;
         if (artistTimeout) clearTimeout(artistTimeout);
         if (artist.length >= 4) {
             artistTimeout = setTimeout(async () => {
@@ -90,6 +89,12 @@
             artistSuggestions = [];
         }
     }
+
+    function loginWithGoogle() {
+      import('$lib/supabaseClient').then(({ supabase }) => {
+        supabase.auth.signInWithOAuth({ provider: 'google' });
+      });
+    }
 </script>
 <div class="bg-slate-400 p-4 flex-row">
     <h2>AGREGAR NUEVA CANCIÓN</h2>
@@ -97,7 +102,7 @@
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
-    Debes <a href="/login" class="text-blue-600 underline">iniciar sesión</a> para crear una canción.
+    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una canción.
   </div>
 {:else}
   {#if !success && !error}
@@ -105,19 +110,23 @@
         <input type="hidden" name="added_by" value={userId} />
         <div class="flex flex-col w-3/4 p-5 mb-4">
             <label for="title" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Título</label>
-            <input id="title" list="title-list" bind:value={titleInput} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} on:input={onTitleInput} autocomplete="off" />
-            <datalist id="title-list">
-              {#each titleSuggestions as suggestion}
-                <option value={suggestion} />
-              {/each}
-            </datalist>
+            <AutocompleteInput 
+              id="title" 
+              bind:value={title} 
+              suggestions={titleSuggestions}
+              onInput={onTitleInput}
+              placeholder="Título de la canción"
+              required
+            />
             <label for="artist" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Artista</label>
-            <input id="artist" list="artist-list" bind:value={artistInput} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }} on:input={onArtistInput} autocomplete="off" />
-            <datalist id="artist-list">
-              {#each artistSuggestions as suggestion}
-                <option value={suggestion} />
-              {/each}
-            </datalist>
+            <AutocompleteInput 
+              id="artist" 
+              bind:value={artist} 
+              suggestions={artistSuggestions}
+              onInput={onArtistInput}
+              placeholder="Nombre del artista"
+              required
+            />
             <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Tonalidad</label>
             <input id="key" type="text" name="key" bind:value={key} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 100 }} />
             <label for="reflink" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Referencia</label>

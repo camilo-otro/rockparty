@@ -6,6 +6,7 @@
     import { page } from '$app/stores';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
+    import SongSelect from '$lib/components/SongSelect.svelte';
     let submitting = false;
     let songs: any[] = [];
     let loadingSongs = true;
@@ -25,7 +26,7 @@
         userId = get(user)?.id ?? null;
         isAuthenticated = !!userId;
         partyId = get(page).url.searchParams.get('partyId') ?? null;
-        const { data, error } = await supabase.from('song').select('id, title');
+        const { data, error } = await supabase.from('song').select('id, title, artist');
         if (error) {
             errorSongs = error.message;
         } else {
@@ -69,37 +70,32 @@
         
         submitting = false;
     }
+
+    function loginWithGoogle() {
+      import('$lib/supabaseClient').then(({ supabase }) => {
+        supabase.auth.signInWithOAuth({ provider: 'google' });
+      });
+    }
 </script>
 <div class="bg-slate-400 p-4 flex-row">
     <h2>AGREGAR NUEVA PERFORMANCE</h2>
-    <a href="/parties" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
+    <a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
-    Debes <a href="/login" class="text-blue-600 underline">iniciar sesión</a> para crear una performance.
+    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una performance.
   </div>
 {:else}
   {#if !success && !error}
     <form on:submit|preventDefault={handleSubmit}>
         <div class="flex flex-col w-3/4 p-5 mb-4">
             <label for="song" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Canción</label>
-            <input id="song" list="song-list" bind:value={songSearch} required class="p-2 border rounded {songError ? 'border-red-500' : ''}" in:fly={{ y: -30, duration: 400, delay: 50 }}
-              on:change={() => {
-                const found = songs.find(s => s.title === songSearch);
-                selectedSong = found ? found.id : '';
-                songError = found ? '' : 'La canción aún no ha sido agregada a la app.';
-              }}
-              on:blur={() => {
-                const found = songs.find(s => s.title === songSearch);
-                selectedSong = found ? found.id : '';
-                songError = found ? '' : 'La canción aún no ha sido agregada a la app.';
-              }}
+            <SongSelect 
+              {songs} 
+              bind:value={songSearch} 
+              bind:selectedSongId={selectedSong} 
+              bind:error={songError} 
             />
-            <datalist id="song-list">
-              {#each songs as song}
-                <option value={song.title} />
-              {/each}
-            </datalist>
             {#if songError}
               <div class="text-red-600 text-sm mt-1">{songError}</div>
             {/if}
