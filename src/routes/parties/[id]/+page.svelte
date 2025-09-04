@@ -68,7 +68,7 @@
 
   // Async functions
   async function updatePerformanceOrder(performanceList = performances, draggableList: HTMLCollection) {
-    if(draggableList.length>0){
+    if(draggableList && draggableList.length>0){
       for(let i = 0; i<draggableList.length; i++){
         const id = Number(draggableList[i].getAttribute('data-id'));
         const perf = performanceList.find(p => p.id === id);
