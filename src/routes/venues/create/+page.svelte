@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
     import { fly } from 'svelte/transition';
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
 
@@ -14,10 +14,17 @@
     let error = '';
     let userId: string | null = null;
     let isAuthenticated = false;
+    let unsubscribeUser: () => void;
 
     onMount(async () => {
-        userId = get(user)?.id ?? null;
-        isAuthenticated = !!userId;
+        unsubscribeUser = user.subscribe(u => {
+            isAuthenticated = !!u?.id;
+            userId = u?.id ?? null;
+        });
+    });
+
+    onDestroy(() => {
+        if (unsubscribeUser) unsubscribeUser();
     });
 
     async function handleSubmit() {
@@ -52,9 +59,12 @@
     }
 
     function loginWithGoogle() {
-        import('$lib/supabaseClient').then(({ supabase }) => {
-            supabase.auth.signInWithOAuth({ provider: 'google' });
+      import('$lib/supabaseClient').then(({ supabase }) => {
+        supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.href }
         });
+      });
     }
 </script>
 <div class="bg-slate-400 p-4 flex-row">

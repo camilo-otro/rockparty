@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
     import { fade, fly } from 'svelte/transition';
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { fetchSongTitles, fetchArtistNames } from '$lib/musicbrainz';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
@@ -23,13 +23,20 @@
     let success = false;
     let error = '';
     let isAuthenticated = false;
+    let unsubscribeUser: () => void;
 
-    onMount(() => {
-        userId = get(user)?.id ?? null;
-        isAuthenticated = !!userId;
+    onMount(async () => {
+      unsubscribeUser = user.subscribe(u => {
+        isAuthenticated = !!u?.id;
+        userId = u?.id ?? null;
+      });
         const params = get(page).url.searchParams;
         fromPerformance = params.get('from') === 'performance';
         partyId = params.get('partyId');
+    });
+
+    onDestroy(() => {
+      if (unsubscribeUser) unsubscribeUser();
     });
 
     async function handleSubmit() {
@@ -92,7 +99,10 @@
 
     function loginWithGoogle() {
       import('$lib/supabaseClient').then(({ supabase }) => {
-        supabase.auth.signInWithOAuth({ provider: 'google' });
+        supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.href }
+        });
       });
     }
 </script>

@@ -90,6 +90,15 @@
   function closeModal() {
     showModal = false;
   }
+
+  function loginWithGoogle() {
+    import('$lib/supabaseClient').then(({ supabase }) => {
+      supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href }
+      });
+    });
+  }
 </script>
 
 <div class="max-w-xl mx-auto mt-8">
@@ -133,9 +142,15 @@
           <li class="text-slate-500">Nadie se ha anotado aún.</li>
         {/if}
       </ul>
-      <div class="w-full flex justify-center">
-        <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
-      </div>
+      {#if get(user)?.id}
+        <div class="w-full flex justify-center">
+          <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
+        </div>
+      {:else}
+        <div class="w-full flex justify-center">
+          <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

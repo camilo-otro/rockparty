@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
     import { fly } from 'svelte/transition';
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
     let submitting = false;
@@ -12,14 +12,21 @@
     let success = false;
     let error = '';
     let isAuthenticated = false;
+    let unsubscribeUser: () => void;
 
     const userObj = get(user);
     email = userObj?.email ?? '';
     authId = userObj?.auth_id ?? '';
 
     onMount(async () => {
-        userId = get(user)?.id ?? null;
-        isAuthenticated = !!userId;
+      unsubscribeUser = user.subscribe(u => {
+        isAuthenticated = !!u?.auth_id;
+        userId = u?.id ?? null;
+      });
+    });
+
+    onDestroy(() => {
+      if (unsubscribeUser) unsubscribeUser();
     });
 
     async function handleSubmit() {
@@ -55,7 +62,10 @@
 
     function loginWithGoogle() {
       import('$lib/supabaseClient').then(({ supabase }) => {
-        supabase.auth.signInWithOAuth({ provider: 'google' });
+        supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.href }
+        });
       });
     }
 </script>
