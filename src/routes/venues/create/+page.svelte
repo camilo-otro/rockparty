@@ -16,11 +16,24 @@
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
 
+    let venueTypes: any[] = [];
+    let selectedVenueType: string = '';
+
+    let allowsParties: boolean = true;
+    let allowsRehearsals: boolean = false;
+
     onMount(async () => {
         unsubscribeUser = user.subscribe(u => {
-            isAuthenticated = !!u?.id;
             userId = u?.id ?? null;
+            isAuthenticated = !!u?.id;
         });
+        // Fetch venue types
+        const { supabase } = await import('$lib/supabaseClient');
+        const { data: typesData, error: typesError } = await supabase.from('venue_type').select('id, name');
+        if (!typesError && typesData) {
+            venueTypes = typesData;
+            if (venueTypes.length > 0) selectedVenueType = venueTypes[0].id;
+        }
     });
 
     onDestroy(() => {
@@ -28,7 +41,7 @@
     });
 
     async function handleSubmit() {
-        if (!name || !address || !contactName || !contact) {
+        if (!name || !address || !contactName || !contact || !selectedVenueType) {
             error = 'Todos los campos son obligatorios.';
             return;
         }
@@ -40,7 +53,7 @@
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('venue')
-                .insert([{ name, address, contact_name: contactName, contact }])
+                .insert([{ name, address, contact_name: contactName, contact, created_by: userId, venue_type: selectedVenueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals }])
                 .select();
                 
             if (dbError) {
@@ -90,9 +103,26 @@
 
             <label for="contact" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Info de contacto</label>
             <input id="contact" type="text" bind:value={contact} required class="p-2 border rounded" placeholder="telefono, correo, instagram" in:fly={{ y: -30, duration: 400, delay: 150 }}/>
+            
+            <label for="venue_type" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 200 }}>Tipo de Local</label>
+            <select id="venue_type" bind:value={selectedVenueType} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 200 }}>
+                {#each venueTypes as type}
+                    <option value={type.id}>{type.name}</option>
+                {/each}
+            </select>
+
+            <div class="flex items-center mb-4" in:fly={{ y: -30, duration: 400, delay: 250 }}>
+                <input id="allows_parties" type="checkbox" bind:checked={allowsParties} class="mr-2" />
+                <label for="allows_parties" class="cursor-pointer">Permite fiestas</label>
+            </div>
+
+            <div class="flex items-center mb-4" in:fly={{ y: -30, duration: 400, delay: 300 }}>
+                <input id="allows_rehearsals" type="checkbox" bind:checked={allowsRehearsals} class="mr-2" />
+                <label for="allows_rehearsals" class="cursor-pointer">Permite ensayos</label>
+            </div>
         </div>
         
-        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
+        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting}>
             {submitting ? 'Creando...' : 'Crear Local'}
         </button>
     </form>

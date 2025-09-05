@@ -5,6 +5,8 @@
   import { get } from 'svelte/store';
   import { ArrowLeft } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
+  import { Share2 } from 'lucide-svelte';
+  import ShareModal from '$lib/components/ShareModal.svelte';
 
   let performance: any = null;
   let songTitle: string = '';
@@ -16,6 +18,7 @@
   let instruments: any[] = [];
   let loadingInstruments = false;
   let signedUpUsers: any[] = [];
+  let showShareModal = false;
 
   async function fetchSignedUpUsers(performanceId: string) {
     const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').eq('performance_id', performanceId);
@@ -99,11 +102,30 @@
       });
     });
   }
+
+  function handleShare() {
+    const url = window.location.href;
+    const title = songTitle ? `¡Inscríbete para tocar ${songTitle}!` : '¡Inscríbete para tocar una canción!';
+    const text = songTitle ? `Te invito a tocar ${songTitle} en Rock Party.` : 'Te invito a tocar una canción en Rock Party.';
+    if (navigator.share) {
+      navigator.share({ title, text, url });
+    } else {
+      showShareModal = true;
+    }
+  }
+  function closeShareModal() {
+    showShareModal = false;
+  }
 </script>
 
 <div class="max-w-xl mx-auto mt-8">
   <div class="mb-4">
-    <a href={performance?.party ? `/parties/${performance.party}` : '/parties'} class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
+    <div class="flex flex-row items-center justify-between">
+      <a href="/parties/{performance?.party}" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+      <button class="ml-auto flex items-center gap-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded px-3 py-1" on:click={handleShare} title="Compartir">
+        <Share2 size={18} /> Compartir
+      </button>
+    </div>
   </div>
   {#if loading}
     <div>Cargando...</div>
@@ -143,12 +165,18 @@
         {/if}
       </ul>
       {#if get(user)?.id}
-        <div class="w-full flex justify-center">
+        <div class="w-full flex justify-between">
           <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
+          <button class="bg-blue-600 text-white rounded p-2 px-4 flex items-center gap-2 mb-4" on:click={handleShare}>
+            <Share2 class="w-5 h-5"/> Invita a un amigo
+          </button>
         </div>
       {:else}
-        <div class="w-full flex justify-center">
+        <div class="w-full flex justify-between">
           <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
+          <button class="bg-blue-600 text-white rounded p-2 px-4 flex items-center gap-2 mb-4" on:click={handleShare}>
+            <Share2 class="w-5 h-5"/> Invita a un amigo
+          </button>
         </div>
       {/if}
     </div>
@@ -181,4 +209,9 @@
       <button class="mt-4 px-4 py-2 bg-gray-300 rounded" on:click={closeModal}>Cancelar</button>
     </div>
   </div>
+{/if}
+
+<!-- Share Modal -->
+{#if showShareModal}
+  <ShareModal url={window.location.href} title={songTitle} on:close={closeShareModal} />
 {/if}

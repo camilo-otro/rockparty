@@ -4,9 +4,10 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft, GripHorizontal } from 'lucide-svelte';
+  import { ArrowLeft, GripHorizontal, Share2 } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import Sortable from 'sortablejs';
+  import ShareModal from '$lib/components/ShareModal.svelte';
 
   // State variables
   let party: any = null;
@@ -22,6 +23,7 @@
   let unsubscribeUser: () => void;
   let sortableInstance: Sortable | null = null;
   let sortableList: HTMLElement;
+  let showShareModal = false;
 
   // Derived helpers
   function getSongTitle(songId: number) {
@@ -67,7 +69,7 @@
   }
 
   // Async functions
-  async function updatePerformanceOrder(performanceList = performances, draggableList: HTMLCollection) {
+  async function updatePerformanceOrder(performanceList = performances, draggableList: HTMLCollection | null) {
     if(draggableList && draggableList.length>0){
       for(let i = 0; i<draggableList.length; i++){
         const id = Number(draggableList[i].getAttribute('data-id'));
@@ -94,6 +96,21 @@
     }
     performances = performanceList.sort((a, b) => (a.order || 0) - (b.order || 0));
     console.log('Updated performance order', performances);
+  }
+
+  function handleShare() {
+    const url = window.location.href;
+    const title = party?.title || 'te invito a esta Rock Party';
+    const text = party?.description || '';
+    if (navigator.share) {
+      navigator.share({ title, text, url });
+    } else {
+      showShareModal = true;
+    }
+  }
+
+  function closeShareModal() {
+    showShareModal = false;
   }
 
   // Lifecycle
@@ -168,16 +185,19 @@
 </style>
 
 <div class="max-w-xl mx-auto mt-2">
-  <div class="flex flex-row items-center">
-    <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
-  </div>
+  <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
   {#if loading}
     <div>Cargando...</div>
   {:else if error}
     <div class="text-red-500">Error: {error}</div>
   {:else if party}
     <div class="px-6 p-2 bg-slate-100 rounded shadow">
-      <h2 class="text-2xl font-bold mb-2">{party.title}</h2>
+      <div class="flex flex-row justify-between">
+        <h2 class="text-2xl font-bold mb-2">{party.title}</h2>
+        <button class="ml-auto flex items-center gap-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded px-3 py-1" on:click={handleShare} title="Compartir">
+          <Share2 size={18} /> Compartir
+        </button>
+      </div>
       <div class="mb-2 text-slate-700">{party.description}</div>
       <div class="mb-2 text-slate-700">Fecha: {party.date}</div>
       <div class="mb-2 text-slate-700">Lugar: {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
@@ -216,7 +236,18 @@
           {/each}
         </ul>
       {/if}
-      <a href={`/performance/create?partyId=${party.id}`} class="bg-slate-700 text-slate-200 rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
+      <div class="flex flex-row justify-between mb-4">
+        <a href={`/performance/create?partyId=${party.id}`} class="bg-slate-700 text-slate-200 rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
+        <div class="mt-2">
+          <button on:click={handleShare} class="bg-blue-600 text-white rounded p-2 px-4 inline-flex items-center gap-2">
+            <Share2 class="w-5 h-5" />
+            Compartir
+          </button>
+        </div>
+      </div>
+      {#if showShareModal}
+        <ShareModal url={window.location.href} title={party?.title} on:close={closeShareModal} />
+      {/if}
     </div>
     <div class="flex flex-row items-center">
       <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
