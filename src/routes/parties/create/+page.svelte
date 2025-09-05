@@ -5,6 +5,7 @@
     import { supabase } from '$lib/supabaseClient';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
+    import { sanitize } from '$lib/sanitize';
     let submitting = false;
     let venues: any[] = [];
     let loadingVenues = true;
@@ -42,14 +43,18 @@
             error = 'All fields are required.';
             return;
         }
-        
+        // Sanitize inputs
+        const safeTitle = sanitize(title);
+        const safeDescription = sanitize(description);
+        const safeDate = sanitize(date);
+        const safeVenue = sanitize(selectedVenue);
         submitting = true;
         error = '';
         
         try {
             const { data, error: dbError } = await supabase
                 .from('party')
-                .insert([{ date, venue: selectedVenue, created_by: userId, title, description }])
+                .insert([{ date: safeDate, venue: safeVenue, created_by: userId, title: safeTitle, description: safeDescription }])
                 .select();
                 
             if (dbError) {

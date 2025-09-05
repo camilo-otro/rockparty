@@ -94,8 +94,7 @@
         }
       }
     }
-    performances = performanceList.sort((a, b) => (a.order || 0) - (b.order || 0));
-    console.log('Updated performance order', performances);
+    performances = performanceList;
   }
 
   function handleShare() {

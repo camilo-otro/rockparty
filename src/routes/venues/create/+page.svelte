@@ -4,6 +4,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
+    import { sanitize } from '$lib/sanitize';
 
     let submitting = false;
     let name = '';
@@ -45,15 +46,19 @@
             error = 'Todos los campos son obligatorios.';
             return;
         }
-        
+        // Sanitize inputs
+        const safeName = sanitize(name);
+        const safeAddress = sanitize(address);
+        const safeContactName = sanitize(contactName);
+        const safeContact = sanitize(contact);
+        const safeVenueType = sanitize(selectedVenueType);
         submitting = true;
         error = '';
-        
         try {
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('venue')
-                .insert([{ name, address, contact_name: contactName, contact, created_by: userId, venue_type: selectedVenueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals }])
+                .insert([{ name: safeName, address: safeAddress, contact_name: safeContactName, contact: safeContact, created_by: userId, venue_type: safeVenueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals }])
                 .select();
                 
             if (dbError) {

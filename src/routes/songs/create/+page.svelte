@@ -8,6 +8,7 @@
     import { page } from '$app/stores';
     import { supabase } from '$lib/supabaseClient';
     import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
+    import { sanitize } from '$lib/sanitize';
     let submitting = false;
     let title = '';
     let artist = '';
@@ -40,18 +41,22 @@
     });
 
     async function handleSubmit() {
-        if (!title || !artist) {
-            error = 'Title and artist are required.';
+        if (!title || !artist || !key) {
+            error = 'Todos los campos son obligatorios.';
             return;
         }
-        
+        // Sanitize inputs
+        const safeTitle = sanitize(title);
+        const safeArtist = sanitize(artist);
+        const safeKey = sanitize(key);
         submitting = true;
         error = '';
         
         try {
+            const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('song')
-                .insert([{ title, artist, key: key || null, reflink: reflink || null, added_by: userId }])
+                .insert([{ title: safeTitle, artist: safeArtist, key: safeKey, created_by: userId }])
                 .select();
                 
             if (dbError) {

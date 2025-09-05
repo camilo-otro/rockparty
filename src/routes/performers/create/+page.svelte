@@ -4,6 +4,8 @@
     import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
+    import { sanitize } from '$lib/sanitize';
+
     let submitting = false;
     let email: string = '';
     let authId: string = '';
@@ -34,7 +36,10 @@
             error = 'All fields are required.';
             return;
         }
-        
+        // Sanitize inputs
+        const safeNickname = sanitize(nickname);
+        const safeAuthId = sanitize(authId);
+        const safeEmail = sanitize(email);
         submitting = true;
         error = '';
         
@@ -42,7 +47,7 @@
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('user')
-                .insert([{ nickname, auth_id: authId }])
+                .insert([{ nickname: safeNickname, auth_id: safeAuthId, email: safeEmail }])
                 .select();
                 
             if (dbError) {
