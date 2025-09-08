@@ -3,7 +3,7 @@
   import { invalidate } from '$app/navigation'
   import "../app.css";
   import { scale, fade } from 'svelte/transition';
-  import logo from '$lib/assets/images/logo.png';
+  import logo from '$lib/assets/images/Logo.png';
   export let data
 
   $: ({ supabase, session } = data)
