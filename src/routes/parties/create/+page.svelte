@@ -5,7 +5,7 @@
     import { supabase } from '$lib/supabaseClient';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
-    import { sanitize } from '$lib/sanitize';
+    import { sanitizeString } from '$lib/sanitize';
     let submitting = false;
     let venues: any[] = [];
     let loadingVenues = true;
@@ -44,10 +44,10 @@
             return;
         }
         // Sanitize inputs
-        const safeTitle = sanitize(title);
-        const safeDescription = sanitize(description);
-        const safeDate = sanitize(date);
-        const safeVenue = sanitize(selectedVenue);
+        const safeTitle = sanitizeString(title);
+        const safeDescription = sanitizeString(description);
+        const safeDate = sanitizeString(date);
+        const safeVenue = sanitizeString(selectedVenue);
         submitting = true;
         error = '';
         
@@ -81,9 +81,9 @@
       });
     }
 </script>
-<div class="bg-slate-400 p-4 flex-row">
-    <h2>AGREGAR NUEVA FIESTA</h2>
-    <a href="/parties" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
+<div class="bg-cold-base p-4 flex-row">
+    <h2 class="text-white text-2xl">AGREGAR NUEVA FIESTA</h2>
+    <a href="/parties" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
@@ -113,7 +113,7 @@
               </select>
             {/if}
         </div>
-        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 100 }}>
+        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 100 }}>
             {submitting ? 'Creando...' : 'Crear Fiesta'}
         </button>
     </form>

@@ -122,7 +122,7 @@
   <div class="mb-4">
     <div class="flex flex-row items-center justify-between">
       <a href="/parties/{performance?.party}" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
-      <button class="ml-auto flex items-center gap-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded px-3 py-1" on:click={handleShare} title="Compartir">
+      <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded px-3 py-1" on:click={handleShare} title="Compartir">
         <Share2 size={18} /> Compartir
       </button>
     </div>
@@ -132,51 +132,42 @@
   {:else if error}
     <div class="text-red-500">Error: {error}</div>
   {:else if performance}
-    <div class="p-6 bg-slate-100 rounded shadow">
-      <h2 class="text-2xl font-bold mb-2">{songTitle}</h2>
-      <div class="mb-2 text-slate-700 flex items-center gap-2">
-        Sugerido por:
+    <div class="bg-base-900 rounded shadow mx-4 px-6 p-4">
+      <h2 class="text-3xl text-yellow font-bold mb-2">{songTitle}</h2>
+      <div class="mb-2 text-cold-light">Sugerido por:
         {#if suggestedByAvatar}
-          <img src={suggestedByAvatar} alt="Foto de perfil" class="w-6 h-6 rounded-full" />
+          <img src={suggestedByAvatar} alt="Foto de perfil" class="w-6 h-6 rounded-full inline-block mr-2" />
         {/if}
         <span>{suggestedBy?.nickname ?? performance.suggested_by}</span>
       </div>
+      <div class="mb-2 text-cold-light">Tonalidad: {performance.key}</div>
       {#if performance.ref_link}
-        <div class="mb-2 text-slate-700">Ref Link: {performance.ref_link}</div>
+        <a href={performance.ref_link} target="_blank" class="text-yellow underline">Ver referencia</a>
       {/if}
-      {#if performance.key}
-        <div class="mb-2 text-slate-700">Key: {performance.key}</div>
-      {/if}
-      <h3 class="text-lg font-bold mt-6 mb-2">Participantes</h3>
+      <h3 class="text-2xl text-white font-bold mt-6 mb-2">Participantes</h3>
       <ul class="mb-4">
         {#each signedUpUsers as u}
-          <li class="mb-2 p-2 bg-slate-200 rounded flex gap-2 items-center justify-between">
+          <li class="mb-2 p-2 bg-cold-base rounded flex gap-2 items-center justify-between">
             <div>
-              <span class="font-semibold">{u.nickname}</span>
-              <span class="text-slate-600">— {u.instrument}</span>
+              <span class="font-semibold text-yellow">{u.nickname}</span>
+              <span class="text-cold-light">— {u.instrument}</span>
             </div>
             {#if get(user)?.id === u.user_id}
-              <button class="bg-slate-700 text-slate-200 rounded px-3 py-1 ml-2" on:click={openModal}>cambiar</button>
+              <button class="bg-cold-base text-white rounded px-3 py-1 ml-2" on:click={openModal}>cambiar</button>
             {/if}
           </li>
         {/each}
         {#if signedUpUsers.length === 0}
-          <li class="text-slate-500">Nadie se ha anotado aún.</li>
+          <li class="text-cold-light">Nadie se ha anotado aún.</li>
         {/if}
       </ul>
       {#if get(user)?.id}
-        <div class="w-full flex justify-between">
-          <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
-          <button class="bg-blue-600 text-white rounded p-2 px-4 flex items-center gap-2 mb-4" on:click={handleShare}>
-            <Share2 class="w-5 h-5"/> Invita a un amigo
-          </button>
+        <div class="w-full flex justify-center">
+          <button class="bg-yellow text-black rounded p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
         </div>
       {:else}
-        <div class="w-full flex justify-between">
-          <button class="bg-slate-700 text-slate-200 rounded p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
-          <button class="bg-blue-600 text-white rounded p-2 px-4 flex items-center gap-2 mb-4" on:click={handleShare}>
-            <Share2 class="w-5 h-5"/> Invita a un amigo
-          </button>
+        <div class="w-full flex justify-center">
+          <button class="bg-cold-base text-white rounded p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
         </div>
       {/if}
     </div>
@@ -186,27 +177,26 @@
 <!-- Modal -->
 {#if showModal}
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click={closeModal}>
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4" on:click|stopPropagation>
-      <h3 class="text-lg font-bold mb-4">Selecciona tu instrumento</h3>
+    <div class="bg-base-900 rounded-lg p-6 max-w-md w-full mx-4" on:click|stopPropagation>
+      <h3 class="text-xl text-yellow font-bold mb-4">Selecciona tu instrumento</h3>
       {#if loadingInstruments}
-        <div class="text-center">Cargando instrumentos...</div>
+        <div class="text-center text-white">Cargando instrumentos...</div>
       {:else}
         <div class="space-y-2">
           {#each instruments as instrument}
             <button 
-              class="w-full text-left p-3 border rounded hover:bg-slate-100 transition active:bg-slate-300"
+              class="w-full text-left p-3 border border-cold-base rounded bg-cold-base text-white hover:bg-cold-light transition active:bg-yellow active:text-black"
               on:mousedown={() => instrument._down = true}
               on:mouseup={() => { instrument._down = false; selectInstrument(instrument); }}
               on:touchstart={() => instrument._down = true}
               on:touchend={() => { instrument._down = false; selectInstrument(instrument); }}
-              style="background-color: {instrument._down ? '#e2e8f0' : ''};"
             >
               {instrument.name}
             </button>
           {/each}
         </div>
       {/if}
-      <button class="mt-4 px-4 py-2 bg-gray-300 rounded" on:click={closeModal}>Cancelar</button>
+      <button class="mt-4 px-4 py-2 bg-cold-base text-white rounded hover:bg-cold-light" on:click={closeModal}>Cancelar</button>
     </div>
   </div>
 {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
+  import { ChevronsDown, Plus, MapPin } from 'lucide-svelte';
   let parties: any[] = [];
   let venues: any[] = [];
   let loading = true;
@@ -9,7 +10,7 @@
 
   onMount(async () => {
     const { data: partyData, error: partyErr } = await supabase.from('party').select('id, title, date, venue').order('date', { ascending: true });
-    const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name');
+    const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address');
     if (partyErr || venueErr) {
       error = partyErr?.message ?? venueErr?.message ?? null;
     } else {
@@ -38,57 +39,64 @@
   }
 </script>
 
-<p class="bg-slate-200 p-2 px-4">Planea tu proxima Rock Party!</p>
 <div class="max-w-2xl mx-auto mt-8 flex flex-col gap-8">
   <section>
-    <h2 class="text-xl font-bold m-4 mb-4">Próximas fiestas</h2>
-    {#if loading}
-      <div>Cargando...</div>
-    {:else if error}
-      <div class="text-red-500">Error: {error}</div>
-    {:else if parties.length === 0}
-      <div>No hay próximas fiestas registradas.</div>
-    {:else}
-      <ul class="space-y-2">
-        {#each parties as party}
-          <a href={`/parties/${party.id}`} class="block">
-            <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
-              <div class="font-semibold">{party.title}</div>
-              <div class="text-sm text-slate-600">{party.date}</div>
-              <div class="text-sm text-slate-600">{getVenueName(party.venue)}</div>
-            </li>
-          </a>
-        {/each}
-        <li class="p-4">
-          <a href="/parties" class="btn btn-accent text-center bg-slate-700 text-slate-200 w-full px-4 p-2 rounded">Ver más</a>
-        </li>
-      </ul>
-      
-    {/if}
+    <h2 class="text-3xl text-white m-4 mb-4">PRÓXIMOS TOQUES</h2>
+    <div class="m-4 rounded-md overflow-clip flex flex-col">
+      <a href="/parties/create" class="w-full bg-cold-base text-white text-sm block text-center p-2">Planea un nuevo toque <Plus class="inline-block" /></a>
+      {#if loading}
+        <div>Cargando...</div>
+      {:else if error}
+        <div class="text-red-500">Error: {error}</div>
+      {:else if parties.length === 0}
+        <div>No hay próximos toques registrados.</div>
+      {:else}
+        <ul class="p-0 space-y-[1px]">
+          {#each parties as party}
+            <a href={`/parties/${party.id}`} class="block">
+              <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
+                <div class="text-2xl text-yellow">{party.title}</div>
+                <div class="text-sm text-white">{party.date}</div>
+                <div class="text-sm text-cold-light"><MapPin class="inline-block mr-1" size="15" stroke-width="4"/>{getVenueName(party.venue)}</div>
+              </li>
+            </a>
+          {/each}
+          <li class="bg-base-900 flex flex-row w-full">
+            <a href="/parties" class="text-cold-light px-4 p-2 mx-auto">Ver más toques <ChevronsDown class="inline-block" /></a>
+          </li>
+        </ul>
+        
+      {/if}
+    </div>
   </section>
   <section>
-    <h2 class="text-xl font-bold m-4 mb-4">Locales con fiestas cercanas</h2>
-    {#if loading}
-      <div>Cargando...</div>
-    {:else if error}
-      <div class="text-red-500">Error: {error}</div>
-    {:else if topVenues.length === 0}
-      <div>No hay locales con fiestas próximas.</div>
-    {:else}
-      <ul class="space-y-2">
-        {#each topVenues as venue}
-          <a href={`/venues/${venue.id}`} class="block">
-            <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
-              <div class="font-semibold">{venue.name}</div>
-              <div class="text-sm text-slate-600">{venue.count} fiestas próximas</div>
-            </li>
-          </a>
-        {/each}
-        <li class="p-4">
-          <a href="/venues" class="btn btn-accent text-center bg-slate-700 text-slate-200 w-full px-4 p-2 rounded">Ver más</a>
-        </li>
-      </ul>
-    {/if}
+    <h2 class="text-3xl m-4 mb-4">LOCALES CERCANOS</h2>
+    <div class="m-4 rounded-md overflow-clip flex flex-col">
+      {#if loading}
+        <div>Cargando...</div>
+      {:else if error}
+        <div class="text-red-500">Error: {error}</div>
+      {:else if topVenues.length === 0}
+        <div>No hay locales con fiestas próximas.</div>
+      {:else}
+        <ul class="p-0 space-y-[1px]">
+          {#each topVenues as venue}
+            <a href={`/venues/${venue.id}`} class="block">
+              <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
+                <div class="text-xl text-yellow">{venue.name}</div>
+                <div class="flex flex-row w-full justify-between">
+                  <div class="text-sm">{venue.address}</div>
+                  <div class="text-sm text-cold-light">{venue.count} toques</div>
+                </div>
+              </li>
+            </a>
+          {/each}
+          <li class="bg-base-900 flex flex-row w-full">
+            <a href="/venues" class="text-cold-light px-4 p-2 mx-auto">Ver más locales<ChevronsDown class="inline-block" /></a>
+          </li>
+        </ul>
+      {/if}
+    </div>
   </section>
 </div>
 

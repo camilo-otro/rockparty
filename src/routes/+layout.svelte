@@ -3,6 +3,7 @@
   import { invalidate } from '$app/navigation'
   import "../app.css";
   import { scale, fade } from 'svelte/transition';
+  import logo from '$lib/assets/images/logo.png';
   export let data
 
   $: ({ supabase, session } = data)
@@ -42,9 +43,11 @@
   })
 </script>
 
-<nav class="bg-slate-800 text-slate-200 p-4 flex flex-row gap-4 items-center">
+<nav class="bg-base-950 text-slate-200 p-4 flex flex-row gap-4 items-center">
   <div class="basis-3/4">
-    <a href="/" class="text-xl px-3 font-bold">Rock Party</a>
+    <a href="/" class="">
+      <img src={logo} alt="Rock Party Logo" class="h-20 w-auto" />
+    </a>
   </div>
   {#if session}
     <div class="relative">

@@ -4,7 +4,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
-    import { sanitize } from '$lib/sanitize';
+    import { sanitizeString } from '$lib/sanitize';
 
     let submitting = false;
     let name = '';
@@ -47,11 +47,11 @@
             return;
         }
         // Sanitize inputs
-        const safeName = sanitize(name);
-        const safeAddress = sanitize(address);
-        const safeContactName = sanitize(contactName);
-        const safeContact = sanitize(contact);
-        const safeVenueType = sanitize(selectedVenueType);
+        const safeName = sanitizeString(name);
+        const safeAddress = sanitizeString(address);
+        const safeContactName = sanitizeString(contactName);
+        const safeContact = sanitizeString(contact);
+        const safeVenueType = sanitizeString(selectedVenueType);
         submitting = true;
         error = '';
         try {
@@ -85,9 +85,9 @@
       });
     }
 </script>
-<div class="bg-slate-400 p-4 flex-row">
-    <h2>AGREGAR NUEVO LOCAL</h2>
-    <a href="/venues" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
+<div class="bg-cold-base p-4 flex-row">
+    <h2 class="text-white text-2xl">AGREGAR NUEVO LOCAL</h2>
+    <a href="/venues" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
@@ -127,7 +127,7 @@
             </div>
         </div>
         
-        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting}>
+        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting}>
             {submitting ? 'Creando...' : 'Crear Local'}
         </button>
     </form>

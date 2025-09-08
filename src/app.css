@@ -1,9 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@0,100..900;1,100..900&display=swap');
+
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
 @layer base {
   body {
-    @apply bg-slate-100 text-slate-800;
+    @apply bg-base-950 text-white;
+    font-weight: 100;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 100;
   }
 }

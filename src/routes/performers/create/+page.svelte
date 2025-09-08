@@ -4,7 +4,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
-    import { sanitize } from '$lib/sanitize';
+    import { sanitizeString } from '$lib/sanitize';
 
     let submitting = false;
     let email: string = '';
@@ -37,9 +37,9 @@
             return;
         }
         // Sanitize inputs
-        const safeNickname = sanitize(nickname);
-        const safeAuthId = sanitize(authId);
-        const safeEmail = sanitize(email);
+        const safeNickname = sanitizeString(nickname);
+        const safeAuthId = sanitizeString(authId);
+        const safeEmail = sanitizeString(email);
         submitting = true;
         error = '';
         
@@ -74,9 +74,9 @@
       });
     }
 </script>
-<div class="bg-slate-400 p-4 flex-row">
-    <h2>AGREGAR NUEVO INTÉRPRETE</h2>
-    <a href="/performers" class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
+<div class="bg-cold-base p-4 flex-row">
+    <h2 class="text-white text-2xl">AGREGAR NUEVO INTÉRPRETE</h2>
+    <a href="/performers" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
@@ -91,7 +91,7 @@
             <label for="nickname" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Nickname</label>
             <input id="nickname" type="text" bind:value={nickname} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
         </div>
-        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 100 }}>
+        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 100 }}>
             {submitting ? 'Creando...' : 'Crear Intérprete'}
         </button>
     </form>

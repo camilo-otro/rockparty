@@ -184,49 +184,49 @@
 </style>
 
 <div class="max-w-xl mx-auto mt-2">
-  <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+  <a href="/parties" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
   {#if loading}
-    <div>Cargando...</div>
+    <div class="text-white p-4">Cargando...</div>
   {:else if error}
-    <div class="text-red-500">Error: {error}</div>
+    <div class="text-red-500 p-4">Error: {error}</div>
   {:else if party}
-    <div class="px-6 p-2 bg-slate-100 rounded shadow">
+    <div class="px-6 p-2 bg-base-900 rounded shadow mx-4">
       <div class="flex flex-row justify-between">
-        <h2 class="text-2xl font-bold mb-2">{party.title}</h2>
-        <button class="ml-auto flex items-center gap-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded px-3 py-1" on:click={handleShare} title="Compartir">
+        <h2 class="text-3xl text-yellow font-bold mb-2">{party.title}</h2>
+        <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded px-3 py-1" on:click={handleShare} title="Compartir">
           <Share2 size={18} /> Compartir
         </button>
       </div>
-      <div class="mb-2 text-slate-700">{party.description}</div>
-      <div class="mb-2 text-slate-700">Fecha: {party.date}</div>
-      <div class="mb-2 text-slate-700">Lugar: {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
-      <h3 class="text-lg font-semibold mt-4 mb-2">Setlist</h3>
+      <div class="mb-2 text-white">{party.description}</div>
+      <div class="mb-2 text-cold-light">Fecha: {party.date}</div>
+      <div class="mb-2 text-cold-light">Lugar: {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
+      <h3 class="text-2xl text-white font-semibold mt-4 mb-2">Setlist</h3>
       {#if loadingPerformances}
-        <div>Cargando Setlist...</div>
+        <div class="text-white">Cargando Setlist...</div>
       {:else if errorPerformances}
         <div class="text-red-500">Error: {errorPerformances}</div>
       {:else if performances.length === 0}
-        <div>No hay canciones en el Setlist.</div>
+        <div class="text-white">No hay canciones en el Setlist.</div>
       {:else}
         <ul bind:this={sortableList} class="mb-4 grid grid-cols-1 gap-2">
           {#each performances as perf, index (perf.id)}
             <li 
-              class="bg-white rounded shadow px-4 p-2 transition-all duration-200"
+              class="bg-cold-base rounded shadow px-4 p-2 transition-all duration-200"
               data-id={perf.id}
             >
               <a href={`/performance/${perf.id}`} class="block">
                 <div class="flex items-center gap-2">
-                  <span class="text-gray-400 text-sm font-mono">{index + 1}.</span>
+                  <span class="text-cold-light text-sm font-mono">{index + 1}.</span>
                   <div class="flex-1">
-                    <h4 class="text-md font-semibold mb-1">{getSongTitle(perf.song)}</h4>
-                    <div class="text-xs text-slate-500 mb-1">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
+                    <h4 class="text-md text-yellow font-semibold mb-1">{getSongTitle(perf.song)}</h4>
+                    <div class="text-xs text-cold-light mb-1">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
                     {#if perf.key}
-                      <div class="mb-1">Tonalidad: {perf.key}</div>
+                      <div class="mb-1 text-white">Tonalidad: {perf.key}</div>
                     {/if}
                   </div>
                   {#if party?.created_by === currentUserId}
                     <div class="drag-handle cursor-move">
-                      <GripHorizontal class="text-gray-400" />
+                      <GripHorizontal class="text-cold-light" />
                     </div>
                   {/if}
                 </div>
@@ -236,9 +236,9 @@
         </ul>
       {/if}
       <div class="flex flex-row justify-between mb-4">
-        <a href={`/performance/create?partyId=${party.id}`} class="bg-slate-700 text-slate-200 rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
+        <a href={`/performance/create?partyId=${party.id}`} class="bg-cold-base text-white rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
         <div class="mt-2">
-          <button on:click={handleShare} class="bg-blue-600 text-white rounded p-2 px-4 inline-flex items-center gap-2">
+          <button on:click={handleShare} class="bg-yellow text-black rounded p-2 px-4 inline-flex items-center gap-2">
             <Share2 class="w-5 h-5" />
             Compartir
           </button>
@@ -249,7 +249,7 @@
       {/if}
     </div>
     <div class="flex flex-row items-center">
-      <a href="/parties" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+      <a href="/parties" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
     </div>
   {/if}
 </div>
