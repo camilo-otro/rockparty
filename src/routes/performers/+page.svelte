@@ -8,7 +8,7 @@
     let error: string | null = null;
 
     onMount(async () => {
-        const { data, error: err } = await supabase.from('user').select('*');
+        const { data, error: err } = await supabase.from('profile').select('*');
         if (err) {
             error = err.message;
         } else {

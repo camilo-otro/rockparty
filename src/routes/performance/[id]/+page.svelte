@@ -24,7 +24,7 @@
     const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').eq('performance_id', performanceId);
     const users: any[] = [];
     for (const perfUser of perfUsers ?? []) {
-      const { data: userData } = await supabase.from('user').select('nickname').eq('id', perfUser.user_id).single();
+      const { data: userData } = await supabase.from('profile').select('nickname').eq('id', perfUser.user_id).single();
       const { data: instrumentData } = await supabase.from('instrument').select('name').eq('id', perfUser.instrument_id).single();
       users.push({
         nickname: userData?.nickname ?? perfUser.user_id,

@@ -7,13 +7,13 @@ export const load = async ({ depends, url }) => {
   const { data: { session } } = await supabase.auth.getSession();
   let userRecord = null;
   if (session?.user?.id) {
-    // Try to fetch user entity by auth_id
-    let { data: dbUser } = await supabase.from('user').select('id, role, nickname, auth_id').eq('auth_id', session.user.id).single();
+    // Try to fetch user entity by id
+    let { data: dbUser } = await supabase.from('profile').select('id, role, nickname').eq('id', session.user.id).single();
     // If not found, redirect to performer creation
     if (!dbUser) {
       userRecord = {
         email: session?.user?.email ?? '',
-        auth_id: session?.user?.id
+        id: session?.user?.id
       };
       userStore.set(userRecord);
       if (!url.pathname.startsWith('/performers/create')) {
@@ -25,7 +25,6 @@ export const load = async ({ depends, url }) => {
         email: session?.user?.email ?? '',
         role: dbUser?.role,
         nickname: dbUser?.nickname,
-        auth_id: dbUser?.auth_id
       };
     userStore.set(userRecord);
     }

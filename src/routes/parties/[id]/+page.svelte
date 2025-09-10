@@ -1,10 +1,10 @@
 <script lang="ts">
   // Imports
   import { onMount, onDestroy } from 'svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft, GripHorizontal, Share2 } from 'lucide-svelte';
+  import { ArrowLeft, GripHorizontal, Share2, Edit } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import Sortable from 'sortablejs';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -24,6 +24,7 @@
   let sortableInstance: Sortable | null = null;
   let sortableList: HTMLElement;
   let showShareModal = false;
+  let partyAdmins: string[] = [];
 
   // Derived helpers
   function getSongTitle(songId: number) {
@@ -108,6 +109,12 @@
     }
   }
 
+  function handleEdit() {
+    if (party?.id) {
+      window.location.href = `/parties/${party.id}/edit`;
+    }
+  }
+
   function closeShareModal() {
     showShareModal = false;
   }
@@ -120,8 +127,12 @@
       destroySortable();
       setTimeout(initializeSortable, 0);
     });
-    const id = get(page).params.id;
+    const id = page.params.id;
     const { data, error: err } = await supabase.from('party').select('*').eq('id', id).single();
+    party = data;
+    // Fetch party admins
+    const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', id);
+    partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
     if (err) {
       error = err.message;
     } else {
@@ -151,7 +162,7 @@
         const songIds = [...new Set(performances.map(p => p.song))];
         const userIds = [...new Set(performances.map(p => p.suggested_by))];
         const { data: songData } = await supabase.from('song').select('id, title').in('id', songIds);
-        const { data: userData } = await supabase.from('user').select('id, nickname').in('id', userIds);
+        const { data: userData } = await supabase.from('profile').select('id, nickname').in('id', userIds);
         songs = songData ?? [];
         users = userData ?? [];
         // Initialize sortable after performances are loaded
@@ -184,7 +195,19 @@
 </style>
 
 <div class="max-w-xl mx-auto mt-2">
-  <a href="/parties" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+  <div class="flex flex-row w-full justify-between">
+    <a href="/parties" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+    <div class="flex flex-row w-auto gap-2 m-4">
+      {#if currentUserId == party?.created_by || partyAdmins && currentUserId && partyAdmins.includes(currentUserId)}
+        <button on:click={handleEdit} class="bg-cold-light text-black rounded px-2 py-1 inline-flex items-center gap-2">
+          <Edit size={18} />
+        </button>
+      {/if}
+      <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded px-2 py-1" on:click={handleShare} title="Compartir">
+          <Share2 size={18} />
+        </button>
+    </div>
+  </div>
   {#if loading}
     <div class="text-white p-4">Cargando...</div>
   {:else if error}
@@ -193,9 +216,7 @@
     <div class="px-6 p-2 bg-base-900 rounded shadow mx-4">
       <div class="flex flex-row justify-between">
         <h2 class="text-3xl text-yellow font-bold mb-2">{party.title}</h2>
-        <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded px-3 py-1" on:click={handleShare} title="Compartir">
-          <Share2 size={18} /> Compartir
-        </button>
+        
       </div>
       <div class="mb-2 text-white">{party.description}</div>
       <div class="mb-2 text-cold-light">Fecha: {party.date}</div>

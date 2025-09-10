@@ -41,7 +41,7 @@
     });
 
     async function handleSubmit() {
-        if (!title || !artist || !key) {
+        if (!title || !artist) {
             error = 'Todos los campos son obligatorios.';
             return;
         }
@@ -56,7 +56,7 @@
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('song')
-                .insert([{ title: safeTitle, artist: safeArtist, key: safeKey, created_by: userId }])
+                .insert([{ title: safeTitle, artist: safeArtist, key: safeKey, added_by: userId, reflink: reflink }])
                 .select();
                 
             if (dbError) {

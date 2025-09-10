@@ -18,11 +18,11 @@
 
     const userObj = get(user);
     email = userObj?.email ?? '';
-    authId = userObj?.auth_id ?? '';
+    authId = userObj?.id ?? '';
 
     onMount(async () => {
       unsubscribeUser = user.subscribe(u => {
-        isAuthenticated = !!u?.auth_id;
+        isAuthenticated = !!u?.id;
         userId = u?.id ?? null;
       });
     });
@@ -46,8 +46,8 @@
         try {
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
-                .from('user')
-                .insert([{ nickname: safeNickname, auth_id: safeAuthId, email: safeEmail }])
+                .from('profile')
+                .insert([{ nickname: safeNickname, email: safeEmail }])
                 .select();
                 
             if (dbError) {

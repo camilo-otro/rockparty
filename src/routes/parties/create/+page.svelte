@@ -6,6 +6,7 @@
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
     import { sanitizeString } from '$lib/sanitize';
+    import PartyForm from '$lib/components/PartyForm.svelte';
     let submitting = false;
     let venues: any[] = [];
     let loadingVenues = true;
@@ -38,40 +39,6 @@
       if (unsubscribeUser) unsubscribeUser();
     });
 
-    async function handleSubmit() {
-        if (!date || !selectedVenue || !title) {
-            error = 'All fields are required.';
-            return;
-        }
-        // Sanitize inputs
-        const safeTitle = sanitizeString(title);
-        const safeDescription = sanitizeString(description);
-        const safeDate = sanitizeString(date);
-        const safeVenue = sanitizeString(selectedVenue);
-        submitting = true;
-        error = '';
-        
-        try {
-            const { data, error: dbError } = await supabase
-                .from('party')
-                .insert([{ date: safeDate, venue: safeVenue, created_by: userId, title: safeTitle, description: safeDescription }])
-                .select();
-                
-            if (dbError) {
-                error = `Database error: ${dbError.message}`;
-            } else {
-                success = true;
-                setTimeout(() => {
-                    window.location.href = '/parties';
-                }, 1000);
-            }
-        } catch (e) {
-            error = 'Could not connect to the server.';
-        }
-        
-        submitting = false;
-    }
-
     function loginWithGoogle() {
       import('$lib/supabaseClient').then(({ supabase }) => {
         supabase.auth.signInWithOAuth({
@@ -91,32 +58,48 @@
   </div>
 {:else}
   {#if !success && !error}
-    <form on:submit|preventDefault={handleSubmit}>
-        <div class="flex flex-col w-3/4 p-5 mb-4">
-            <label for="title" class="mb-1">Título</label>
-            <input id="title" type="text" bind:value={title} required class="p-2 border rounded" />
-            <label for="description" class="mb-1">Descripción</label>
-            <textarea id="description" bind:value={description} class="p-2 border rounded mb-2" rows="3"></textarea>
-            <label for="date" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Fecha</label>
-            <input id="date" type="date" bind:value={date} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
-            <label for="venue" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Venue</label>
-            {#if loadingVenues}
-              <div class="text-slate-600">Cargando venues...</div>
-            {:else if errorVenues}
-              <div class="text-red-600">Error: {errorVenues}</div>
-            {:else}
-              <select id="venue" bind:value={selectedVenue} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }}>
-                <option value="" disabled selected>Selecciona un venue</option>
-                {#each venues as venue}
-                  <option value={venue.id}>{venue.name}</option>
-                {/each}
-              </select>
-            {/if}
-        </div>
-        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 100 }}>
-            {submitting ? 'Creando...' : 'Crear Fiesta'}
-        </button>
-    </form>
+    <PartyForm
+      venues={venues}
+      loadingVenues={loadingVenues}
+      errorVenues={errorVenues}
+      initialTitle={title}
+      initialDescription={description}
+      initialDate={date}
+      initialVenue={selectedVenue}
+      initialAdmins={[]}
+      submitting={submitting}
+      success={success}
+      error={error}
+      userId={userId}
+      isAuthenticated={isAuthenticated}
+      on:submit={async (e) => {
+        submitting = true;
+        error = '';
+        const { title, description, date, venue, admins } = e.detail;
+        try {
+          const { data, error: dbError } = await supabase
+            .from('party')
+            .insert([{ date, venue, created_by: userId, title, description }])
+            .select();
+          if (dbError) {
+            error = `Database error: ${dbError.message}`;
+          } else {
+            // Add party_admins
+            if (data && data.length > 0 && admins && admins.length > 0) {
+              await supabase.from('party_admin').insert(admins.map((a: string) => ({ party_id: data[0].id, user_id: a })));
+            }
+            success = true;
+            setTimeout(() => {
+              window.location.href = '/parties';
+            }, 1000);
+          }
+        } catch (e) {
+          error = 'Could not connect to the server.';
+        }
+        submitting = false;
+      }}
+      on:error={(e) => error = e.detail}
+    />
   {/if}
   {#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
