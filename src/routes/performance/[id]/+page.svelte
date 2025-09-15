@@ -121,7 +121,7 @@
 <div class="max-w-xl mx-auto mt-8">
   <div class="mb-4">
     <div class="flex flex-row items-center justify-between">
-      <a href="/parties/{performance?.party}" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+      <a href="/parties/{performance?.party}" class="text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> volve</a>
       <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded px-3 py-1" on:click={handleShare} title="Compartir">
         <Share2 size={18} /> Compartir
       </button>

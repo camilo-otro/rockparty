@@ -4,7 +4,7 @@
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft, GripHorizontal, Share2, Edit } from 'lucide-svelte';
+  import { ChevronLeft, GripHorizontal, Share2, Edit } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import Sortable from 'sortablejs';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -196,7 +196,7 @@
 
 <div class="max-w-xl mx-auto mt-2">
   <div class="flex flex-row w-full justify-between">
-    <a href="/parties" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+    <a href="/parties" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft />VOLVER</a>
     <div class="flex flex-row w-auto gap-2 m-4">
       {#if currentUserId == party?.created_by || partyAdmins && currentUserId && partyAdmins.includes(currentUserId)}
         <button on:click={handleEdit} class="bg-cold-light text-black rounded px-2 py-1 inline-flex items-center gap-2">
@@ -270,7 +270,7 @@
       {/if}
     </div>
     <div class="flex flex-row items-center">
-      <a href="/parties" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+      <a href="/parties" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft />VOLVER</a>
     </div>
   {/if}
 </div>

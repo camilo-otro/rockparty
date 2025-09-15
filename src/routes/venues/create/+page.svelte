@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft } from 'lucide-svelte';
+    import { ChevronLeft } from 'lucide-svelte';
     import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
@@ -52,7 +52,7 @@
 </script>
 <div class="bg-cold-base p-4 flex-row">
     <h2 class="text-white text-2xl">AGREGAR NUEVO LOCAL</h2>
-    <a href="/venues" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
+    <a href="/venues" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">

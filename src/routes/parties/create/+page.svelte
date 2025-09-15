@@ -1,11 +1,9 @@
 <script lang="ts">
-    import { ArrowLeft } from 'lucide-svelte';
+    import { ChevronLeft } from 'lucide-svelte';
     import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
     import { user } from '$lib/stores/user';
-    import { get } from 'svelte/store';
-    import { sanitizeString } from '$lib/sanitize';
     import PartyForm from '$lib/components/PartyForm.svelte';
     let submitting = false;
     let venues: any[] = [];
@@ -50,7 +48,7 @@
 </script>
 <div class="bg-cold-base p-4 flex-row">
     <h2 class="text-white text-2xl">AGREGAR NUEVA FIESTA</h2>
-    <a href="/parties" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
+    <a href="/parties" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">

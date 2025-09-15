@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft } from 'lucide-svelte';
+  import { ChevronLeft } from 'lucide-svelte';
 
   let song: any = null;
   let loading = true;
@@ -23,7 +23,7 @@
 
 <div class="max-w-xl mx-auto mt-8">
   <div class="mb-4">
-    <a href="/songs" class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
+    <a href="/songs" class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
   </div>
   {#if loading}
     <div>Cargando...</div>
@@ -34,7 +34,7 @@
       <h2 class="text-2xl font-bold mb-2">{song.title}</h2>
       <div class="mb-2 text-slate-700">Artista: {song.artist}</div>
       <div class="mb-2 text-slate-700">Tonalidad: {song.key}</div>
-      <a href="/songs" class="text-blue-600 hover:underline">&larr; Volver a la lista</a>
+      <a href="/songs" class="text-cold-light"><ChevronLeft />Volver a la lista</a>
     </div>
   {/if}
 </div>

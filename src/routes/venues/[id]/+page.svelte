@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
-  import { ArrowLeft, Edit } from 'lucide-svelte';
+  import { ChevronLeft, Edit } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
 
   let venue: any = null;
@@ -37,7 +37,7 @@
 
 <div class="max-w-xl mx-auto mt-2">
   <div class="flex flex-row w-full justify-between">
-    <a href="/venues" class="text-lg text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+    <a href="/venues" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft/>VOLVER</a>
     <div class="flex flex-row w-auto gap-2 m-4">
       {#if currentUserId == venue?.created_by || (venueAdmins && currentUserId && venueAdmins.includes(currentUserId))}
         <button on:click={handleEdit} class="bg-cold-light text-black rounded px-2 py-1 inline-flex items-center gap-2">

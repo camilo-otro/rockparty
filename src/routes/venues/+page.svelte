@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
-    import { ArrowLeft, MapPin } from 'lucide-svelte';
+    import { ChevronLeft } from 'lucide-svelte';
+    import VenueListItem from '$lib/components/VenueListItem.svelte';
 
     let venues: any[] = [];
     let parties: any[] = [];
@@ -9,13 +10,17 @@
     let error: string | null = null;
 
     onMount(async () => {
-        const { data: venueData, error: venueErr } = await supabase.from('venue').select('*');
-        const { data: partyData, error: partyErr } = await supabase.from('party').select('id, date, venue');
-        if (venueErr || partyErr) {
-            error = venueErr?.message ?? partyErr?.message ?? null;
+        const { data: partyData, error: partyErr } = await supabase.from('party').select('id, venue');
+        const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address');
+        if (partyErr || venueErr) {
+            error = partyErr?.message ?? venueErr?.message ?? null;
         } else {
-            venues = venueData ?? [];
-            parties = partyData ?? [];
+            // Calculate party count for each venue
+            const venueCounts: Record<string | number, number> = {};
+            for (const party of partyData ?? []) {
+                venueCounts[party.venue] = (venueCounts[party.venue] || 0) + 1;
+            }
+            venues = (venueData ?? []).map(v => ({ ...v, count: venueCounts[v.id] || 0 }));
         }
         loading = false;
     });
@@ -28,33 +33,25 @@
 </script>
 <div class="flex flex-col items-left">
     <div class="flex flex-row items-center">
-        <a href="/" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+        <a href="/" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft/>VOLVER</a>
     </div>
     <section>
-        <h2 class="text-lg font-bold px-4 p-3 mb-2">Locales</h2>
-        {#if loading}
-            <div>Cargando...</div>
-        {:else if error}
-            <div class="text-red-500">Error: {error}</div>
-        {:else if venues.length === 0}
-            <div>No hay nngun local registrado.</div>
-        {:else}
-            <ul class="space-y-2">
-                {#each venues as venue}
-                    <a href={`/venues/${venue.id}`} class="block">
-                        <li class="px-5 p-3 bg-base-950 rounded shadow cursor-pointer hover:bg-base-900 transition flex justify-between items-center">
-                            <div>
-                                <div class="text-xl text-yellow">{venue.name}</div>
-                                <div class=""><MapPin size={14} class="inline-block mr-1" /> {venue.address}</div>
-                            </div>
-                            <div class="text-right text-slate-700">
-                                {getUpcomingPartyCount(venue.id)} fiestas cercanas
-                            </div>
-                        </li>
-                    </a>
-                {/each}
-            </ul>
-        {/if}
+        <h2 class="text-3xl text-white m-4 mb-4">LOCALES</h2>
+        <div class="m-4 rounded-md overflow-clip flex flex-col">
+            {#if loading}
+                <div class="text-white p-4">Cargando...</div>
+            {:else if error}
+                <div class="text-red-500 p-4">Error: {error}</div>
+            {:else if venues.length === 0}
+                <div class="text-white p-4">No hay locales registrados.</div>
+            {:else}
+                <ul class="p-0 space-y-[1px]">
+                  {#each venues as venue}
+                    <VenueListItem venue={venue} />
+                  {/each}
+                </ul>
+            {/if}
+        </div>
     </section>
     <div class="flex justify-center p-4">
         <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-4 rounded" href="/venues/create">Agregar un local</a>

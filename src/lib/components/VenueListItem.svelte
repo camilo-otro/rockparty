@@ -1,0 +1,15 @@
+<script lang="ts">
+  export let venue: any;
+</script>
+<a href={`/venues/${venue.id}`} class="block">
+  <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
+    <div class="text-2xl text-yellow">{venue.name}</div>
+    {#if venue.description}
+      <div class="text-sm text-white">{venue.description}</div>
+    {/if}
+    <div class="flex flex-row width-full justify-between">
+        <div class="text-sm text-white">{venue.address}</div>
+        <div class="text-sm text-cold-light">{venue.count ? `${venue.count} fiestas próximas` : ''}</div>
+    </div>
+  </li>
+</a>

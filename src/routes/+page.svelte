@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronsDown, Plus, MapPin } from 'lucide-svelte';
+  import { ChevronLeft, ChevronsDown, Plus, MapPin } from 'lucide-svelte';
+  import PartyListItem from '$lib/components/PartyListItem.svelte';
+  import VenueListItem from '$lib/components/VenueListItem.svelte';
+
   let parties: any[] = [];
   let venues: any[] = [];
   let loading = true;
@@ -53,13 +56,7 @@
       {:else}
         <ul class="p-0 space-y-[1px]">
           {#each parties as party}
-            <a href={`/parties/${party.id}`} class="block">
-              <li class="bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-2">
-                <div class="text-2xl text-yellow">{party.title}</div>
-                <div class="text-sm text-white">{party.date}</div>
-                <div class="text-sm text-cold-light"><MapPin class="inline-block mr-1" size="15" stroke-width="4"/>{getVenueName(party.venue)}</div>
-              </li>
-            </a>
+            <PartyListItem party={party} venueName={getVenueName(party.venue)} />
           {/each}
           <li class="bg-base-900 flex flex-row w-full">
             <a href="/parties" class="text-cold-light px-4 p-2 mx-auto">Ver más toques <ChevronsDown class="inline-block" /></a>
@@ -81,15 +78,7 @@
       {:else}
         <ul class="p-0 space-y-[1px]">
           {#each topVenues as venue}
-            <a href={`/venues/${venue.id}`} class="block">
-              <li class="bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-2">
-                <div class="text-xl text-yellow">{venue.name}</div>
-                <div class="flex flex-row w-full justify-between">
-                  <div class="text-sm">{venue.address}</div>
-                  <div class="text-sm text-cold-light">{venue.count} toques</div>
-                </div>
-              </li>
-            </a>
+            <VenueListItem venue={venue} />
           {/each}
           <li class="bg-base-900 flex flex-row w-full">
             <a href="/venues" class="text-cold-light px-4 p-2 mx-auto">Ver más locales<ChevronsDown class="inline-block" /></a>

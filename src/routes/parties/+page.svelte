@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
-    import { ArrowLeft } from 'lucide-svelte';
+    import { ChevronLeft } from 'lucide-svelte';
+    import PartyListItem from '$lib/components/PartyListItem.svelte';
 
     let parties: any[] = [];
     let venues: any[] = [];
@@ -37,7 +38,7 @@
 </script>
 <div class="flex flex-col items-left">
     <div class="flex flex-row items-center">
-        <a href="/" class="text-lg text-bold text-slate-700 flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> Volver</a>
+        <a href="/" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft/>VOLVER</a>
     </div>
     <section>
         <h2 class="text-3xl text-white m-4 mb-4">ROCK PARTIES</h2>
@@ -56,13 +57,7 @@
                 {:else}
                     <ul class="p-0 space-y-[1px]">
                         {#each getUpcomingParties() as party}
-                            <a href={`/parties/${party.id}`} class="block">
-                                <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
-                                    <div class="text-2xl text-yellow">{party.title}</div>
-                                    <div class="text-sm text-white">{party.date}</div>
-                                    <div class="text-sm text-cold-light">{getVenueName(party.venue)}</div>
-                                </li>
-                            </a>
+                            <PartyListItem party={party} venueName={getVenueName(party.venue)} />
                         {/each}
                     </ul>
                 {/if}
@@ -72,14 +67,7 @@
                 {:else}
                     <ul class="p-0 space-y-[1px]">
                         {#each getPastParties() as party}
-                            <a href={`/parties/${party.id}`} class="block">
-                                <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
-                                    <div class="text-2xl text-yellow">{party.title}</div>
-                                    <div class="text-sm text-white">{party.description}</div>
-                                    <div class="text-sm text-white">{party.date}</div>
-                                    <div class="text-sm text-cold-light">{getVenueName(party.venue)}</div>
-                                </li>
-                            </a>
+                            <PartyListItem party={party} venueName={getVenueName(party.venue)} />
                         {/each}
                     </ul>
                 {/if}

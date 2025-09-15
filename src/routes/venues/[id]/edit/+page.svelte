@@ -4,7 +4,7 @@ import { onMount } from 'svelte';
 import { page } from '$app/state';
 import { supabase } from '$lib/supabaseClient';
 import VenueForm from '$lib/components/VenueForm.svelte';
-import { ArrowLeft } from 'lucide-svelte';
+import { ChevronLeft } from 'lucide-svelte';
 import { user } from '$lib/stores/user';
 
 // State variables
@@ -43,7 +43,7 @@ onMount(async () => {
 
 <div class="bg-cold-base p-4 flex-row">
   <h2 class="text-white text-2xl">EDITAR LOCAL</h2>
-  <a href="/venues" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
+  <a href="/venues" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
 </div>
 {#if !venue}
   <div class="mt-8 p-6 text-white">Cargando datos del local...</div>

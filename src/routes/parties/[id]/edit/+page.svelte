@@ -5,7 +5,7 @@ import { page } from '$app/state';
 import { supabase } from '$lib/supabaseClient';
 import PartyForm from '$lib/components/PartyForm.svelte';
 import { user } from '$lib/stores/user';
-import { ArrowLeft } from 'lucide-svelte';
+import { ChevronLeft } from 'lucide-svelte';
 
 // State variables
 let party: any = null;
@@ -43,7 +43,7 @@ onMount(async () => {
 
 <div class="bg-cold-base p-4 flex-row">
   <h2 class="text-white text-2xl">EDITAR FIESTA</h2>
-  <a href="/parties" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
+  <a href="/parties" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
 </div>
 {#if !party}
   <div class="mt-8 p-6 text-white">Cargando datos de la fiesta...</div>

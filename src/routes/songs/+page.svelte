@@ -19,7 +19,7 @@
 </script>
 <div class="flex flex-col items-left gap-6">
     <div class="mb-4">
-        <a href="/" class="text-lg text-bold text-slate-700 flex items-center gap-2"><ArrowLeft/> Volver</a>
+        <a href="/" class="text-bold text-cold-light flex items-center gap-2"><ArrowLeft/>VOLVER</a>
     </div>
     <section>
         <h2 class="text-lg font-bold mb-2 px-4 p-3">Canciones</h2>
