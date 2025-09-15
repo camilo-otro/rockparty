@@ -54,7 +54,7 @@
         <ul class="p-0 space-y-[1px]">
           {#each parties as party}
             <a href={`/parties/${party.id}`} class="block">
-              <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
+              <li class="bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-2">
                 <div class="text-2xl text-yellow">{party.title}</div>
                 <div class="text-sm text-white">{party.date}</div>
                 <div class="text-sm text-cold-light"><MapPin class="inline-block mr-1" size="15" stroke-width="4"/>{getVenueName(party.venue)}</div>
@@ -82,7 +82,7 @@
         <ul class="p-0 space-y-[1px]">
           {#each topVenues as venue}
             <a href={`/venues/${venue.id}`} class="block">
-              <li class="bg-base-900 cursor-pointer hover:bg-slate-200 transition px-4 py-2">
+              <li class="bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-2">
                 <div class="text-xl text-yellow">{venue.name}</div>
                 <div class="flex flex-row w-full justify-between">
                   <div class="text-sm">{venue.address}</div>

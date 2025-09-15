@@ -3,7 +3,7 @@
     import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
-    import { page } from '$app/stores';
+    import { page } from '$app/state';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
     import SongSelect from '$lib/components/SongSelect.svelte';
@@ -29,7 +29,7 @@
         isAuthenticated = !!u?.id;
         userId = u?.id ?? null;
       });
-        partyId = get(page).url.searchParams.get('partyId') ?? null;
+        partyId = page.url.searchParams.get('partyId') ?? null;
         const { data, error } = await supabase.from('song').select('id, title, artist');
         if (error) {
             errorSongs = error.message;
@@ -52,8 +52,7 @@
         // Sanitize inputs
         const safeRefLink = sanitizeString(refLink);
         const safeKey = sanitizeString(key);
-        const safeSelectedSong = sanitizeString(selectedSong);
-        partyId = get(page).url.searchParams.get('partyId') ?? null;
+        partyId = page.url.searchParams.get('partyId') ?? null;
         submitting = true;
         error = '';
         
@@ -62,7 +61,7 @@
                 .from('performance')
                 .insert([{ 
                     party: partyId, 
-                    song: safeSelectedSong, 
+                    song: selectedSong, 
                     suggested_by: userId, 
                     ref_link: safeRefLink || null, 
                     key: safeKey || null 
@@ -98,7 +97,7 @@
     <a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
+  <div class="mt-8 p-6 bg-yellow-100 text-yellow rounded-md text-center">
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una performance.
   </div>
 {:else}

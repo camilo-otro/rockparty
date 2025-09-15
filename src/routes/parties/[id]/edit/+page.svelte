@@ -1,40 +1,44 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/state';
-  import { supabase } from '$lib/supabaseClient';
-  import PartyForm from '$lib/components/PartyForm.svelte';
-  import { user } from '$lib/stores/user';
-  import { ArrowLeft } from 'lucide-svelte';
+// Imports
+import { onMount } from 'svelte';
+import { page } from '$app/state';
+import { supabase } from '$lib/supabaseClient';
+import PartyForm from '$lib/components/PartyForm.svelte';
+import { user } from '$lib/stores/user';
+import { ArrowLeft } from 'lucide-svelte';
 
-  let party: any = null;
-  let venues: any[] = [];
-  let loadingVenues = true;
-  let errorVenues: string | null = null;
-  let submitting = false;
-  let success = false;
-  let error = '';
-  let partyAdmins: string[] = [];
-  let currentUserId: string | null = null;
+// State variables
+let party: any = null;
+let venues: any[] = [];
+let loadingVenues = true;
+let errorVenues: string | null = null;
+let submitting = false;
+let success = false;
+let error = '';
+let partyAdmins: string[] = [];
+let currentUserId: string | null = null;
 
-  onMount(async () => {
-    const id = page.params.id;
-    const { data: partyData, error: partyErr } = await supabase.from('party').select('*').eq('id', id).single();
-    party = partyData;
-    const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name');
-    if (venueErr) {
-      errorVenues = venueErr.message;
-    } else {
-      venues = venueData ?? [];
-    }
-    // Fetch party admins
-    const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', id);
-    partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
-    // Get current user id
-    user.subscribe(u => {
-      currentUserId = u?.id ?? null;
-    })();
-    loadingVenues = false;
-  });
+// Lifecycle
+onMount(async () => {
+  const id = page.params.id;
+  // Fetch party
+  const { data: partyData, error: partyErr } = await supabase.from('party').select('*').eq('id', id).single();
+  party = partyData;
+  // Fetch venues
+  const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name');
+  venues = venueData ?? [];
+  if (venueErr) errorVenues = venueErr.message;
+  // Fetch party admins
+  const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', id);
+  partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
+  // Get current user id
+  user.subscribe(u => {
+    currentUserId = u?.id ?? null;
+  })();
+  loadingVenues = false;
+});
+
+// Render
 </script>
 
 <div class="bg-cold-base p-4 flex-row">

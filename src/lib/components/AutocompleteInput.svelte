@@ -63,11 +63,11 @@
   />
   
   {#if isOpen && filteredSuggestions.length > 0}
-    <div class="absolute z-10 w-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-y-auto">
+    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded shadow-lg max-h-60 overflow-y-auto">
       {#each filteredSuggestions as suggestion}
         <button
           type="button"
-          class="w-full text-left p-3 hover:bg-slate-100 border-b last:border-b-0"
+          class="w-full text-left p-3 hover:bg-base-900 border-b last:border-b-0"
           on:mousedown={() => selectSuggestion(suggestion)}
         >
           {suggestion}

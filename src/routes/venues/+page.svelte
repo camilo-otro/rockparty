@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
-    import { ArrowLeft } from 'lucide-svelte';
+    import { ArrowLeft, MapPin } from 'lucide-svelte';
 
     let venues: any[] = [];
     let parties: any[] = [];
@@ -42,10 +42,10 @@
             <ul class="space-y-2">
                 {#each venues as venue}
                     <a href={`/venues/${venue.id}`} class="block">
-                        <li class="px-5 p-3 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition flex justify-between items-center">
+                        <li class="px-5 p-3 bg-base-950 rounded shadow cursor-pointer hover:bg-base-900 transition flex justify-between items-center">
                             <div>
-                                <div class="font-semibold">{venue.name}</div>
-                                <div class="text-sm text-slate-600">{venue.address}</div>
+                                <div class="text-xl text-yellow">{venue.name}</div>
+                                <div class=""><MapPin size={14} class="inline-block mr-1" /> {venue.address}</div>
                             </div>
                             <div class="text-right text-slate-700">
                                 {getUpcomingPartyCount(venue.id)} fiestas cercanas

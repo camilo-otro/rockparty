@@ -69,15 +69,15 @@
   />
   
   {#if isOpen && filteredSongs.length > 0}
-    <div class="absolute z-10 w-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-y-auto">
+    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded shadow-lg max-h-60 overflow-y-auto">
       {#each filteredSongs as song}
         <button
           type="button"
-          class="w-full text-left p-3 hover:bg-slate-100 border-b last:border-b-0"
+          class="w-full text-left p-3 hover:bg-base-900 border-b last:border-b-0"
           on:mousedown={() => selectSong(song)}
         >
           <div class="font-medium">{song.title}</div>
-          <div class="text-sm text-slate-600">{song.artist}</div>
+          <div class="text-sm text-yellow">{song.artist}</div>
         </button>
       {/each}
     </div>

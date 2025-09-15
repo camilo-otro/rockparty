@@ -4,7 +4,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
-    import { sanitizeString } from '$lib/sanitize';
+    import VenueForm from '$lib/components/VenueForm.svelte';
 
     let submitting = false;
     let name = '';
@@ -25,8 +25,8 @@
 
     onMount(async () => {
         unsubscribeUser = user.subscribe(u => {
-            userId = u?.id ?? null;
             isAuthenticated = !!u?.id;
+            userId = u?.id ?? null;
         });
         // Fetch venue types
         const { supabase } = await import('$lib/supabaseClient');
@@ -40,41 +40,6 @@
     onDestroy(() => {
         if (unsubscribeUser) unsubscribeUser();
     });
-
-    async function handleSubmit() {
-        if (!name || !address || !contactName || !contact || !selectedVenueType) {
-            error = 'Todos los campos son obligatorios.';
-            return;
-        }
-        // Sanitize inputs
-        const safeName = sanitizeString(name);
-        const safeAddress = sanitizeString(address);
-        const safeContactName = sanitizeString(contactName);
-        const safeContact = sanitizeString(contact);
-        const safeVenueType = sanitizeString(selectedVenueType);
-        submitting = true;
-        error = '';
-        try {
-            const { supabase } = await import('$lib/supabaseClient');
-            const { data, error: dbError } = await supabase
-                .from('venue')
-                .insert([{ name: safeName, address: safeAddress, contact_name: safeContactName, contact: safeContact, created_by: userId, venue_type: safeVenueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals }])
-                .select();
-                
-            if (dbError) {
-                error = `Error de base de datos: ${dbError.message}`;
-            } else {
-                success = true;
-                setTimeout(() => {
-                    window.location.href = '/venues';
-                }, 1000);
-            }
-        } catch (e) {
-            error = 'No se pudo conectar con el servidor.';
-        }
-        
-        submitting = false;
-    }
 
     function loginWithGoogle() {
       import('$lib/supabaseClient').then(({ supabase }) => {
@@ -95,42 +60,50 @@
   </div>
 {:else}
   {#if !success && !error}
-    <form on:submit|preventDefault={handleSubmit}>
-        <div class="flex flex-col w-3/4 p-5 mb-4">
-            <label for="name" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Nombre del Local</label>
-            <input id="name" type="text" bind:value={name} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
-        
-            <label for="address" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Dirección</label>
-            <input id="address" type="text" bind:value={address} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 50 }} />
-        
-            <label for="contact_name" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Persona de contacto</label>
-            <input id="contact_name" type="text" bind:value={contactName} required class="p-2 border rounded"  in:fly={{ y: -30, duration: 400, delay: 100 }} />
-
-            <label for="contact" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Info de contacto</label>
-            <input id="contact" type="text" bind:value={contact} required class="p-2 border rounded" placeholder="telefono, correo, instagram" in:fly={{ y: -30, duration: 400, delay: 150 }}/>
-            
-            <label for="venue_type" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 200 }}>Tipo de Local</label>
-            <select id="venue_type" bind:value={selectedVenueType} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 200 }}>
-                {#each venueTypes as type}
-                    <option value={type.id}>{type.name}</option>
-                {/each}
-            </select>
-
-            <div class="flex items-center mb-4" in:fly={{ y: -30, duration: 400, delay: 250 }}>
-                <input id="allows_parties" type="checkbox" bind:checked={allowsParties} class="mr-2" />
-                <label for="allows_parties" class="cursor-pointer">Permite fiestas</label>
-            </div>
-
-            <div class="flex items-center mb-4" in:fly={{ y: -30, duration: 400, delay: 300 }}>
-                <input id="allows_rehearsals" type="checkbox" bind:checked={allowsRehearsals} class="mr-2" />
-                <label for="allows_rehearsals" class="cursor-pointer">Permite ensayos</label>
-            </div>
-        </div>
-        
-        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting}>
-            {submitting ? 'Creando...' : 'Crear Local'}
-        </button>
-    </form>
+    <VenueForm
+      submitting={submitting}
+      success={success}
+      error={error}
+      initialName={name}
+      initialAddress={address}
+      initialContactName={contactName}
+      initialContact={contact}
+      initialVenueType={selectedVenueType}
+      venueTypes={venueTypes}
+      initialAllowsParties={allowsParties}
+      initialAllowsRehearsals={allowsRehearsals}
+      userId={userId}
+      isAuthenticated={isAuthenticated}
+      initialAdmins={[]}
+      on:submit={async (e) => {
+        submitting = true;
+        error = '';
+        const { name, address, contactName, contact, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
+        try {
+          const { supabase } = await import('$lib/supabaseClient');
+          const { data, error: dbError } = await supabase
+            .from('venue')
+            .insert([{ name, address, contact_name: contactName, contact, created_by: userId, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals }])
+            .select();
+          if (dbError) {
+            error = `Error de base de datos: ${dbError.message}`;
+          } else {
+            // Add venue_admins
+            if (data && data.length > 0 && admins && admins.length > 0) {
+              await supabase.from('venue_admin').insert(admins.map((a: string) => ({ venue_id: data[0].id, user_id: a })));
+            }
+            success = true;
+            setTimeout(() => {
+              window.location.href = '/venues';
+            }, 1000);
+          }
+        } catch (e) {
+          error = 'No se pudo conectar con el servidor.';
+        }
+        submitting = false;
+      }}
+      on:error={(e) => error = e.detail}
+    />
   {/if}
   {#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>

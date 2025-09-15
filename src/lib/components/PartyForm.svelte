@@ -98,9 +98,9 @@
     <div class="mb-2">
       <input id="admins" type="text" bind:value={adminInput} on:input={handleAdminInput} placeholder="Buscar usuario..." class="p-2 border rounded w-full" />
       {#if adminInput && filteredOptions.length > 0}
-        <ul class="bg-white border rounded shadow mt-1">
+        <ul class="bg-base-950 border rounded shadow mt-1">
           {#each filteredOptions as option}
-            <li class="p-2 cursor-pointer hover:bg-cold-light" on:click={() => addAdmin(option)}>{option.nickname}</li>
+            <li class="p-2 cursor-pointer hover:bg-base-900" on:click={() => addAdmin(option)}>{option.nickname}</li>
           {/each}
         </ul>
       {/if}
