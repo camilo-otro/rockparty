@@ -3,11 +3,12 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
-  import { get } from 'svelte/store';
-  import { ChevronLeft, GripHorizontal, Share2, Edit } from 'lucide-svelte';
+  import { ChevronLeft, GripHorizontal, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import Sortable from 'sortablejs';
   import ShareModal from '$lib/components/ShareModal.svelte';
+  import dayjs from 'dayjs';
+  import 'dayjs/locale/es';
 
   // State variables
   let party: any = null;
@@ -15,6 +16,7 @@
   let performances: any[] =   [];
   let songs: any[] = [];
   let users: any[] = [];
+  let partyPerformers: any[] = [];
   let loading = true;
   let error: string | null = null;
   let loadingPerformances = true;
@@ -25,15 +27,24 @@
   let sortableList: HTMLElement;
   let showShareModal = false;
   let partyAdmins: string[] = [];
+  let usersLoaded = false;
 
   // Derived helpers
   function getSongTitle(songId: number) {
     const song = songs.find(s => s.id === songId);
     return song ? song.title : 'Sin título';
   }
-  function getUserNickname(userId: number) {
-    const userObj = users.find(u => u.id === userId);
-    return userObj ? userObj.nickname : 'Sin nombre';
+  function getSongArtist(songId: number) {
+    const song = songs.find(s => s.id === songId);
+    return song ? song.artist : '';
+  }
+  function getUserNickname(userId: string) {
+    const usr = users.find(u => u.id === userId);
+    return usr ? usr.nickname : 'Anónimo';
+  }
+  function getUserAvatar(userId: string) {
+    const usr = users.find(u => u.id === userId);
+    return usr && usr.avatarUrl ? usr.avatarUrl : 'assets/images/default-avatar.png';
   }
 
   // Sortable functionality
@@ -161,10 +172,26 @@
         // Fetch all songs and users referenced in performances
         const songIds = [...new Set(performances.map(p => p.song))];
         const userIds = [...new Set(performances.map(p => p.suggested_by))];
-        const { data: songData } = await supabase.from('song').select('id, title').in('id', songIds);
-        const { data: userData } = await supabase.from('profile').select('id, nickname').in('id', userIds);
+        userIds.push(party.created_by);
+        const { data: songData } = await supabase.from('song').select('id, title, artist').in('id', songIds);
+        const { data: userData } = await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', userIds);
         songs = songData ?? [];
         users = userData ?? [];
+        usersLoaded = true;
+        // Fetch performers and their instruments
+        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').in('performance_id', performances.map(p => p.id));
+        const { data: instrumentData } = await supabase.from('instrument').select('id, name');
+        // Group by user and count songs
+        const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
+        for (const perfUser of perfUsers ?? []) {
+          if (!performerMap[perfUser.user_id]) {
+            performerMap[perfUser.user_id] = { user_id: perfUser.user_id, instruments: [], songCount: 0 };
+          }
+          const inst = instrumentData?.find(i => i.id === perfUser.instrument_id);
+          if (inst) performerMap[perfUser.user_id].instruments.push(inst.name);
+          performerMap[perfUser.user_id].songCount += 1;
+        }
+        partyPerformers = Object.values(performerMap).sort((a, b) => b.songCount - a.songCount);
         // Initialize sortable after performances are loaded
         setTimeout(initializeSortable, 0);
       }
@@ -194,34 +221,35 @@
   }
 </style>
 
-<div class="max-w-xl mx-auto mt-2">
+<div class="max-w-xl mx-auto mt-2 p-4 flex flex-col gap-4">
   <div class="flex flex-row w-full justify-between">
-    <a href="/parties" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft />VOLVER</a>
-    <div class="flex flex-row w-auto gap-2 m-4">
-      {#if currentUserId == party?.created_by || partyAdmins && currentUserId && partyAdmins.includes(currentUserId)}
-        <button on:click={handleEdit} class="bg-cold-light text-black rounded px-2 py-1 inline-flex items-center gap-2">
-          <Edit size={18} />
-        </button>
-      {/if}
-      <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded px-2 py-1" on:click={handleShare} title="Compartir">
-          <Share2 size={18} />
-        </button>
-    </div>
+    <a href="/parties" class="text-bold text-cold-light flex flex-row"><ChevronLeft />VOLVER</a>
+    {#if currentUserId == party?.created_by || partyAdmins && currentUserId && partyAdmins.includes(currentUserId)}
+      <button on:click={handleEdit} class="bg-cold-light text-black rounded-lg px-4 py-2 inline-flex items-center gap-2">
+        <Edit size={18} />
+      </button>
+    {/if}
   </div>
   {#if loading}
     <div class="text-white p-4">Cargando...</div>
   {:else if error}
     <div class="text-red-500 p-4">Error: {error}</div>
   {:else if party}
-    <div class="px-6 p-2 bg-base-900 rounded shadow mx-4">
-      <div class="flex flex-row justify-between">
-        <h2 class="text-3xl text-yellow font-bold mb-2">{party.title}</h2>
-        
-      </div>
-      <div class="mb-2 text-white">{party.description}</div>
-      <div class="mb-2 text-cold-light">Fecha: {party.date}</div>
-      <div class="mb-2 text-cold-light">Lugar: {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
-      <h3 class="text-2xl text-white font-semibold mt-4 mb-2">Setlist</h3>
+    <div class="flex flex-row justify-between">
+      <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
+    </div>
+    <div class="">Organizado por: {#if usersLoaded}<img src={getUserAvatar(party.created_by)} alt="User Avatar" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" /><span class="text-cold-light">{getUserNickname(party.created_by)}</span>{/if}</div>
+    <div class="text-lg mb-2 text-white">{party.description}</div>
+    <div class="mb-2 text-white">{dayjs(party.date).locale('es').format('ddd D [de] MMMM, YYYY')}</div>
+    <div class="mb-2 text-cold-light"><MapPin class="inline-block" size={18} /> {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
+    <div class="mt-2 w-full flex items-center">
+      <button on:click={handleShare} class="bg-cold-base text-white rounded-lg p-2 px-6 inline-flex items-center gap-2 m-auto">
+        Compartir
+        <Share2 class="w-5 h-5" />
+      </button>
+    </div>
+    <h3 class="text-3xl text-white font-medium tracking-widest mt-4 mb-2">SETLIST</h3>
+    <div class="bg-base-950 rounded-lg overflow-hidden">
       {#if loadingPerformances}
         <div class="text-white">Cargando Setlist...</div>
       {:else if errorPerformances}
@@ -229,18 +257,18 @@
       {:else if performances.length === 0}
         <div class="text-white">No hay canciones en el Setlist.</div>
       {:else}
-        <ul bind:this={sortableList} class="mb-4 grid grid-cols-1 gap-2">
+        <ul bind:this={sortableList} class="grid grid-cols-1 space-y-[1px]">
           {#each performances as perf, index (perf.id)}
             <li 
-              class="bg-cold-base rounded shadow px-4 p-2 transition-all duration-200"
+              class="bg-base-900 px-4 p-2 transition-all duration-200"
               data-id={perf.id}
             >
               <a href={`/performance/${perf.id}`} class="block">
                 <div class="flex items-center gap-2">
-                  <span class="text-cold-light text-sm font-mono">{index + 1}.</span>
+                  <span class="text-gray-400 text-3xl font-medium mr-2">{index + 1}</span>
                   <div class="flex-1">
-                    <h4 class="text-md text-yellow font-semibold mb-1">{getSongTitle(perf.song)}</h4>
-                    <div class="text-xs text-cold-light mb-1">Sugerido por: {getUserNickname(perf.suggested_by)}</div>
+                    <h4 class="text-lg text-yellow font-medium mb-1">{getSongTitle(perf.song)}</h4>
+                    <div class="text-sm text-white mb-1">{getSongArtist(perf.song)}</div>
                     {#if perf.key}
                       <div class="mb-1 text-white">Tonalidad: {perf.key}</div>
                     {/if}
@@ -256,19 +284,39 @@
           {/each}
         </ul>
       {/if}
-      <div class="flex flex-row justify-between mb-4">
-        <a href={`/performance/create?partyId=${party.id}`} class="bg-cold-base text-white rounded p-2 px-4 inline-block mt-2">Sugerir otra cancion</a>
-        <div class="mt-2">
-          <button on:click={handleShare} class="bg-yellow text-black rounded p-2 px-4 inline-flex items-center gap-2">
-            <Share2 class="w-5 h-5" />
-            Compartir
-          </button>
-        </div>
-      </div>
-      {#if showShareModal}
-        <ShareModal url={window.location.href} title={party?.title} on:close={closeShareModal} />
-      {/if}
+      <a href={`/performance/create?partyId=${party.id}`} class="w-full bg-cold-base text-white p-3 inline-block text-center">Sugerir una canción <Plus class="inline-block" /></a>
     </div>
+    <h3 class="text-3xl text-white font-medium pt-4 mt-2">MÚSICOS</h3>
+    <div class="bg-base-950 rounded-lg overflow-hidden mt-2">
+      <ul class="space-y-[1px]">
+        {#each partyPerformers as performer}
+          <li class="flex flex-col bg-base-900 gap-2 p-4">
+            <div class="flex flex-row gap-2">
+                <img src={getUserAvatar(performer.user_id)} alt="Avatar" class="w-6 h-6 rounded-full" />
+                <span class="text-cold-light font-semibold">{getUserNickname(performer.user_id)}</span>
+            </div>
+            <div class="flex flex-row justify-between">
+              <span class="text-sm text-white">{performer.instruments.join(', ')}</span>
+              <span class="text-sm text-cold-light font-bold ml-2">{performer.songCount} CANCIÓN{performer.songCount === 1 ? '' : 'ES'}</span>
+            </div>
+          </li>
+        {/each}
+        {#if partyPerformers.length === 0}
+          <li class="text-cold-light">Nadie se ha anotado aún.</li>
+        {/if}
+      </ul>
+    </div>
+    <div class="flex flex-row justify-between mb-4">
+      <div class="mt-2 w-full flex items-center">
+        <button on:click={handleShare} class="bg-cold-base text-white rounded-lg p-2 px-6 inline-flex items-center gap-2 m-auto">
+          Compartir
+          <Share2 class="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+    {#if showShareModal}
+      <ShareModal url={window.location.href} title={party?.title} on:close={closeShareModal} />
+    {/if}
     <div class="flex flex-row items-center">
       <a href="/parties" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft />VOLVER</a>
     </div>

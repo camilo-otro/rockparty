@@ -55,7 +55,7 @@
     <a href="/venues" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
 </div>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
+  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un local.
   </div>
 {:else}
@@ -106,12 +106,12 @@
     />
   {/if}
   {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Nuevo Local Creado!
     </div>
   {/if}
   {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Error: {error}
     </div>
   {/if}

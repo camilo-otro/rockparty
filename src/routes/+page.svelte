@@ -45,7 +45,7 @@
 <div class="max-w-2xl mx-auto mt-8 flex flex-col gap-8">
   <section>
     <h2 class="text-3xl text-white m-4 mb-4">PRÓXIMOS TOQUES</h2>
-    <div class="m-4 rounded-md overflow-clip flex flex-col">
+    <div class="m-4 rounded-lg overflow-clip flex flex-col">
       <a href="/parties/create" class="w-full bg-cold-base text-white text-sm block text-center p-2">Planea un nuevo toque <Plus class="inline-block" /></a>
       {#if loading}
         <div>Cargando...</div>
@@ -68,7 +68,7 @@
   </section>
   <section>
     <h2 class="text-3xl m-4 mb-4">LOCALES CERCANOS</h2>
-    <div class="m-4 rounded-md overflow-clip flex flex-col">
+    <div class="m-4 rounded-lg overflow-clip flex flex-col">
       {#if loading}
         <div>Cargando...</div>
       {:else if error}

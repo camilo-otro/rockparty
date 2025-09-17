@@ -33,7 +33,7 @@
             <ul class="space-y-2">
                 {#each songs as song}
                     <a href={`/songs/${song.id}`} class="block">
-                        <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
+                        <li class="p-4 bg-slate-100 rounded-lg shadow cursor-pointer hover:bg-slate-200 transition">
                             <div class="font-semibold">{song.title}</div>
                             <div class="text-sm text-slate-600">Artista: {song.artist}</div>
                         </li>
@@ -43,6 +43,6 @@
         {/if}
     </section>
     <div class="flex justify-center">
-        <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-6 rounded" href="/songs/create">Agregar una canción</a>
+        <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-6 rounded-lg" href="/songs/create">Agregar una canción</a>
     </div>
 </div>

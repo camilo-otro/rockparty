@@ -102,12 +102,12 @@ onMount(async () => {
     on:error={(e) => error = e.detail}
   />
   {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center">
+    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center">
       Fiesta actualizada!
     </div>
   {/if}
   {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center">
+    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center">
       Error: {error}
     </div>
   {/if}

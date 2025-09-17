@@ -30,7 +30,7 @@
   {:else if error}
     <div class="text-red-500">Error: {error}</div>
   {:else if song}
-    <div class="p-6 bg-slate-100 rounded shadow">
+    <div class="p-6 bg-slate-100 rounded-lg shadow">
       <h2 class="text-2xl font-bold mb-2">{song.title}</h2>
       <div class="mb-2 text-slate-700">Artista: {song.artist}</div>
       <div class="mb-2 text-slate-700">Tonalidad: {song.key}</div>

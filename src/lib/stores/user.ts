@@ -3,6 +3,7 @@ export type UserRecord = {
   email: string;
   role?: string;
   nickname?: string;
+  avatarUrl?: string | null;
 };
 
 import { writable } from 'svelte/store';

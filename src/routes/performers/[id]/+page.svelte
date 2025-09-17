@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ChevronLeft } from 'lucide-svelte';
+  import { ChevronLeft, Edit } from 'lucide-svelte';
 
   let performer: any = null;
   let loading = true;
@@ -11,7 +11,7 @@
 
   onMount(async () => {
     const id = get(page).params.id;
-    const { data, error: err } = await supabase.from('user').select('*').eq('id', id).single();
+    const { data, error: err } = await supabase.from('profile').select('*').eq('id', id).single();
     if (err) {
       error = err.message;
     } else {
@@ -30,10 +30,15 @@
   {:else if error}
     <div class="text-red-500">Error: {error}</div>
   {:else if performer}
-    <div class="p-6 bg-slate-100 rounded shadow">
-      <h2 class="text-2xl font-bold mb-2">{performer.nickname}</h2>
-      <div class="mb-2 text-slate-700">Role: {performer.role}</div>
-      <a href="/performers" class="text-cold-light"><ChevronLeft /> Volver a la lista</a>
+    <div class="p-6">
+      <div class="flex justify-center">
+        <img src={performer.avatar_url} alt="User Avatar" class="w-32 h-32 rounded-full mb-4" />
+      </div>
+      <h2 class="text-3xl text-yellow font-medium mb-2">{performer.nickname}</h2>
+      <div class="mb-2 text-white">{performer.email}</div>
+      <div class="flex justify-center">
+        <button class="btn btn-accent text-center bg-cold-base font-medium px-4 py-2 rounded-lg mt-4" on:click={() => window.location.href = `/performers/${performer.id}/edit`}>Editar perfil<Edit class="inline ml-2" size={16} /></button>
+      </div>
     </div>
   {/if}
 </div>

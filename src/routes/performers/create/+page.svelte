@@ -5,6 +5,7 @@
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
     import { sanitizeString } from '$lib/sanitize';
+    import PerformerForm from '$lib/components/PerformerForm.svelte';
 
     let submitting = false;
     let email: string = '';
@@ -15,10 +16,12 @@
     let error = '';
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
+    let avatarUrl = '';
 
     const userObj = get(user);
     email = userObj?.email ?? '';
     authId = userObj?.id ?? '';
+    avatarUrl = userObj?.avatarUrl ?? '';
 
     onMount(async () => {
       unsubscribeUser = user.subscribe(u => {
@@ -79,30 +82,51 @@
     <a href="/performers" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
+  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un intérprete.
   </div>
 {:else}
   {#if !success && !error}
-    <form on:submit|preventDefault={handleSubmit}>
-        <div class="flex flex-col w-3/4 p-5 mb-4">
-            <label for="email" class="mb-1">Email</label>
-            <input id="email" type="text" value={email} readonly class="p-2 border rounded bg-gray-100 text-gray-600" />
-            <label for="nickname" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Nickname</label>
-            <input id="nickname" type="text" bind:value={nickname} required class="p-2 border rounded" in:fly={{ y: -30, duration: 400 }} />
-        </div>
-        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 100 }}>
-            {submitting ? 'Creando...' : 'Crear Intérprete'}
-        </button>
-    </form>
+    <PerformerForm
+      submitting={submitting}
+      success={success}
+      error={error}
+      initialEmail={email}
+      initialNickname={nickname}
+      initialAvatarUrl={avatarUrl}
+      on:submit={async (e) => {
+        submitting = true;
+        error = '';
+        const { nickname, email, avatar_url } = e.detail;
+        try {
+          const { supabase } = await import('$lib/supabaseClient');
+          const { data, error: dbError } = await supabase
+            .from('profile')
+            .insert([{ nickname, email, avatar_url }])
+            .select();
+          if (dbError) {
+            error = `Database error: ${dbError.message}`;
+          } else {
+            success = true;
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 1000);
+          }
+        } catch (e) {
+          error = 'Could not connect to the server.';
+        }
+        submitting = false;
+      }}
+      on:error={(e) => error = e.detail}
+    />
   {/if}
   {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Nuevo Intérprete Creado!
     </div>
   {/if}
   {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Error: {error}
     </div>
   {/if}

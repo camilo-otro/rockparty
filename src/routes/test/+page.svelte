@@ -42,7 +42,7 @@
         placeholder="Search for songs..." 
         class="w-full p-3 border rounded-lg"
       />
-      <button type="submit" class="mt-2 px-4 py-2 bg-slate-700 text-slate-200 rounded">Buscar</button>
+      <button type="submit" class="mt-2 px-4 py-2 bg-slate-700 text-slate-200 rounded-lg">Buscar</button>
     </form>
     
     {#if searchingSongs}
@@ -52,7 +52,7 @@
         <h3 class="font-medium mb-2">Song Results:</h3>
         <ul class="space-y-2">
           {#each songResults as title}
-            <li class="p-3 bg-slate-100 rounded">
+            <li class="p-3 bg-slate-100 rounded-lg">
               <div class="font-medium">{title}</div>
             </li>
           {/each}
@@ -73,7 +73,7 @@
         placeholder="Search for artists..." 
         class="w-full p-3 border rounded-lg"
       />
-      <button type="submit" class="mt-2 px-4 py-2 bg-slate-700 text-slate-200 rounded">Buscar</button>
+      <button type="submit" class="mt-2 px-4 py-2 bg-slate-700 text-slate-200 rounded-lg">Buscar</button>
     </form>
     
     {#if searchingArtists}
@@ -83,7 +83,7 @@
         <h3 class="font-medium mb-2">Artist Results:</h3>
         <ul class="space-y-2">
           {#each artistResults as artist}
-            <li class="p-3 bg-slate-100 rounded">
+            <li class="p-3 bg-slate-100 rounded-lg">
               <div class="font-medium">{artist}</div>
             </li>
           {/each}

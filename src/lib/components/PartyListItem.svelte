@@ -1,5 +1,7 @@
 <script lang="ts">
   import { MapPin } from 'lucide-svelte';
+  import dayjs from 'dayjs';
+  import 'dayjs/locale/es';
   export let party: any;
   export let venueName: string;
 </script>
@@ -9,7 +11,7 @@
     {#if party.description}
       <div class="text-sm text-white">{party.description}</div>
     {/if}
-    <div class="text-sm text-white">{party.date}</div>
+  <div class="text-sm text-white">{dayjs(party.date).locale('es').format('ddd D [de] MMMM, YYYY')}</div>
     <div class="text-sm text-cold-light"><MapPin class="inline-block mr-1" size="15" stroke-width="4"/>{venueName}</div>
   </li>
 </a>

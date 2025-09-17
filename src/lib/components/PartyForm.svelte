@@ -76,18 +76,18 @@
 <form on:submit|preventDefault={handleSubmit}>
   <div class="flex flex-col w-3/4 p-5 mb-4">
     <label for="title" class="mb-1">Título</label>
-    <input id="title" type="text" bind:value={title} required class="p-2 border rounded" />
+    <input id="title" type="text" bind:value={title} required class="p-2 border rounded-lg" />
     <label for="description" class="mb-1">Descripción</label>
-    <textarea id="description" bind:value={description} class="p-2 border rounded mb-2" rows="3"></textarea>
+    <textarea id="description" bind:value={description} class="p-2 border rounded-lg mb-2" rows="3"></textarea>
     <label for="date" class="mb-1">Fecha</label>
-    <input id="date" type="date" bind:value={date} required class="p-2 border rounded" />
+    <input id="date" type="date" bind:value={date} required class="p-2 border rounded-lg" />
     <label for="venue" class="mb-1">Venue</label>
     {#if loadingVenues}
       <div class="text-slate-600">Cargando venues...</div>
     {:else if errorVenues}
       <div class="text-red-600">Error: {errorVenues}</div>
     {:else}
-      <select id="venue" bind:value={selectedVenue} required class="p-2 border rounded">
+      <select id="venue" bind:value={selectedVenue} required class="p-2 border rounded-lg">
         <option value="" disabled selected>Selecciona un venue</option>
         {#each venues as venue}
           <option value={venue.id}>{venue.name}</option>
@@ -96,9 +96,9 @@
     {/if}
     <label for="admins" class="mb-1 mt-4">Administradores de la fiesta</label>
     <div class="mb-2">
-      <input id="admins" type="text" bind:value={adminInput} on:input={handleAdminInput} placeholder="Buscar usuario..." class="p-2 border rounded w-full" />
+      <input id="admins" type="text" bind:value={adminInput} on:input={handleAdminInput} placeholder="Buscar usuario..." class="p-2 border rounded-lg w-full" />
       {#if adminInput && filteredOptions.length > 0}
-        <ul class="bg-base-950 border rounded shadow mt-1">
+        <ul class="bg-base-950 border rounded-lg shadow mt-1">
           {#each filteredOptions as option}
             <li class="p-2 cursor-pointer hover:bg-base-900" on:click={() => addAdmin(option)}>{option.nickname}</li>
           {/each}
@@ -106,7 +106,7 @@
       {/if}
       <div class="flex flex-wrap gap-2 mt-2">
         {#each admins as admin}
-          <span class="bg-cold-base text-white rounded px-2 py-1 flex items-center gap-1">
+          <span class="bg-cold-base text-white rounded-lg px-2 py-1 flex items-center gap-1">
             {admin.nickname}
             <button type="button" class="ml-1 text-yellow" on:click={() => removeAdmin(admin.id)}>✕</button>
           </span>
@@ -114,7 +114,7 @@
       </div>
     </div>
   </div>
-  <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting}>
+  <button class="bg-cold-base text-white rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Creando...' : 'Guardar Fiesta'}
   </button>
 </form>

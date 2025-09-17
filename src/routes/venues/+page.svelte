@@ -37,7 +37,7 @@
     </div>
     <section>
         <h2 class="text-3xl text-white m-4 mb-4">LOCALES</h2>
-        <div class="m-4 rounded-md overflow-clip flex flex-col">
+        <div class="m-4 rounded-lg overflow-clip flex flex-col">
             {#if loading}
                 <div class="text-white p-4">Cargando...</div>
             {:else if error}
@@ -54,6 +54,6 @@
         </div>
     </section>
     <div class="flex justify-center p-4">
-        <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-4 rounded" href="/venues/create">Agregar un local</a>
+        <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-4 rounded-lg" href="/venues/create">Agregar un local</a>
     </div>
 </div>

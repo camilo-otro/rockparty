@@ -33,7 +33,7 @@
             <ul class="space-y-2">
                 {#each performers as performer}
                     <a href={`/performers/${performer.id}`} class="block">
-                        <li class="p-4 bg-slate-100 rounded shadow cursor-pointer hover:bg-slate-200 transition">
+                        <li class="p-4 bg-slate-100 rounded-lg shadow cursor-pointer hover:bg-slate-200 transition">
                             <div class="font-semibold">{performer.nickname}</div>
                             <div class="text-sm text-slate-600">Role: {performer.role}</div>
                         </li>
@@ -42,5 +42,5 @@
             </ul>
         {/if}
     </section>
-    <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-1/3 p-6 rounded" href="/performers/create">Agregar un intérprete</a>
+    <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-1/3 p-6 rounded-lg" href="/performers/create">Agregar un intérprete</a>
 </div>

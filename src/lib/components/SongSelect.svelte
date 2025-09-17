@@ -63,13 +63,13 @@
     on:focus={handleFocus}
     on:blur={handleBlur}
     on:input={handleInput}
-    class="w-full p-2 border rounded {error ? 'border-red-500' : ''}"
+    class="w-full p-2 border rounded-lg {error ? 'border-red-500' : ''}"
     placeholder="Buscar canción..."
     autocomplete="off"
   />
   
   {#if isOpen && filteredSongs.length > 0}
-    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded shadow-lg max-h-60 overflow-y-auto">
+    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded-lg shadow-lg max-h-60 overflow-y-auto">
       {#each filteredSongs as song}
         <button
           type="button"

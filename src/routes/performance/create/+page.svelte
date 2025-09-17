@@ -97,7 +97,7 @@
     <a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow rounded-md text-center">
+  <div class="mt-8 p-6 bg-yellow-100 text-yellow rounded-lg text-center">
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una performance.
   </div>
 {:else}
@@ -115,11 +115,11 @@
               <div class="text-red-600 text-sm mt-1">{songError}</div>
             {/if}
             <label for="ref_link" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Referencia</label>
-            <input id="ref_link" type="text" bind:value={refLink} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 100 }} />
+            <input id="ref_link" type="text" bind:value={refLink} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 100 }} />
             <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Tonalidad</label>
-            <input id="key" type="text" bind:value={key} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 150 }} />
+            <input id="key" type="text" bind:value={key} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 150 }} />
         </div>
-        <button class="bg-slate-700 text-slate-200 rounded mx-6 p-4 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
+        <button class="bg-slate-700 text-slate-200 rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
             {submitting ? 'Creando...' : 'Crear Performance'}
         </button>
     </form>
@@ -128,12 +128,12 @@
     </p>
   {/if}
   {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Nueva Performance Creada!
     </div>
   {/if}
   {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Error: {error}
     </div>
   {/if}

@@ -42,10 +42,10 @@
     </div>
     <section>
         <h2 class="text-3xl text-white m-4 mb-4">ROCK PARTIES</h2>
-        <div class="m-4 rounded-md overflow-clip flex flex-col">
+        <div class="m-4 rounded-lg overflow-clip flex flex-col">
             <div class="flex gap-4 mb-4">
-                <button class="px-4 py-2 rounded border-b-2 text-white" class:font-bold={activeTab === 'upcoming'} class:border-yellow={activeTab === 'upcoming'} on:click={() => activeTab = 'upcoming'}>Próximas fiestas</button>
-                <button class="px-4 py-2 rounded border-b-2 text-white" class:font-bold={activeTab === 'past'} class:border-yellow={activeTab === 'past'} on:click={() => activeTab = 'past'}>Fiestas pasadas</button>
+                <button class="px-4 py-2 rounded-lg border-b-2 text-white" class:font-bold={activeTab === 'upcoming'} class:border-yellow={activeTab === 'upcoming'} on:click={() => activeTab = 'upcoming'}>Próximas fiestas</button>
+                <button class="px-4 py-2 rounded-lg border-b-2 text-white" class:font-bold={activeTab === 'past'} class:border-yellow={activeTab === 'past'} on:click={() => activeTab = 'past'}>Fiestas pasadas</button>
             </div>
             {#if loading}
                 <div class="text-white p-4">Cargando...</div>
@@ -75,6 +75,6 @@
         </div>
     </section>
     <div class="flex justify-center p-4">
-      <a class="btn btn-accent text-center bg-cold-base text-white w-2/3 p-4 rounded" href="/parties/create">Organizar Fiesta</a>
+      <a class="btn btn-accent text-center bg-cold-base text-white w-2/3 p-4 rounded-lg" href="/parties/create">Organizar Fiesta</a>
     </div>
 </div>

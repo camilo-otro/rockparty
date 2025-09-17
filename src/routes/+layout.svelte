@@ -53,8 +53,9 @@
     <div class="relative">
       <img src={session.user?.user_metadata?.avatar_url} alt="User Avatar" class="w-8 h-8 rounded-full mx-3 cursor-pointer" on:click={toggleMenu} />
       {#if showMenu}
-        <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-white rounded shadow-lg z-10" in:scale={{ duration: 200 }}>
-          <button class="block w-full text-left px-4 py-2 text-slate-800 hover:bg-slate-100" on:click={() => { supabase.auth.signOut(); showMenu = false; }}>Sign Out</button>
+        <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-base-900 rounded-lg shadow-lg z-10" in:scale={{ duration: 200 }}>
+          <a href={`/performers/${session.user.id}`} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-slate-100">Ver mi perfil</a>
+          <button class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-slate-100" on:click={() => { supabase.auth.signOut(); showMenu = false; }}>Sign Out</button>
         </div>
       {/if}
     </div>

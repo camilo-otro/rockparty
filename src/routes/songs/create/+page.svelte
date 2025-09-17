@@ -116,7 +116,7 @@
     <a href="/songs" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-md text-center">
+  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una canción.
   </div>
 {:else}
@@ -143,22 +143,22 @@
               required
             />
             <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Tonalidad</label>
-            <input id="key" type="text" name="key" bind:value={key} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 100 }} />
+            <input id="key" type="text" name="key" bind:value={key} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 100 }} />
             <label for="reflink" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Referencia</label>
-            <input id="reflink" type="text" name="reflink" bind:value={reflink} class="p-2 border rounded" in:fly={{ y: -30, duration: 400, delay: 150 }} />
+            <input id="reflink" type="text" name="reflink" bind:value={reflink} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 150 }} />
         </div>
-        <button class="bg-cold-base text-white rounded mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
+        <button class="bg-cold-base text-white rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
             {submitting ? 'Creando...' : 'Crear Canción'}
         </button>
     </form>
   {/if}
   {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Nueva Canción Creada!
     </div>
   {/if}
   {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-md text-center" in:fly={{ y: -20, duration: 400 }}>
+    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
     Error: {error}
     </div>
   {/if}

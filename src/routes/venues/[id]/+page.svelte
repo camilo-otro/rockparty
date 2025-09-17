@@ -40,7 +40,7 @@
     <a href="/venues" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft/>VOLVER</a>
     <div class="flex flex-row w-auto gap-2 m-4">
       {#if currentUserId == venue?.created_by || (venueAdmins && currentUserId && venueAdmins.includes(currentUserId))}
-        <button on:click={handleEdit} class="bg-cold-light text-black rounded px-2 py-1 inline-flex items-center gap-2">
+        <button on:click={handleEdit} class="bg-cold-light text-black rounded-lg px-2 py-1 inline-flex items-center gap-2">
           <Edit size={18} />
         </button>
       {/if}
@@ -51,7 +51,7 @@
   {:else if error}
     <div class="text-red-500 p-4">Error: {error}</div>
   {:else if venue}
-    <div class="px-6 p-2 bg-base-900 rounded shadow mx-4">
+    <div class="px-6 p-2 bg-base-900 rounded-lg shadow mx-4">
       <h2 class="text-3xl text-yellow font-bold mb-2">{venue.name}</h2>
       <div class="mb-2 text-white">Dirección: {venue.address}</div>
       <div class="mb-2 text-cold-light">Persona de contacto: {venue.contact_name}</div>

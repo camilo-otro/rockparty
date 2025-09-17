@@ -8,16 +8,17 @@ export const load = async ({ depends, url }) => {
   let userRecord = null;
   if (session?.user?.id) {
     // Try to fetch user entity by id
-    let { data: dbUser } = await supabase.from('profile').select('id, role, nickname').eq('id', session.user.id).single();
+    let { data: dbUser } = await supabase.from('profile').select('id, role, nickname, email').eq('id', session.user.id).single();
     // If not found, redirect to performer creation
-    if (!dbUser) {
+    if (!dbUser || !dbUser.email || !dbUser.nickname) {
       userRecord = {
         email: session?.user?.email ?? '',
+        avatarUrl: session?.user?.user_metadata?.avatar_url || null,
         id: session?.user?.id
       };
       userStore.set(userRecord);
-      if (!url.pathname.startsWith('/performers/create')) {
-        throw redirect(302, '/performers/create');
+      if (!/^\/performers\/[^/]+\/edit$/.test(url.pathname)) {
+        throw redirect(302, '/performers/' + userRecord.id + '/edit');
       }
     } else {
       userRecord = {

@@ -47,6 +47,7 @@
 		"@supabase/auth-ui-svelte": "^0.2.9",
 		"@supabase/supabase-js": "^2.52.0",
 		"date-fns": "^4.1.0",
+		"dayjs": "^1.11.18",
 		"lucide-svelte": "^0.525.0",
 		"sortablejs": "^1.15.6"
 	}

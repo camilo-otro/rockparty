@@ -58,12 +58,12 @@
     on:input={handleInput}
     {required}
     {placeholder}
-    class="w-full p-2 border rounded"
+    class="w-full p-2 border rounded-lg"
     autocomplete="off"
   />
   
   {#if isOpen && filteredSuggestions.length > 0}
-    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded shadow-lg max-h-60 overflow-y-auto">
+    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded-lg shadow-lg max-h-60 overflow-y-auto">
       {#each filteredSuggestions as suggestion}
         <button
           type="button"
