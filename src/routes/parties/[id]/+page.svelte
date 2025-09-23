@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, GripHorizontal, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
+  import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import Sortable from 'sortablejs';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -179,7 +180,7 @@
         users = userData ?? [];
         usersLoaded = true;
         // Fetch performers and their instruments
-        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').in('performance_id', performances.map(p => p.id));
+        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, performance_id').in('performance_id', performances.map(p => p.id));
         const { data: instrumentData } = await supabase.from('instrument').select('id, name');
         // Group by user and count songs
         const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
@@ -188,10 +189,36 @@
             performerMap[perfUser.user_id] = { user_id: perfUser.user_id, instruments: [], songCount: 0 };
           }
           const inst = instrumentData?.find(i => i.id === perfUser.instrument_id);
-          if (inst) performerMap[perfUser.user_id].instruments.push(inst.name);
+          if (inst) {
+            // Only add instrument if not already present
+            if (!performerMap[perfUser.user_id].instruments.includes(inst.name)) {
+              performerMap[perfUser.user_id].instruments.push(inst.name);
+            }
+          }
           performerMap[perfUser.user_id].songCount += 1;
         }
         partyPerformers = Object.values(performerMap).sort((a, b) => b.songCount - a.songCount);
+
+        // Add status to each performance
+        performances = performances.map(perf => {
+          const perfMusicians = (perfUsers ?? []).filter(u => u.performance_id === perf.id);
+          if (perfMusicians.length === 0) {
+            return { ...perf, status: 0 };
+          }
+          const hasSinger = perfMusicians.some(u => u.instrument_id === 1);
+          const hasOther = perfMusicians.some(u => u.instrument_id !== 1);
+          if (!hasSinger) {
+            return { ...perf, status: 1 };
+          }
+          if (hasSinger && !hasOther) {
+            return { ...perf, status: 2 };
+          }
+          if (hasSinger && hasOther) {
+            return { ...perf, status: 3 };
+          }
+          return { ...perf, status: 0 };
+        });
+
         // Initialize sortable after performances are loaded
         setTimeout(initializeSortable, 0);
       }
@@ -267,11 +294,12 @@
                 <div class="flex items-center gap-2">
                   <span class="text-gray-400 text-3xl font-medium mr-2">{index + 1}</span>
                   <div class="flex-1">
-                    <h4 class="text-lg text-yellow font-medium mb-1">{getSongTitle(perf.song)}</h4>
-                    <div class="text-sm text-white mb-1">{getSongArtist(perf.song)}</div>
-                    {#if perf.key}
-                      <div class="mb-1 text-white">Tonalidad: {perf.key}</div>
-                    {/if}
+                    <PerformanceListItem
+                      title={getSongTitle(perf.song)}
+                      artist={getSongArtist(perf.song)}
+                      key={perf.key}
+                      status={perf.status}
+                    />
                   </div>
                   {#if party?.created_by === currentUserId}
                     <div class="drag-handle cursor-move">

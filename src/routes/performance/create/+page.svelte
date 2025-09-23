@@ -10,7 +10,7 @@
     import { sanitizeString } from '$lib/sanitize';
     let submitting = false;
     let songs: any[] = [];
-    let loadingSongs = true;
+    let loadingSongs = false;
     let errorSongs: string | null = null;
     let partyId: string | null = null;
     let userId: string | null = null;
@@ -29,19 +29,50 @@
         isAuthenticated = !!u?.id;
         userId = u?.id ?? null;
       });
-        partyId = page.url.searchParams.get('partyId') ?? null;
-        const { data, error } = await supabase.from('song').select('id, title, artist');
-        if (error) {
-            errorSongs = error.message;
-        } else {
-            songs = data ?? [];
-        }
-        loadingSongs = false;
+      partyId = page.url.searchParams.get('partyId') ?? null;
     });
 
     onDestroy(() => {
       if (unsubscribeUser) unsubscribeUser();
     });
+
+    $: if (songSearch && songSearch.length >= 3) {
+      loadingSongs = true;
+      supabase
+        .from('song')
+        .select('id, title, artist')
+        .or(`title.ilike.%${songSearch}%,artist.ilike.%${songSearch}%`)
+        .order('title', { ascending: true })
+        .limit(20)
+        .then(({ data, error }) => {
+          if (error) {
+            errorSongs = error.message;
+            songs = [];
+          } else {
+            // Custom sort: title starts with, artist starts with, title contains, artist contains
+            const sortedSongs = (data ?? []).sort((a, b) => {
+              const searchLower = songSearch.toLowerCase();
+              const aTitleStarts = a.title.toLowerCase().startsWith(searchLower);
+              const bTitleStarts = b.title.toLowerCase().startsWith(searchLower);
+              const aArtistStarts = a.artist.toLowerCase().startsWith(searchLower);
+              const bArtistStarts = b.artist.toLowerCase().startsWith(searchLower);
+              
+              if (aTitleStarts && !bTitleStarts) return -1;
+              if (!aTitleStarts && bTitleStarts) return 1;
+              if (aArtistStarts && !bArtistStarts) return -1;
+              if (!aArtistStarts && bArtistStarts) return 1;
+              
+              return a.title.localeCompare(b.title);
+            });
+            songs = sortedSongs;
+            errorSongs = null;
+          }
+          loadingSongs = false;
+        });
+    } else {
+      songs = [];
+      loadingSongs = false;
+    }
 
     async function handleSubmit() {
         if (!selectedSong || !partyId || !userId) {
