@@ -129,7 +129,7 @@
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow rounded-lg text-center">
-    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una performance.
+    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para agregar canciones al Setlist.
   </div>
 {:else}
   {#if !success && !error}
@@ -160,7 +160,7 @@
   {/if}
   {#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nueva Performance Creada!
+    Agregada al Setlist!
     </div>
   {/if}
   {#if error}

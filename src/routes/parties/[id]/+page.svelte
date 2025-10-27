@@ -45,7 +45,7 @@
   }
   function getUserAvatar(userId: string) {
     const usr = users.find(u => u.id === userId);
-    return usr && usr.avatarUrl ? usr.avatarUrl : 'assets/images/default-avatar.png';
+    return usr && usr.avatarUrl ? usr.avatarUrl : '/images/avatar-default.svg';
   }
 
   // Sortable functionality
@@ -287,7 +287,7 @@
         <ul bind:this={sortableList} class="grid grid-cols-1 space-y-[1px]">
           {#each performances as perf, index (perf.id)}
             <li 
-              class="bg-base-900 px-4 p-2 transition-all duration-200"
+              class="bg-base-900 px-4 p-3 transition-all duration-200"
               data-id={perf.id}
             >
               <a href={`/performance/${perf.id}`} class="block">

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
-    import { ChevronLeft } from 'lucide-svelte';
+    import { ChevronLeft, Plus } from 'lucide-svelte';
     import PartyListItem from '$lib/components/PartyListItem.svelte';
 
     let parties: any[] = [];
@@ -41,17 +41,17 @@
         <a href="/" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft/>VOLVER</a>
     </div>
     <section>
-        <h2 class="text-3xl text-white m-4 mb-4">ROCK PARTIES</h2>
         <div class="m-4 rounded-lg overflow-clip flex flex-col">
             <div class="flex gap-4 mb-4">
-                <button class="px-4 py-2 rounded-lg border-b-2 text-white" class:font-bold={activeTab === 'upcoming'} class:border-yellow={activeTab === 'upcoming'} on:click={() => activeTab = 'upcoming'}>Próximas fiestas</button>
-                <button class="px-4 py-2 rounded-lg border-b-2 text-white" class:font-bold={activeTab === 'past'} class:border-yellow={activeTab === 'past'} on:click={() => activeTab = 'past'}>Fiestas pasadas</button>
+                <button class="px-4 py-2 border-b-2" class:border-yellow={activeTab === 'upcoming'} class:text-cold-light={activeTab === 'past'} class:border-none={activeTab === 'past'} on:click={() => activeTab = 'upcoming'}>PRÓXIMOS TOQUES</button>
+                <button class="px-4 py-2 border-b-2" class:border-yellow={activeTab === 'past'} class:text-cold-light={activeTab === 'upcoming'} class:border-none={activeTab === 'upcoming'} on:click={() => activeTab = 'past'}>TOQUES PASADOS</button>
             </div>
             {#if loading}
                 <div class="text-white p-4">Cargando...</div>
             {:else if error}
                 <div class="text-red-500 p-4">Error: {error}</div>
             {:else if activeTab === 'upcoming'}
+                <a class="btn btn-accent text-center bg-cold-base text-white w-2/3 rounded-t-lg w-full p-3" href="/parties/create">Organiza un nuevo toque <Plus class="inline" /></a>
                 {#if getUpcomingParties().length === 0}
                     <div class="text-white p-4">No hay próximas fiestas registradas.</div>
                 {:else}
@@ -74,7 +74,4 @@
             {/if}
         </div>
     </section>
-    <div class="flex justify-center p-4">
-      <a class="btn btn-accent text-center bg-cold-base text-white w-2/3 p-4 rounded-lg" href="/parties/create">Organizar Fiesta</a>
-    </div>
 </div>

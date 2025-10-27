@@ -20,11 +20,12 @@ export default {
 				mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
 			},
 			fontWeight: {
-				normal: '100',
-				medium: '300',
-				bold: '400'
+				normal: '200',
+				medium: '400',
+				bold: '600'
 			},
 			fontSize: {
+				xs: '0.75rem',
 				sm: '0.875rem',
 				base: '1rem',
 				lg: '1.125rem',

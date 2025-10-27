@@ -7,10 +7,10 @@
 @layer base {
   body {
     @apply bg-base-950 text-white;
-    font-weight: 100;
+    font-weight: 300;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 100;
+    font-weight: 300;
   }
   input, textarea, select {
     @apply bg-base-950 text-white rounded-lg;

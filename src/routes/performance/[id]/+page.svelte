@@ -150,7 +150,7 @@
     <div class="bg-base-900 rounded-lg shadow mx-4 px-6 p-4">
       <h2 class="text-3xl text-yellow font-medium mb-2">{songTitle}</h2>
       <div class="mb-2">Sugerido por:
-        <img src={suggestedBy?.avatarUrl ?? '/default-avatar.png'} alt="Foto de perfil" class="w-6 h-6 rounded-full inline-block mx-2" />
+        <img src={suggestedBy?.avatarUrl && suggestedBy.avatarUrl.trim() !== '' ? suggestedBy.avatarUrl : '/images/avatar-default.svg'} alt="Foto de perfil" class="w-6 h-6 rounded-full inline-block mx-2" />
         <span class="text-cold-light">{suggestedBy?.nickname ?? performance.suggested_by}</span>
       </div>
       {#if performance.key}
