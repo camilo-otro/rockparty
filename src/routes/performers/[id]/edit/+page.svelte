@@ -51,9 +51,19 @@ function handleBack() {
       const { nickname, email, avatarUrl } = e.detail;
       try {
         const { supabase } = await import('$lib/supabaseClient');
+        
+        // If avatarUrl is empty, try to get it from Google auth
+        let finalAvatarUrl = avatarUrl;
+        if (!avatarUrl || avatarUrl.trim() === '') {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser?.user_metadata?.avatar_url) {
+            finalAvatarUrl = authUser.user_metadata.avatar_url;
+          }
+        }
+        
         const { error: dbError } = await supabase
           .from('profile')
-          .update({ nickname, avatar_url: avatarUrl, email })
+          .update({ nickname, avatar_url: finalAvatarUrl, email })
           .eq('id', userId);
         if (dbError) {
           error = `Database error: ${dbError.message}`;
