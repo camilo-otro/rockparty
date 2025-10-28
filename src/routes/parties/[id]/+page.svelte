@@ -175,13 +175,20 @@
         const userIds = [...new Set(performances.map(p => p.suggested_by))];
         userIds.push(party.created_by);
         const { data: songData } = await supabase.from('song').select('id, title, artist').in('id', songIds);
-        const { data: userData } = await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', userIds);
+        
+        // Fetch performers and their instruments first
+        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, performance_id').in('performance_id', performances.map(p => p.id));
+        
+        // Add all performer user IDs to the userIds array
+        const performerUserIds = [...new Set((perfUsers ?? []).map(p => p.user_id))];
+        const allUserIds = [...new Set([...userIds, ...performerUserIds])];
+        
+        const { data: userData } = await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds);
+        const { data: instrumentData } = await supabase.from('instrument').select('id, name');
         songs = songData ?? [];
         users = userData ?? [];
         usersLoaded = true;
-        // Fetch performers and their instruments
-        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, performance_id').in('performance_id', performances.map(p => p.id));
-        const { data: instrumentData } = await supabase.from('instrument').select('id, name');
+      
         // Group by user and count songs
         const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
         for (const perfUser of perfUsers ?? []) {
