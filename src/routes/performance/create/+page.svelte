@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft } from 'lucide-svelte';
+    import { ChevronLeft } from 'lucide-svelte';
     import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
@@ -123,12 +123,10 @@
       });
     }
 </script>
-<div class="bg-slate-400 p-4 flex-row">
-    <h2>AGREGAR NUEVA PERFORMANCE</h2>
-    <a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-lg text-bold text-slate-700"><ArrowLeft/></a>
-</div>
+<a href="/parties" class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
+<h2 class="text-yellow text-2xl px-5 py-2">AGREGA UNA CANCIÓN AL SETLIST</h2>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow rounded-lg text-center">
+  <div class="mt-8 p-6 text-white rounded-lg text-center">
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para agregar canciones al Setlist.
   </div>
 {:else}
@@ -146,13 +144,15 @@
               <div class="text-red-600 text-sm mt-1">{songError}</div>
             {/if}
             <label for="ref_link" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Referencia</label>
-            <input id="ref_link" type="text" bind:value={refLink} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 100 }} />
+            <input id="ref_link" type="text" bind:value={refLink} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 100 }} />
             <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Tonalidad</label>
-            <input id="key" type="text" bind:value={key} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 150 }} />
+            <input id="key" type="text" bind:value={key} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 150 }} />
         </div>
-        <button class="bg-slate-700 text-slate-200 rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
-            {submitting ? 'Creando...' : 'Crear Performance'}
-        </button>
+        <div class="flex justify-center" in:fly={{ y: -30, duration: 400, delay: 200 }}>
+          <button class="bg-cold-base text-white text-sm rounded-full mx-auto p-2 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
+              {submitting ? 'Creando...' : 'Agregar'}
+          </button>
+        </div>
     </form>
     <p class="mt-6 text-center text-slate-700">
       ¿No encuentras tu canción en la lista? <a href="/songs/create?from=performance&partyId={partyId}" class="text-blue-600 underline">Agregala aquí</a>.

@@ -46,13 +46,11 @@
       });
     }
 </script>
-<div class="bg-cold-base p-4 flex-row">
-    <h2 class="text-white text-2xl">AGREGAR NUEVA FIESTA</h2>
-    <a href="/parties" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
-</div>
+<a href="/parties" class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
+<h2 class="text-yellow text-2xl px-5 py-2">CREAR UN TOQUE</h2>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
-    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una fiesta.
+  <div class="mt-8 p-6 text-white rounded-lg text-center">
+    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un toque.
   </div>
 {:else}
   {#if !success && !error}
@@ -101,7 +99,7 @@
   {/if}
   {#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nueva Fiesta Creada!
+    Nuevo Toque Creado!
     </div>
   {/if}
   {#if error}

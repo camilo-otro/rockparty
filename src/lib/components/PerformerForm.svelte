@@ -29,7 +29,7 @@
     <input id="nickname" type="text" bind:value={nickname} required class="p-2 border rounded-lg" />
     <input type="hidden" bind:value={avatarUrl} />
   </div>
-  <button class="bg-cold-base text-white rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting}>
+  <button class="bg-cold-base text-white text-sm rounded-full mx-6 p-2 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Creando...' : 'Guardar'}
   </button>
 </form>

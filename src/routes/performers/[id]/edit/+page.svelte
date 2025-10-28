@@ -2,7 +2,7 @@
 import { onMount } from 'svelte';
 import { user } from '$lib/stores/user';
 import PerformerForm from '$lib/components/PerformerForm.svelte';
-import { ArrowLeft } from 'lucide-svelte';
+import { ChevronLeft } from 'lucide-svelte';
 
 let submitting = false;
 let success = false;
@@ -13,8 +13,12 @@ let nickname = '';
 let avatarUrl = '';
 let userId: string | null = null;
 let unsubscribeUser: () => void;
+let previousPage = '/'; // fallback to home
 
 onMount(async () => {
+  // Store the previous page, fallback to home if no referrer
+  previousPage = document.referrer || '/';
+  
   unsubscribeUser = user.subscribe(u => {
     isAuthenticated = !!u?.id;
     userId = u?.id ?? null;
@@ -25,14 +29,15 @@ onMount(async () => {
 });
 
 function handleBack() {
-  window.location.href = '/';
+  window.location.href = previousPage;
 }
 </script>
 
-<div class="bg-cold-base p-4 flex-row">
-  <h2 class="text-white text-2xl">EDITAR PERFIL</h2>
-  <button on:click={handleBack} class="text-lg text-bold text-cold-light"><ArrowLeft/></button>
+<div class="mb-4 mx-4">
+  <a href="/performers" class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
+  <h2 class="text-yellow text-2xl">EDITAR PERFIL</h2>
 </div>
+  
 {#if !isAuthenticated}
   <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
     Debes iniciar sesión para editar tu perfil.
@@ -61,17 +66,43 @@ function handleBack() {
           }
         }
         
-        const { error: dbError } = await supabase
+        // Check if profile exists
+        const { data: existingProfile, error: fetchError } = await supabase
           .from('profile')
-          .update({ nickname, avatar_url: finalAvatarUrl, email })
-          .eq('id', userId);
-        if (dbError) {
-          error = `Database error: ${dbError.message}`;
+          .select('id')
+          .eq('id', userId)
+          .single();
+        
+        if (fetchError && fetchError.code !== 'PGRST116') {
+          // PGRST116 is "not found" error, other errors are actual problems
+          error = `Database error: ${fetchError.message}`;
+        } else if (existingProfile) {
+          // Profile exists, update it
+          const { error: dbError } = await supabase
+            .from('profile')
+            .update({ nickname, avatar_url: finalAvatarUrl, email })
+            .eq('id', userId);
+          if (dbError) {
+            error = `Database error: ${dbError.message}`;
+          } else {
+            success = true;
+            setTimeout(() => {
+              window.location.href = previousPage;
+            }, 500);
+          }
         } else {
-          success = true;
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 1000);
+          // Profile doesn't exist, insert new one
+          const { error: dbError } = await supabase
+            .from('profile')
+            .insert({ id: userId, nickname, avatar_url: finalAvatarUrl, email });
+          if (dbError) {
+            error = `Database error: ${dbError.message}`;
+          } else {
+            success = true;
+            setTimeout(() => {
+              window.location.href = previousPage;
+            }, 500);
+          }
         }
       } catch (e) {
         error = 'Could not connect to the server.';

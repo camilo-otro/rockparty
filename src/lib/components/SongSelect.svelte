@@ -63,7 +63,7 @@
     on:focus={handleFocus}
     on:blur={handleBlur}
     on:input={handleInput}
-    class="w-full p-2 border rounded-lg {error ? 'border-red-500' : ''}"
+    class="w-full p-2 mb-4 border rounded-lg {error ? 'border-red-500' : ''}"
     placeholder="Buscar canción..."
     autocomplete="off"
   />
