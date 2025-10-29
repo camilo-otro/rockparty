@@ -8,6 +8,8 @@
   export let initialAddress = '';
   export let initialContactName = '';
   export let initialContact = '';
+  export let initialWhatsapp = '';
+  export let initialInstagram = '';
   export let initialVenueType = '';
   export let venueTypes: any[] = [];
   export let initialAllowsParties = true;
@@ -22,6 +24,8 @@
   let address = initialAddress;
   let contactName = initialContactName;
   let contact = initialContact;
+  let whatsapp = initialWhatsapp;
+  let instagram = initialInstagram;
   let selectedVenueType = initialVenueType;
   let allowsParties = initialAllowsParties;
   let allowsRehearsals = initialAllowsRehearsals;
@@ -67,11 +71,31 @@
       address,
       contactName,
       contact,
+      whatsapp,
+      instagram,
       venueType: selectedVenueType,
       allowsParties,
       allowsRehearsals,
       admins: admins.map(a => a.id)
     });
+  }
+
+  function validateWhatsapp(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    if (value && !/^\+?[1-9]\d{1,14}$/.test(value.replace(/\s/g, ''))) {
+      setInvalid(event, 'Ingresa un número de WhatsApp válido (ej: +5491234567890)');
+    } else {
+      clearInvalid(event);
+    }
+  }
+
+  function validateInstagram(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    if (value && !/^[a-zA-Z0-9._]{1,30}$/.test(value)) {
+      setInvalid(event, 'Ingresa un usuario de Instagram válido (solo letras, números, puntos y guiones bajos)');
+    } else {
+      clearInvalid(event);
+    }
   }
 
   function setInvalid(event: Event, errorMessage: string) {
@@ -84,13 +108,17 @@
 <form on:submit|preventDefault={handleSubmit}>
   <div class="flex flex-col w-3/4 p-5 mb-4">
     <label for="name" class="mb-1">Nombre del Local</label>
-    <input id="name" type="text" bind:value={name} required class="p-2 border rounded-lg" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre del local')} on:input={clearInvalid} />
+    <input id="name" type="text" bind:value={name} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre del local')} on:input={clearInvalid} />
     <label for="address" class="mb-1">Dirección</label>
-    <input id="address" type="text" bind:value={address} required class="p-2 border rounded-lg" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la dirección del local')} on:input={clearInvalid} />
+    <input id="address" type="text" bind:value={address} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la dirección del local')} on:input={clearInvalid} />
     <label for="contact_name" class="mb-1">Persona de contacto</label>
-    <input id="contact_name" type="text" bind:value={contactName} required class="p-2 border rounded-lg" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre de la persona de contacto')} on:input={clearInvalid} />
+    <input id="contact_name" type="text" bind:value={contactName} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre de la persona de contacto')} on:input={clearInvalid} />
     <label for="contact" class="mb-1">Info de contacto</label>
-    <input id="contact" type="text" bind:value={contact} required class="p-2 border rounded-lg" placeholder="telefono, correo, instagram" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la información de contacto')} on:input={clearInvalid} />
+    <input id="contact" type="text" bind:value={contact} required class="p-2 border rounded-lg mb-2" placeholder="telefono, correo, instagram" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la información de contacto')} on:input={clearInvalid} />
+    <label for="whatsapp" class="mb-1">WhatsApp (opcional)</label>
+    <input id="whatsapp" type="text" bind:value={whatsapp} class="p-2 border rounded-lg mb-2" placeholder="+5491234567890" on:blur={validateWhatsapp} on:input={clearInvalid} />
+    <label for="instagram" class="mb-1">Instagram (opcional)</label>
+    <input id="instagram" type="text" bind:value={instagram} class="p-2 border rounded-lg mb-2" placeholder="usuario_instagram" on:blur={validateInstagram} on:input={clearInvalid} />
     <label for="venue_type" class="mb-1">Tipo de Local</label>
     <select id="venue_type" bind:value={selectedVenueType} class="p-2 border rounded-lg" required on:invalid={(event) => setInvalid(event, 'Por favor selecciona un tipo de local')} on:input={clearInvalid}>
       {#each venueTypes as type}

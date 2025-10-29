@@ -58,6 +58,8 @@ onMount(async () => {
     initialAddress={venue.address}
     initialContactName={venue.contact_name}
     initialContact={venue.contact}
+    initialWhatsapp={venue.whatsapp || ''}
+    initialInstagram={venue.instagram || ''}
     initialVenueType={venue.venue_type}
     venueTypes={venueTypes}
     initialAllowsParties={venue.allow_party}
@@ -68,11 +70,11 @@ onMount(async () => {
     on:submit={async (e) => {
       submitting = true;
       error = '';
-      const { name, address, contactName, contact, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
+      const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
       try {
         const { error: dbError } = await supabase
           .from('venue')
-          .update({ name, address, contact_name: contactName, contact, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals })
+          .update({ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals })
           .eq('id', venue.id);
         if (dbError) {
           error = `Error de base de datos: ${dbError.message}`;

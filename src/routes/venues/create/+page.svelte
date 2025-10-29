@@ -11,6 +11,8 @@
     let address = '';
     let contactName = '';
     let contact = '';
+    let whatsapp = '';
+    let instagram = '';
     let success = false;
     let error = '';
     let userId: string | null = null;
@@ -68,6 +70,8 @@
       initialAddress={address}
       initialContactName={contactName}
       initialContact={contact}
+      initialWhatsapp={whatsapp}
+      initialInstagram={instagram}
       initialVenueType={selectedVenueType}
       venueTypes={venueTypes}
       initialAllowsParties={allowsParties}
@@ -78,12 +82,12 @@
       on:submit={async (e) => {
         submitting = true;
         error = '';
-        const { name, address, contactName, contact, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
+        const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
         try {
           const { supabase } = await import('$lib/supabaseClient');
           const { data, error: dbError } = await supabase
             .from('venue')
-            .insert([{ name, address, contact_name: contactName, contact, created_by: userId, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals }])
+            .insert([{ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals, created_by: userId }])
             .select();
           if (dbError) {
             error = `Error de base de datos: ${dbError.message}`;
