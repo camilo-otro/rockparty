@@ -12,7 +12,6 @@
     let submitting = false;
     let title = '';
     let artist = '';
-    let key = '';
     let reflink = '';
     let titleSuggestions: string[] = [];
     let artistSuggestions: string[] = [];
@@ -48,7 +47,6 @@
         // Sanitize inputs
         const safeTitle = sanitizeString(title);
         const safeArtist = sanitizeString(artist);
-        const safeKey = sanitizeString(key);
         submitting = true;
         error = '';
         
@@ -56,7 +54,7 @@
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('song')
-                .insert([{ title: safeTitle, artist: safeArtist, key: safeKey, added_by: userId, reflink: reflink }])
+                .insert([{ title: safeTitle, artist: safeArtist, added_by: userId, ref_link: reflink }])
                 .select();
                 
             if (dbError) {
@@ -69,7 +67,7 @@
                     } else {
                         window.location.href = '/songs';
                     }
-                }, 1000);
+                }, 500);
             }
         } catch (e) {
             error = 'Could not connect to the server.';
@@ -142,8 +140,6 @@
               placeholder="Nombre del artista"
               required
             />
-            <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Tonalidad</label>
-            <input id="key" type="text" name="key" bind:value={key} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 100 }} />
             <label for="reflink" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Referencia</label>
             <input id="reflink" type="text" name="reflink" bind:value={reflink} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 150 }} />
         </div>
