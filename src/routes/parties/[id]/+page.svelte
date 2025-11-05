@@ -206,24 +206,18 @@
         }
         partyPerformers = Object.values(performerMap).sort((a, b) => b.songCount - a.songCount);
 
-        // Add status to each performance
+        // Add performers data to each performance
         performances = performances.map(perf => {
           const perfMusicians = (perfUsers ?? []).filter(u => u.performance_id === perf.id);
-          if (perfMusicians.length === 0) {
-            return { ...perf, status: 0 };
-          }
-          const hasSinger = perfMusicians.some(u => u.instrument_id === 1);
-          const hasOther = perfMusicians.some(u => u.instrument_id !== 1);
-          if (!hasSinger) {
-            return { ...perf, status: 1 };
-          }
-          if (hasSinger && !hasOther) {
-            return { ...perf, status: 2 };
-          }
-          if (hasSinger && hasOther) {
-            return { ...perf, status: 3 };
-          }
-          return { ...perf, status: 0 };
+          
+          // Create performers array with user avatars
+          const performers = perfMusicians.map(pm => ({
+            instrument_id: pm.instrument_id,
+            user_id: pm.user_id,
+            user_avatar: getUserAvatar(pm.user_id)
+          }));
+          
+          return { ...perf, performers };
         });
 
         // Initialize sortable after performances are loaded
@@ -305,7 +299,7 @@
                       title={getSongTitle(perf.song)}
                       artist={getSongArtist(perf.song)}
                       key={perf.key}
-                      status={perf.status}
+                      performers={perf.performers || []}
                     />
                   </div>
                   {#if party?.created_by === currentUserId}
