@@ -6,12 +6,12 @@
   
   // Default instruments with their IDs and icon paths
   const defaultInstruments = [
-    { id: 1, name: 'Singer', icon: '/static/images/microphone.svg' },
-    { id: 2, name: 'Lead Guitar', icon: '/static/images/guitar.svg' },
-    { id: 3, name: 'Rhythm Guitar', icon: '/static/images/guitar.svg' },
-    { id: 4, name: 'Bass', icon: '/static/images/bass.svg' },
-    { id: 5, name: 'Keyboard', icon: '/static/images/keyboard.svg' },
-    { id: 6, name: 'Drums', icon: '/static/images/drums.svg' }
+    { id: 1, name: 'Singer', icon: '/images/microphone.svg' },
+    { id: 2, name: 'Lead Guitar', icon: '/images/guitar.svg' },
+    { id: 3, name: 'Rhythm Guitar', icon: '/images/guitar.svg' },
+    { id: 4, name: 'Bass', icon: '/images/bass.svg' },
+    { id: 5, name: 'Keyboard', icon: '/images/keyboard.svg' },
+    { id: 6, name: 'Drums', icon: '/images/drums.svg' }
   ];
   
   function getPerformerForInstrument(instrumentId: number) {
