@@ -32,20 +32,22 @@
     {/if}
   </div>
   <div class="flex flex-row -space-x-2 ml-2 self-end">
-    {#each availableInstruments as instrument}
+    {#each availableInstruments as instrument, index}
       <img 
         src={instrument.icon} 
         alt={instrument.name} 
         class="w-6 h-6 opacity-50 bg-base-900 rounded-full p-0.5"
+        style="z-index: {index + 1}"
         title={`${instrument.name} - Available`}
       />
     {/each}
-    {#each filledInstruments as instrument}
+    {#each filledInstruments as instrument, index}
       {@const performer = getPerformerForInstrument(instrument.id)}
       <img 
         src={performer.user_avatar || '/images/avatar-default.svg'} 
         alt="Performer" 
         class="w-6 h-6 rounded-full border border-cold-base bg-base-900"
+        style="z-index: {availableInstruments.length + index + 1}"
         title={instrument.name}
       />
     {/each}
