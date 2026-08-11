@@ -1,0 +1,4 @@
+# Build-script approval for this environment's supply-chain guard.
+# esbuild's postinstall (install.js) verifies its prebuilt binary; approved.
+allowBuilds:
+  esbuild: true
