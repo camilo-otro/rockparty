@@ -57,8 +57,10 @@ All data access is client-side straight to Supabase — no server routes.
       findings: wrapped `auth.uid()` as `(select auth.uid())` in 8 owner/admin
       policies (per-row re-eval), added 13 FK covering indexes, gave
       `venue_admin` a primary key, and pinned `auto_add_admin`'s search_path.
-      See `supabase/migrations/20260811_advisor_fixes.sql`. Remaining advisor
-      to-do: Postgres minor-version security upgrade (dashboard action).
+      See `supabase/migrations/20260811_advisor_fixes.sql`. Postgres upgraded
+      17.4.1 → 17.6 (2026-08-12), clearing the security-patch advisor. All
+      remaining advisor items are by-design (public-read GraphQL exposure,
+      deny-all lookup tables) or accepted (kept profile duplicate index).
 - [ ] Confirm sanitization (`sanitize.ts`) is applied consistently across
       all create/edit forms
 
