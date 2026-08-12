@@ -113,7 +113,7 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
   directly.
 - Use the **camilo-otro** identity for all git ops (see git config / memory).
 
-## Known rough edges (see BACKLOG.md for full tracked list)
+## Known rough edges (full tracked list is in GitHub Issues)
 
 - Liberal use of `any` types in `.svelte` files instead of generated
   Supabase types
@@ -135,4 +135,6 @@ GitHub connector/access situation is sorted, if that matters to you.
    even after the user confirmed "Connected" status in settings. Not
    resolved as of this writing. If you (Claude Code) have direct `gh` CLI
    or git access, that sidesteps the issue entirely.
-4. See BACKLOG.md for the full epics/features/issues list to work through.
+4. The backlog now lives in **GitHub Issues**, organized into per-epic
+   milestones: https://github.com/camilo-otro/rockparty/issues (migrated from
+   the old BACKLOG.md, which was removed).
