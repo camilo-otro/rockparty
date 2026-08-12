@@ -46,10 +46,6 @@ weights by default (`font-weight: 300` on body/headings). Logo lives at
 `src/lib/assets/images/Logo.png` (purple-to-orange gradient wordmark, "ROCK
 the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
 
-**Known inconsistency:** `/login` page (`src/routes/login/+page.svelte`) is
-plain unstyled HTML — predates the design system. Needs restyling to match
-everything else (see BACKLOG.md).
-
 ## Supabase setup
 
 - Project name: **RockParty**
@@ -95,7 +91,6 @@ pnpm run format       # prettier --write
 
 ## Known rough edges (see BACKLOG.md for full tracked list)
 
-- `/login` page unstyled (predates design system)
 - `/test` route left in routes tree, should be removed
 - No DB schema file checked in
 - Liberal use of `any` types in `.svelte` files instead of generated

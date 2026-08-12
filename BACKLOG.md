@@ -26,8 +26,9 @@ Priority: do this first, blocks everything else.
 ## Epic 1: Design System Consistency
 Bring every screen up to the current visual language.
 
-- [ ] Restyle `/login` page to match Tailwind design system (currently
-      plain HTML, predates the design system)
+- [x] ~~Restyle `/login` page~~ → Removed the dead `/login` route instead.
+      Nothing linked to it; login is triggered inline via signInWithOAuth from
+      the header and each gated action, so the standalone page was orphaned.
 - [ ] Audit all pages for consistent spacing/typography per
       `tailwind.config.ts` tokens
 - [ ] Remove leftover `/test` route from routes tree
