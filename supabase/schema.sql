@@ -82,12 +82,13 @@ create table if not exists public.venue (
 );
 
 -- venue_admin — who may administer a venue (besides its creator).
--- NOTE: no primary key; created_at is timestamp WITHOUT time zone and user_id
--- is nullable — inconsistent with the other join tables. Worth tightening.
+-- NOTE: created_at is timestamp WITHOUT time zone (inconsistent with the other
+-- tables' timestamptz). PK + user_id NOT NULL added 2026-08-11 (advisor fix).
 create table if not exists public.venue_admin (
   venue_id   bigint not null references public.venue (id),
   created_at timestamp default now(),
-  user_id    uuid references public.profile (id)
+  user_id    uuid not null references public.profile (id),
+  primary key (venue_id, user_id)
 );
 
 -- party — a gig ("toque") at a venue on a date.
@@ -156,6 +157,22 @@ create table if not exists public.temp_spotify_songs (
   ref_link text
 );
 
+-- ---- foreign-key covering indexes (advisor fix 2026-08-11) ------------------
+-- venue_admin.venue_id is covered by its composite PK, so it's omitted here.
+create index if not exists idx_party_created_by            on public.party (created_by);
+create index if not exists idx_party_venue                 on public.party (venue);
+create index if not exists idx_party_admin_user_id         on public.party_admin (user_id);
+create index if not exists idx_performance_party           on public.performance (party);
+create index if not exists idx_performance_song            on public.performance (song);
+create index if not exists idx_performance_suggested_by    on public.performance (suggested_by);
+create index if not exists idx_performance_user_instrument on public.performance_user (instrument_id);
+create index if not exists idx_performance_user_user_id    on public.performance_user (user_id);
+create index if not exists idx_profile_role                on public.profile (role);
+create index if not exists idx_song_added_by               on public.song (added_by);
+create index if not exists idx_venue_created_by            on public.venue (created_by);
+create index if not exists idx_venue_venue_type            on public.venue (venue_type);
+create index if not exists idx_venue_admin_user_id         on public.venue_admin (user_id);
+
 -- =============================================================================
 -- ROW LEVEL SECURITY
 -- =============================================================================
@@ -173,6 +190,9 @@ create table if not exists public.temp_spotify_songs (
 --     policy, so with RLS on, deletes are denied to anon/authenticated.
 --   * role, temp_spotify_songs: RLS on with NO policies => fully deny-all
 --     (not even SELECT). `venue_type`/`instrument` are readable; `role` is not.
+--   * auth.uid() is wrapped as (select auth.uid()) in the owner/admin policies
+--     so it's evaluated once per query, not per row (advisor fix 2026-08-11;
+--     see migrations/20260811_advisor_fixes.sql).
 -- =============================================================================
 
 alter table public.role              enable row level security;
@@ -201,10 +221,10 @@ create policy "allow insert to authenticated users" on public.venue
   for insert to authenticated with check (true);
 create policy "allow update to venue admins" on public.venue
   for update using (
-    (created_by = auth.uid())
+    (created_by = (select auth.uid()))
     or exists (
       select 1 from public.venue_admin
-      where venue_admin.venue_id = venue.id and venue_admin.user_id = auth.uid()
+      where venue_admin.venue_id = venue.id and venue_admin.user_id = (select auth.uid())
     )
   );
 
@@ -213,10 +233,10 @@ create policy "Enable read access for all users" on public.venue_admin
   for select to anon, authenticated using (true);
 create policy "allow insert for party admins" on public.venue_admin
   for insert to authenticated with check (
-    ((select venue.created_by from public.venue where venue.id = venue_admin.venue_id) = auth.uid())
+    ((select venue.created_by from public.venue where venue.id = venue_admin.venue_id) = (select auth.uid()))
     or exists (
       select 1 from public.venue_admin venue_admin_1
-      where venue_admin_1.venue_id = venue_admin.venue_id and venue_admin_1.user_id = auth.uid()
+      where venue_admin_1.venue_id = venue_admin.venue_id and venue_admin_1.user_id = (select auth.uid())
     )
   );
 create policy "allow delete for venue admins" on public.venue_admin
@@ -235,10 +255,10 @@ create policy "allow insert to authenticated users" on public.party
   for insert to authenticated with check (true);
 create policy "allow update to party admins" on public.party
   for update to authenticated using (
-    (created_by = auth.uid())
+    (created_by = (select auth.uid()))
     or exists (
       select 1 from public.party_admin
-      where party_admin.party_id = party.id and party_admin.user_id = auth.uid()
+      where party_admin.party_id = party.id and party_admin.user_id = (select auth.uid())
     )
   ) with check (true);
 
@@ -247,10 +267,10 @@ create policy "Enable read access for authenticated users" on public.party_admin
   for select to authenticated using (true);
 create policy "allow Insert to party owner and other party admins" on public.party_admin
   for insert to authenticated with check (
-    ((select party.created_by from public.party where party.id = party_admin.party_id) = auth.uid())
+    ((select party.created_by from public.party where party.id = party_admin.party_id) = (select auth.uid()))
     or exists (
       select 1 from public.party_admin party_admin_1
-      where party_admin_1.party_id = party_admin.party_id and party_admin_1.user_id = auth.uid()
+      where party_admin_1.party_id = party_admin.party_id and party_admin_1.user_id = (select auth.uid())
     )
   );
 create policy "Enable delete for party admins" on public.party_admin
@@ -273,10 +293,10 @@ create policy "Enable Update for authenticated users only" on public.performance
       select 1 from public.party p
       where p.id = performance.party
         and (
-          p.created_by = auth.uid()
+          p.created_by = (select auth.uid())
           or exists (
             select 1 from public.party_admin pa
-            where pa.party_id = p.id and pa.user_id = auth.uid()
+            where pa.party_id = p.id and pa.user_id = (select auth.uid())
           )
         )
     )
@@ -288,9 +308,9 @@ create policy "allow select to all users" on public.performance_user
 create policy "allow insert to authenticated users" on public.performance_user
   for insert to authenticated with check (true);
 create policy "Enable update for authenticated users only" on public.performance_user
-  for update to authenticated using (user_id = auth.uid());
+  for update to authenticated using (user_id = (select auth.uid()));
 create policy "allow delete to own user" on public.performance_user
-  for delete to authenticated using (user_id = auth.uid());
+  for delete to authenticated using (user_id = (select auth.uid()));
 
 -- ---- profile ----------------------------------------------------------------
 create policy "allow select to all users" on public.profile
@@ -298,7 +318,7 @@ create policy "allow select to all users" on public.profile
 create policy "allow insert to authenticated users" on public.profile
   for insert to authenticated with check (true);
 create policy "allow update to own user" on public.profile
-  for update to authenticated using (id = auth.uid());
+  for update to authenticated using (id = (select auth.uid()));
 
 -- ---- instrument -------------------------------------------------------------
 create policy "Enable read access for all users" on public.instrument

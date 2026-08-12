@@ -51,6 +51,12 @@ All data access is client-side straight to Supabase — no server routes.
       with no policies (no reads at all). Confirm `role` not being readable
       doesn't break any UI that wants role names; drop `temp_spotify_songs`
       if it's dead.
+- [x] Ran Supabase security + performance advisors and fixed the actionable
+      findings: wrapped `auth.uid()` as `(select auth.uid())` in 8 owner/admin
+      policies (per-row re-eval), added 13 FK covering indexes, gave
+      `venue_admin` a primary key, and pinned `auto_add_admin`'s search_path.
+      See `supabase/migrations/20260811_advisor_fixes.sql`. Remaining advisor
+      to-do: Postgres minor-version security upgrade (dashboard action).
 - [ ] Confirm sanitization (`sanitize.ts`) is applied consistently across
       all create/edit forms
 
