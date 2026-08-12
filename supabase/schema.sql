@@ -165,9 +165,10 @@ create table if not exists public.temp_spotify_songs (
 --   * UPDATE/DELETE: restricted to owners/admins via *_admin tables.
 --
 -- SECURITY NOTES worth reviewing (Epic 2):
---   * performance UPDATE uses `true` for authenticated — ANY logged-in user can
---     edit ANY set-list slot, not just the party's admins.
---   * performance_user UPDATE likewise `true` for authenticated.
+--   * performance UPDATE is restricted to the parent party's owner/admins, and
+--     performance_user UPDATE to the owning user (tightened 2026-08-11; see
+--     migrations/20260811_tighten_performance_update_rls.sql). INSERT remains
+--     open to any authenticated user by design (collaborative suggestions).
 --   * Core tables (party, venue, song, profile, performance) have NO DELETE
 --     policy, so with RLS on, deletes are denied to anon/authenticated.
 --   * role, temp_spotify_songs: RLS on with NO policies => fully deny-all
@@ -267,7 +268,19 @@ create policy "allow select to all users" on public.performance
 create policy "allow insert to authenticated users" on public.performance
   for insert to authenticated with check (true);
 create policy "Enable Update for authenticated users only" on public.performance
-  for update to authenticated using (true) with check (true);
+  for update to authenticated using (
+    exists (
+      select 1 from public.party p
+      where p.id = performance.party
+        and (
+          p.created_by = auth.uid()
+          or exists (
+            select 1 from public.party_admin pa
+            where pa.party_id = p.id and pa.user_id = auth.uid()
+          )
+        )
+    )
+  );
 
 -- ---- performance_user -------------------------------------------------------
 create policy "allow select to all users" on public.performance_user
@@ -275,7 +288,7 @@ create policy "allow select to all users" on public.performance_user
 create policy "allow insert to authenticated users" on public.performance_user
   for insert to authenticated with check (true);
 create policy "Enable update for authenticated users only" on public.performance_user
-  for update to authenticated using (true) with check (true);
+  for update to authenticated using (user_id = auth.uid());
 create policy "allow delete to own user" on public.performance_user
   for delete to authenticated using (user_id = auth.uid());
 

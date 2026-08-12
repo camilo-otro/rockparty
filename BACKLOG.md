@@ -42,10 +42,11 @@ All data access is client-side straight to Supabase — no server routes.
 - [x] Verify admin-only actions (venue edit, party admin) are enforced by
       RLS, not just hidden in the UI. CONFIRMED — `venue`/`party` UPDATE
       policies check `created_by` or `venue_admin`/`party_admin` membership.
-- [ ] FIX: `performance` UPDATE policy ("Enable Update for authenticated
-      users only") uses `using (true)` — ANY authenticated user can edit ANY
-      set-list slot, not just the party's admins. Same for `performance_user`
-      UPDATE. Decide intended rule and tighten.
+- [x] FIX: `performance` / `performance_user` UPDATE policies used
+      `using (true)` — any authenticated user could edit any set-list slot.
+      Tightened to party owner/admins (performance) and owning user
+      (performance_user); applied to prod and verified via pg_policies. See
+      `supabase/migrations/20260811_tighten_performance_update_rls.sql`.
 - [ ] Review deny-all tables: `role` and `temp_spotify_songs` have RLS on
       with no policies (no reads at all). Confirm `role` not being readable
       doesn't break any UI that wants role names; drop `temp_spotify_songs`
