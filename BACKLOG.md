@@ -14,7 +14,14 @@ Priority: do this first, blocks everything else.
 - [x] Restore paused Supabase project from dashboard (confirmed live —
       REST returns data, homepage renders venues)
 - [x] Verify local `pnpm install && pnpm run dev` connects to DB successfully
-- [ ] Verify Google OAuth login still works post-restore
+- [x] Verify Google OAuth login still works post-restore. Confirmed the
+      Supabase→Google handoff: authorize endpoint 302s to Google with a valid
+      client_id + the correct …/auth/v1/callback, and Google returns its
+      sign-in page (no redirect_uri_mismatch), so the Cloud Console redirect
+      URI is still registered. Existing profile rows (FK to auth.users) show
+      real logins have worked. Final credential click-through is manual.
+      Reminder: add the Netlify prod URL to Auth → URL Configuration redirect
+      allowlist before deploy.
 - [x] Export current DB schema to a SQL file, commit it to the repo
       (closes the "no schema file" gap). Authoritative dump (types, keys, FKs,
       indexes, RLS) captured from the live DB and committed as
