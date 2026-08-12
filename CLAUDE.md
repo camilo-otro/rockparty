@@ -89,6 +89,30 @@ pnpm run lint         # prettier --check + eslint
 pnpm run format       # prettier --write
 ```
 
+## Branching & deploy workflow
+
+Two-branch model: **`main` = production, `dev` = work-in-progress.**
+
+- **Do all work on `dev`** and commit/push progress there freely. Netlify only
+  auto-builds `main`, so nothing on `dev` triggers a deploy or spends build
+  minutes.
+- **Deploy = merge `dev` → `main`** (deliberately, only when `dev` is
+  shippable):
+  ```bash
+  git checkout main && git merge --ff-only dev && git push && git checkout dev
+  ```
+  Fast-forward keeps `main`'s history a clean, linear list of what's live. The
+  push to `main` is the ONLY thing that deploys.
+- **Keep `main` always-deployable** — don't merge unless `pnpm run check` is
+  clean and the app runs.
+- `main` is the GitHub default branch and Netlify's production branch. Keep
+  Netlify **branch deploys OFF** (default) so `dev` never builds; test locally
+  instead.
+- `netlify.toml` also has a build-`ignore` rule that skips builds when only
+  docs/schema/backlog change — a backstop for commits that land on `main`
+  directly.
+- Use the **camilo-otro** identity for all git ops (see git config / memory).
+
 ## Known rough edges (see BACKLOG.md for full tracked list)
 
 - Liberal use of `any` types in `.svelte` files instead of generated
