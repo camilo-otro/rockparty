@@ -31,7 +31,8 @@ Bring every screen up to the current visual language.
       the header and each gated action, so the standalone page was orphaned.
 - [ ] Audit all pages for consistent spacing/typography per
       `tailwind.config.ts` tokens
-- [ ] Remove leftover `/test` route from routes tree
+- [x] Removed the leftover `/test` route (dev-only MusicBrainz search
+      harness; nothing linked to it).
 
 ## Epic 2: Security Hardening
 All data access is client-side straight to Supabase — no server routes.

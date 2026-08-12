@@ -91,13 +91,8 @@ pnpm run format       # prettier --write
 
 ## Known rough edges (see BACKLOG.md for full tracked list)
 
-- `/test` route left in routes tree, should be removed
-- No DB schema file checked in
 - Liberal use of `any` types in `.svelte` files instead of generated
   Supabase types
-- No server-side enforcement visible for admin-only actions (venue edit,
-  party admin) — appears to be UI-hidden only; needs verification against
-  RLS policies
 - Error handling is per-page inline strings, no shared pattern
 
 ## History snapshot
