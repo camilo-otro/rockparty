@@ -73,7 +73,12 @@ All data access is client-side straight to Supabase — no server routes.
 
 ## Epic 4: Code Health
 
-- [ ] Replace `any` types in `.svelte` files with generated Supabase types
+- [~] Replace `any` types in `.svelte` files with generated Supabase types.
+      DONE: generated `src/lib/database.types.ts`, typed the client
+      (`createClient<Database>`), and fixed every type error that surfaced
+      (`pnpm run check` is now 0 errors). REMAINING: local `let x: any[]`
+      state declarations in components can be narrowed to `Tables<'...'>[]`
+      incrementally.
 - [x] ~~Add a checked-in DB schema file~~ → folded into Epic 0
 - [ ] Set up a shared error boundary / toast pattern instead of inline
       per-page error strings
