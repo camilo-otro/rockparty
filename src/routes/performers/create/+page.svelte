@@ -50,7 +50,7 @@
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('profile')
-                .insert([{ nickname: safeNickname, email: safeEmail }])
+                .insert([{ id: authId, nickname: safeNickname, email: safeEmail }])
                 .select();
                 
             if (dbError) {
@@ -102,7 +102,7 @@
           const { supabase } = await import('$lib/supabaseClient');
           const { data, error: dbError } = await supabase
             .from('profile')
-            .insert([{ nickname, email, avatar_url }])
+            .insert([{ id: authId, nickname, email, avatar_url }])
             .select();
           if (dbError) {
             error = `Database error: ${dbError.message}`;

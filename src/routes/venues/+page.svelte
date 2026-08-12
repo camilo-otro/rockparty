@@ -18,6 +18,7 @@
             // Calculate party count for each venue
             const venueCounts: Record<string | number, number> = {};
             for (const party of partyData ?? []) {
+                if (party.venue == null) continue;
                 venueCounts[party.venue] = (venueCounts[party.venue] || 0) + 1;
             }
             venues = (venueData ?? []).map(v => ({ ...v, count: venueCounts[v.id] || 0 }));

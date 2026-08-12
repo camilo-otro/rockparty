@@ -140,10 +140,10 @@
       setTimeout(initializeSortable, 0);
     });
     const id = page.params.id;
-    const { data, error: err } = await supabase.from('party').select('*').eq('id', id).single();
+    const { data, error: err } = await supabase.from('party').select('*').eq('id', Number(id)).single();
     party = data;
     // Fetch party admins
-    const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', id);
+    const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', Number(id));
     partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
     if (err) {
       error = err.message;
@@ -156,7 +156,7 @@
         }
       }
       // Fetch performances for this party
-      const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', id);
+      const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', Number(id));
       if (perfErr) {
         errorPerformances = perfErr.message;
       } else {
@@ -196,10 +196,11 @@
             performerMap[perfUser.user_id] = { user_id: perfUser.user_id, instruments: [], songCount: 0 };
           }
           const inst = instrumentData?.find(i => i.id === perfUser.instrument_id);
-          if (inst) {
+          if (inst && inst.name) {
+            const instName = inst.name;
             // Only add instrument if not already present
-            if (!performerMap[perfUser.user_id].instruments.includes(inst.name)) {
-              performerMap[perfUser.user_id].instruments.push(inst.name);
+            if (!performerMap[perfUser.user_id].instruments.includes(instName)) {
+              performerMap[perfUser.user_id].instruments.push(instName);
             }
           }
           performerMap[perfUser.user_id].songCount += 1;

@@ -14,7 +14,7 @@
 
   onMount(async () => {
     const id = page.params.id;
-    const { data, error: err } = await supabase.from('venue').select('*').eq('id', id).single();
+    const { data, error: err } = await supabase.from('venue').select('*').eq('id', Number(id)).single();
     if (err) {
       error = err.message;
     } else {
@@ -27,7 +27,7 @@
       }
       
       // Fetch venue admins
-      const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', id);
+      const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id));
       venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
     }
     user.subscribe(u => {

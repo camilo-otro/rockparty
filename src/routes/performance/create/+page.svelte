@@ -52,17 +52,17 @@
             // Custom sort: title starts with, artist starts with, title contains, artist contains
             const sortedSongs = (data ?? []).sort((a, b) => {
               const searchLower = songSearch.toLowerCase();
-              const aTitleStarts = a.title.toLowerCase().startsWith(searchLower);
-              const bTitleStarts = b.title.toLowerCase().startsWith(searchLower);
-              const aArtistStarts = a.artist.toLowerCase().startsWith(searchLower);
-              const bArtistStarts = b.artist.toLowerCase().startsWith(searchLower);
+              const aTitleStarts = (a.title ?? '').toLowerCase().startsWith(searchLower);
+              const bTitleStarts = (b.title ?? '').toLowerCase().startsWith(searchLower);
+              const aArtistStarts = (a.artist ?? '').toLowerCase().startsWith(searchLower);
+              const bArtistStarts = (b.artist ?? '').toLowerCase().startsWith(searchLower);
               
               if (aTitleStarts && !bTitleStarts) return -1;
               if (!aTitleStarts && bTitleStarts) return 1;
               if (aArtistStarts && !bArtistStarts) return -1;
               if (!aArtistStarts && bArtistStarts) return 1;
               
-              return a.title.localeCompare(b.title);
+              return (a.title ?? '').localeCompare(b.title ?? '');
             });
             songs = sortedSongs;
             errorSongs = null;
@@ -91,8 +91,8 @@
             const { data, error: dbError } = await supabase
                 .from('performance')
                 .insert([{ 
-                    party: partyId, 
-                    song: selectedSong, 
+                    party: partyId ? Number(partyId) : null,
+                    song: Number(selectedSong),
                     suggested_by: userId, 
                     ref_link: safeRefLink || null, 
                     key: safeKey || null 

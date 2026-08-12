@@ -22,14 +22,14 @@ let currentUserId: string | null = null;
 onMount(async () => {
   const id = page.params.id;
   // Fetch venue
-  const { data: venueData, error: venueErr } = await supabase.from('venue').select('*').eq('id', id).single();
+  const { data: venueData, error: venueErr } = await supabase.from('venue').select('*').eq('id', Number(id)).single();
   venue = venueData;
   // Fetch venue types
   const { data: typesData, error: typesError } = await supabase.from('venue_type').select('id, name');
   venueTypes = typesData ?? [];
   if (typesError) errorVenueTypes = typesError.message;
   // Fetch venue admins
-  const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', id);
+  const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id));
   venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
   // Get current user id
   user.subscribe(u => {

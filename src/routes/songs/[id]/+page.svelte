@@ -11,7 +11,7 @@
 
   onMount(async () => {
     const id = get(page).params.id;
-    const { data, error: err } = await supabase.from('song').select('*').eq('id', id).single();
+    const { data, error: err } = await supabase.from('song').select('*').eq('id', Number(id)).single();
     if (err) {
       error = err.message;
     } else {

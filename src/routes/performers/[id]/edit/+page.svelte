@@ -54,6 +54,8 @@ function handleBack() {
       submitting = true;
       error = '';
       const { nickname, email, avatarUrl } = e.detail;
+      const uid = userId;
+      if (!uid) { error = 'No autenticado.'; submitting = false; return; }
       try {
         const { supabase } = await import('$lib/supabaseClient');
         
@@ -70,7 +72,7 @@ function handleBack() {
         const { data: existingProfile, error: fetchError } = await supabase
           .from('profile')
           .select('id')
-          .eq('id', userId)
+          .eq('id', uid)
           .single();
         
         if (fetchError && fetchError.code !== 'PGRST116') {
@@ -81,7 +83,7 @@ function handleBack() {
           const { error: dbError } = await supabase
             .from('profile')
             .update({ nickname, avatar_url: finalAvatarUrl, email })
-            .eq('id', userId);
+            .eq('id', uid);
           if (dbError) {
             error = `Database error: ${dbError.message}`;
           } else {
@@ -94,7 +96,7 @@ function handleBack() {
           // Profile doesn't exist, insert new one
           const { error: dbError } = await supabase
             .from('profile')
-            .insert({ id: userId, nickname, avatar_url: finalAvatarUrl, email });
+            .insert({ id: uid, nickname, avatar_url: finalAvatarUrl, email });
           if (dbError) {
             error = `Database error: ${dbError.message}`;
           } else {

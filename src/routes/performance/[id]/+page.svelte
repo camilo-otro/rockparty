@@ -21,7 +21,7 @@
   let currentUserId: string | null = null;
 
   async function fetchSignedUpUsers(performanceId: string) {
-    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').eq('performance_id', performanceId);
+    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').eq('performance_id', Number(performanceId));
     const users: any[] = [];
     for (const perfUser of perfUsers ?? []) {
       const { data: userData } = await supabase.from('profile').select('nickname').eq('id', perfUser.user_id).single();
@@ -41,7 +41,7 @@
       currentUserId = u?.id ?? null;
     });
     const id = get(page).params.id;
-    const { data, error: err } = await supabase.from('performance').select('*').eq('id', id).single();
+    const { data, error: err } = await supabase.from('performance').select('*').eq('id', Number(id)).single();
     if (err) {
       error = err.message;
     } else {
@@ -99,7 +99,7 @@
     supabase.from('performance_user').delete()
       .eq('performance_id', performance.id)
       .eq('user_id', userId)
-      .eq('instrument_id', instrumentId)
+      .eq('instrument_id', Number(instrumentId))
       .then(() => {
         refreshSignedUpUsers();
       });
