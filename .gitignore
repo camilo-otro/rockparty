@@ -21,3 +21,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# MCP (references a local SUPABASE_ACCESS_TOKEN env var; keep infra details off the public repo)
+.mcp.json
