@@ -1,4 +1,9 @@
-    # netlify.toml
-    [build]
-      command = "pnpm run build"
-      publish = "build"
+# netlify.toml
+[build]
+  command = "pnpm run build"
+  publish = "build"
+  # Skip the build when nothing deploy-relevant changed since the last built
+  # commit (exit 0 cancels the build). Docs/schema/backlog-only pushes are
+  # ignored, saving free-tier build minutes. Add [skip ci] to a commit message
+  # to force-skip any single build.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- src static package.json pnpm-lock.yaml netlify.toml svelte.config.js vite.config.ts tailwind.config.ts postcss.config.js tsconfig.json"
