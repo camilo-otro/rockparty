@@ -18,6 +18,10 @@
 
   const dispatch = createEventDispatcher();
 
+  // Local YYYY-MM-DD, used to block scheduling a toque in the past.
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
   let title = initialTitle;
   let description = initialDescription;
   let date = initialDate;
@@ -59,6 +63,10 @@
       dispatch('error', 'All fields are required.');
       return;
     }
+    if (date < todayStr) {
+      dispatch('error', 'La fecha no puede ser en el pasado.');
+      return;
+    }
     // Sanitize inputs
     const safeTitle = sanitizeString(title);
     const safeDescription = sanitizeString(description);
@@ -80,7 +88,7 @@
     <label for="description" class="mb-1">Descripción</label>
     <textarea id="description" bind:value={description} class="p-2 mb-4 border rounded-lg" rows="3"></textarea>
     <label for="date" class="mb-1">Fecha</label>
-    <input id="date" type="date" bind:value={date} required class="p-2 mb-4 border rounded-lg" />
+    <input id="date" type="date" bind:value={date} min={todayStr} required class="p-2 mb-4 border rounded-lg" />
     <label for="venue" class="mb-1">Venue</label>
     {#if loadingVenues}
       <div class="text-slate-600">Cargando venues...</div>
