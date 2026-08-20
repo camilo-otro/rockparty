@@ -66,10 +66,37 @@ as a queue.
 ## Handling oversubscription (more applicants than room)
 Solve it with **capacity, not judgement**: a song declares the roles it needs and
 how many — `needs: 1 drums · 1 bass · 2 guitars` — and approved signups fill those
-until full; further signups are blocked or waitlisted. This same "needed roles +
-counts" model also powers **gaps-to-fill** (one concept, two features). No
-reputation system, and nobody gets ranked out. *(Modeled properly this is a small
-`performance_slot` / needed-roles structure; can land with gaps-to-fill.)*
+until full. This same "needed roles + counts" structure also powers
+**gaps-to-fill** (gaps = needs − approved), so it's one concept, two features.
+Nobody gets ranked out.
+
+### Contention & reservation semantics
+A pending signup is an **application, not a reservation** — it never holds the slot:
+- **Multiple people can be pending for the same spot at once** (the PK is per
+  user, so several users can hold `pending` rows for the same song + instrument).
+  This is what lets the approver *choose* among applicants — and what a
+  track-record signal would later assist.
+- **A slot is consumed only when a signup is `approved`.** Availability is simply
+  `approved count for (song, instrument) < capacity`.
+- **Rejection frees nothing** — a declined applicant never held the slot. What
+  reopens a slot is an **approved** performer **withdrawing or being removed**
+  (approved-count drops).
+- **When a slot fills** (`approved == capacity`), no new applications are
+  accepted; remaining pending applicants for that slot are resolved (see Open
+  decisions).
+- Enforced **server-side**: the status trigger rejects an approval that would push
+  approved-count past capacity, so two simultaneous approvals can't over-fill.
+- **No capacity declared → no scarcity → no contention**; approval is pure
+  gatekeeping and any number can be approved.
+
+### No "reservation" primitive needed — mode + capacity cover both philosophies
+- **Compete & be chosen** → a manual mode (`organizer`/`proponent`) + capacity:
+  many apply, the approver picks the lineup.
+- **First-come-first-served** → `auto` + capacity: the first N to sign up are
+  auto-approved and fill it — no pending, no holds.
+
+*(The needed-roles/capacity structure is a small `performance_need` table; it can
+land with gaps-to-fill.)*
 
 ## Deferred — track-record as a decision *aid*, not an auto-judge
 Requested idea: when several people want a slot, weigh them by track record.
@@ -94,6 +121,10 @@ Requested idea: when several people want a slot, weigh them by track record.
 - Approve/decline → performer notified.
 
 ## Open decisions
+- **When a slot fills** — auto-decline the remaining pending applicants (reason
+  `slot_filled`, with a notification), or keep them as a **waitlist** that
+  auto-promotes if an approved performer withdraws? Recommend auto-decline for
+  simplicity; waitlist is the resilient-to-no-shows alternative.
 - **Capacity model timing** — ship needed-roles/caps with this, or with gaps-to-fill? (Lean: with gaps-to-fill; they're the same structure.)
 - **Re-request after decline** — allow (recommend) vs block on the same slot.
 - **Venue-level default** for the mode — skip for now.
