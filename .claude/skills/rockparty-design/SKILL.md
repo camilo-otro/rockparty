@@ -50,6 +50,15 @@ deliberate — not bugs to fix.
 - **Free-tier-first** — media is external links or small free-tier uploads; don't
   design flows that assume heavy hosted assets.
 
+## Component workbench (Storybook)
+Run `pnpm storybook` (Storybook 10, on :6006) to review and adjust components in
+isolation across all their states — the fastest way to judge spacing, sizing, and
+state coverage without clicking through the app. Stories live next to their
+component as `*.stories.ts` and the preview loads `app.css`, so they render on the
+real dark theme + tokens. Add a story when you build or restyle a component; use
+the a11y/controls panels to check contrast and prop variants. `StatusBadge` has
+the first story as the pattern to copy.
+
 ## Two modes
 
 ### A. Reviewing (audit an existing screen or the whole app)
