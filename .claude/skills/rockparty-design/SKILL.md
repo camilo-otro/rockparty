@@ -19,22 +19,29 @@ for organizing jam sessions ("toques") among musicians. Spanish UI. This skill
 makes design work consistent with the established visual language instead of
 re-deriving it each time.
 
-## Authoritative sources (in order)
-1. **Figma — the source of truth for visual design.**
-   `https://www.figma.com/design/CYgSEvo4PG1d5gLaeIFscC/Rock-party`
-   fileKey: `CYgSEvo4PG1d5gLaeIFscC`
-   Pull from it with the Figma MCP tools before designing or reviewing:
-   - `get_metadata(fileKey)` → list frames/components (screens: Home, Próximos
-     toques, Toque detail, Canción detail; components: Toque, Cancion,
-     Instrumentos, Spots, Musicos, Logo).
-   - `get_screenshot(fileKey, nodeId)` → see a frame (download the URL, view it).
-   - `get_design_context(fileKey, nodeId)` → exact colors/type/spacing for a node
-     (load the figma-design-to-code guidance first, as that tool requires).
-   If a screen exists in Figma, match it. If it doesn't (e.g. party status
-   badges), design it *in this language* and note it's net-new.
-2. **The implemented tokens** — `tailwind.config.ts` (colors, type scale, weights)
-   and `src/app.css` (base styles). These are the real values to build with; see
-   `references/design-system.md`.
+## Authoritative sources
+The Figma and the code tokens together define the **design language** — palette,
+type, spacing, and component vocabulary. Treat them as the guidelines to design
+*within*, NOT a pixel-perfect spec to converge the whole app back to. **The app
+has intentionally evolved past some Figma frames**, and those divergences are
+deliberate — not bugs to fix.
+
+1. **Figma — authoritative for the visual *language*** (tokens, type, component
+   patterns/vocabulary), not for exact per-screen fidelity.
+   `https://www.figma.com/design/CYgSEvo4PG1d5gLaeIFscC/Rock-party` · fileKey
+   `CYgSEvo4PG1d5gLaeIFscC`. Pull with the Figma MCP tools to see intended patterns:
+   - `get_metadata(fileKey)` → frames/components (screens: Home, Próximos toques,
+     Toque detail, Canción detail; components: Toque, Cancion, Instrumentos, Spots,
+     Musicos, Logo).
+   - `get_screenshot(fileKey, nodeId)` → view a frame (download the URL).
+   - `get_design_context(fileKey, nodeId)` → exact colors/type/spacing (load the
+     figma-design-to-code guidance first, as that tool requires).
+   Some frames are stale vs the built app — mine them for the *language*, not as a
+   checklist.
+2. **The implemented tokens** — `tailwind.config.ts` + `src/app.css` (see
+   `references/design-system.md`) — the real values to build with. When a new
+   pattern emerges in code that Figma lacks, the code + this skill are the living
+   record until Figma catches up.
 
 ## Project constraints that shape design (from CLAUDE.md)
 - **Dark theme only** — `base-950` page, `base-900` surfaces. Design for dark.
@@ -46,14 +53,18 @@ re-deriving it each time.
 ## Two modes
 
 ### A. Reviewing (audit an existing screen or the whole app)
-Work through `references/review-checklist.md`. The short version:
-1. Screenshot the built screen (run the dev server, or read the component) **and**
-   the corresponding Figma frame. Put them side by side.
-2. Grade against the checklist — contrast/legibility first (it catches the most),
-   then token fidelity, component consistency, state coverage, spacing, copy.
-3. Report findings **prioritized** (blocking legibility bugs → visible
-   inconsistencies → polish), each with the specific fix and token to use. Offer
-   to file the larger ones as GitHub issues and to apply the quick ones.
+Judge against the **design language's consistency and real UX quality**, not
+literal Figma fidelity — the Figma can lag the app, and deliberate divergences are
+fine. Work through `references/review-checklist.md`:
+1. Screenshot the built screen; reference the Figma for the intended patterns.
+2. Grade — contrast/legibility first (catches the most), then consistency *within
+   the app* and with the token/pattern vocabulary, then state coverage, spacing, copy.
+3. A difference from a Figma frame is a finding only if it's a genuine problem
+   (broken contrast, inconsistent with the rest of the app, a missing state) — not
+   merely "doesn't match an old frame." When unsure whether a divergence is
+   intentional, ask rather than assume.
+4. Report **prioritized** (blocking → visible inconsistency → polish), each with
+   the specific fix + token. Offer to file larger ones as issues and apply quick ones.
 
 ### B. Designing a new screen / feature
 1. Read `references/design-system.md` for tokens + the component catalog, and

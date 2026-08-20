@@ -16,13 +16,17 @@ both). If a screen has no Figma frame, review it against the patterns in
 - Icons/glyphs have enough contrast; not black-on-dark.
 - Tap targets ≥ ~44px; interactive things look interactive; visible focus state.
 
-## 2. Fidelity to Figma
+## 2. Consistency with the design language (NOT literal Figma fidelity)
+The Figma can lag the built app; deliberate divergences are not bugs. Flag a
+Figma difference only when it's a real problem or an inconsistency *within the
+app* — never merely "doesn't match an old frame." Check:
 - Colors map to the **tokens**, not one-off hexes.
 - Type: Roboto Condensed, light weights, UPPERCASE section headings with
   letter-spacing; correct scale step.
-- Spacing/radius match (rounded-lg, 1px row gaps, card padding rhythm).
-- The component is the **Figma component**, not an approximation (list rows have
-  the chevron, pills, instrument clusters, etc. where the design calls for them).
+- Spacing/radius consistent with the rest of the app (rounded-lg, 1px row gaps,
+  card padding rhythm).
+- Components reuse the shared **vocabulary** (header, CTA, list row, pill, alert,
+  card) rather than a bespoke one-off.
 
 ## 3. Component & pattern consistency
 - Reuses the shared patterns (header, primary CTA, list row, pill, alert, card)
