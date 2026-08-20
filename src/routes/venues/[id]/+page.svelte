@@ -4,6 +4,7 @@
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, Edit, Instagram } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
+  import PartyListItem from '$lib/components/PartyListItem.svelte';
 
   let venue: any = null;
   let venueType: any = null;
@@ -11,6 +12,10 @@
   let error: string | null = null;
   let venueAdmins: string[] = [];
   let currentUserId: string | null = null;
+  let upcomingParties: any[] = [];
+
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   onMount(async () => {
     const id = page.params.id;
@@ -29,6 +34,16 @@
       // Fetch venue admins
       const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id));
       venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
+
+      // Fetch this venue's upcoming toques (public statuses, future-dated)
+      const { data: partyData } = await supabase
+        .from('party')
+        .select('id, title, date, venue')
+        .eq('venue', Number(id))
+        .in('status', ['confirmed', 'live'])
+        .gte('date', todayStr)
+        .order('date', { ascending: true });
+      upcomingParties = partyData ?? [];
     }
     user.subscribe(u => {
       currentUserId = u?.id ?? null;
@@ -89,5 +104,18 @@
         <div class="mb-2 text-cold-light">Permite ensayos</div>
       {/if}
     </div>
+
+    <section class="mt-6 mx-4">
+      <h3 class="text-2xl text-white mb-3 tracking-wide">PRÓXIMOS TOQUES</h3>
+      {#if upcomingParties.length === 0}
+        <div class="text-cold-light">No hay próximos toques en este local.</div>
+      {:else}
+        <ul class="p-0 space-y-[1px] rounded-lg overflow-clip">
+          {#each upcomingParties as party}
+            <PartyListItem party={party} venueName={venue.name} />
+          {/each}
+        </ul>
+      {/if}
+    </section>
   {/if}
 </div>

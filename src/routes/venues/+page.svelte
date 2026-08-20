@@ -5,12 +5,14 @@
     import VenueListItem from '$lib/components/VenueListItem.svelte';
 
     let venues: any[] = [];
-    let parties: any[] = [];
     let loading = true;
     let error: string | null = null;
 
     onMount(async () => {
-        const { data: partyData, error: partyErr } = await supabase.from('party').select('id, venue');
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        // Only count each venue's upcoming, publicly-visible toques.
+        const { data: partyData, error: partyErr } = await supabase.from('party').select('id, venue').in('status', ['confirmed', 'live']).gte('date', todayStr);
         const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address');
         if (partyErr || venueErr) {
             error = partyErr?.message ?? venueErr?.message ?? null;
@@ -26,11 +28,6 @@
         loading = false;
     });
 
-    function getUpcomingPartyCount(venueId: number) {
-        const now = new Date();
-        const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-        return parties.filter(p => p.venue === venueId && new Date(p.date) >= now && new Date(p.date) <= thirtyDays).length;
-    }
 </script>
 <div class="flex flex-col items-left">
     <div class="flex flex-row items-center">
