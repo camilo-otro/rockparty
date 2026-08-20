@@ -14,5 +14,8 @@
   }
   input, textarea, select {
     @apply bg-base-950 text-white rounded-lg;
+    /* Inputs are dark, so tell the browser to render native affordances
+       (date-picker icon, select arrow, spinners) light instead of black-on-dark. */
+    color-scheme: dark;
   }
 }
