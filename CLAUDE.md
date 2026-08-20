@@ -27,6 +27,25 @@ sessions / gigs among musicians. Spanish-language UI. Core entities:
 - **Deployment:** Netlify (`netlify.toml` — `pnpm run build`, publish `build/`)
 - **Package manager:** pnpm
 
+## Constraints & principles
+
+Guidelines that shape what we build and how — weigh new features against these.
+
+- **Free-tier-first.** Keep the project runnable on free service tiers as much as
+  possible (Supabase free, Netlify free). Weigh every feature against its ongoing
+  cost before reaching for a paid tier.
+- **No media storage — external links only.** Do NOT store user media (photos,
+  audio, video, flyers) in blob storage. Reference external platforms by URL
+  instead: YouTube, Spotify, Instagram, photo-album links, etc. Keeps the app off
+  metered storage/bandwidth. (Supabase Storage is on the plan but deliberately
+  unused for this reason.)
+- **Augment the humans, don't automate their judgment.** The app supports the
+  people running the scene rather than replacing their decisions — e.g. capacity
+  caps over reputation ranking, a "run the show" console over an auto-advancing
+  timer, applause with no engagement-farming.
+- **Future interest:** comments and media (as external links) attached to past
+  performances — see the Encore phase of the roadmap.
+
 ## Design system (already implemented, don't redesign — extend)
 
 Defined in `tailwind.config.ts`:
