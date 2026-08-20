@@ -1,7 +1,7 @@
 <script lang="ts">
   export let title;
   export let artist;
-  export let key = undefined;
+  export let key: string | undefined = undefined;
   export let performers: any[] = []; // Array of { instrument_id, user_id, user_avatar }
   
   // Default instruments with their IDs and icon paths

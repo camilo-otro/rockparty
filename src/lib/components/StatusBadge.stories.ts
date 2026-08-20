@@ -15,7 +15,7 @@ const meta: Meta<typeof StatusBadge> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof StatusBadge>;
 
 export const Draft: Story = { args: { status: 'draft' } };
 export const PendingVenue: Story = { args: { status: 'pending_venue' } };
