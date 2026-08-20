@@ -11,7 +11,7 @@
     let activeTab = 'upcoming';
 
     onMount(async () => {
-        const { data: partyData, error: partyErr } = await supabase.from('party').select('*');
+        const { data: partyData, error: partyErr } = await supabase.from('party').select('*').in('status', ['confirmed', 'live', 'completed']);
         const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name');
         if (partyErr || venueErr) {
             error = partyErr?.message ?? venueErr?.message ?? null;

@@ -188,22 +188,13 @@ create index if not exists idx_venue_admin_user_id         on public.venue_admin
 -- =============================================================================
 -- FUNCTIONS & TRIGGERS
 -- =============================================================================
--- can_see_party: party visibility used by RLS. security definer so the
--- performance policy can check a parent party without recursing through RLS.
+-- can_see_party: party visibility used by the performance SELECT policy.
+-- SECURITY INVOKER — runs as the caller and leans on party's own SELECT policy
+-- for the visibility rule (single source of truth; no public security-definer
+-- RPC to worry about). No recursion: party's policy doesn't reference performance.
 create or replace function public.can_see_party(pid bigint)
-returns boolean language sql stable security definer set search_path = '' as $$
-  select exists (
-    select 1 from public.party p
-    where p.id = pid
-      and (
-        p.status in ('confirmed', 'live', 'completed')
-        or p.created_by = (select auth.uid())
-        or exists (select 1 from public.party_admin pa
-                   where pa.party_id = p.id and pa.user_id = (select auth.uid()))
-        or exists (select 1 from public.venue_admin va
-                   where va.venue_id = p.venue and va.user_id = (select auth.uid()))
-      )
-  );
+returns boolean language sql stable security invoker set search_path = '' as $$
+  select exists (select 1 from public.party p where p.id = pid);
 $$;
 
 -- keep party.status_changed_at fresh on status transitions

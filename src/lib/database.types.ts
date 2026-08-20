@@ -15,7 +15,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.12 (cd3cf9e)"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -40,31 +40,40 @@ export type Database = {
       party: {
         Row: {
           approved_by_venue: boolean
+          cancel_reason: string | null
           created_at: string
           created_by: string | null
           date: string | null
           description: string | null
           id: number
+          status: Database["public"]["Enums"]["party_status"]
+          status_changed_at: string
           title: string | null
           venue: number | null
         }
         Insert: {
           approved_by_venue?: boolean
+          cancel_reason?: string | null
           created_at?: string
           created_by?: string | null
           date?: string | null
           description?: string | null
           id?: number
+          status?: Database["public"]["Enums"]["party_status"]
+          status_changed_at?: string
           title?: string | null
           venue?: number | null
         }
         Update: {
           approved_by_venue?: boolean
+          cancel_reason?: string | null
           created_at?: string
           created_by?: string | null
           date?: string | null
           description?: string | null
           id?: number
+          status?: Database["public"]["Enums"]["party_status"]
+          status_changed_at?: string
           title?: string | null
           venue?: number | null
         }
@@ -450,11 +459,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_see_party: { Args: { pid: number }; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
-      [_ in never]: never
+      party_status:
+        | "draft"
+        | "pending_venue"
+        | "confirmed"
+        | "live"
+        | "completed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -581,6 +597,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      party_status: [
+        "draft",
+        "pending_venue",
+        "confirmed",
+        "live",
+        "completed",
+        "cancelled",
+      ],
+    },
   },
 } as const

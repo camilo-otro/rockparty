@@ -8,8 +8,12 @@
   import { user } from '$lib/stores/user';
   import Sortable from 'sortablejs';
   import ShareModal from '$lib/components/ShareModal.svelte';
+  import StatusBadge from '$lib/components/StatusBadge.svelte';
+  import type { Database, TablesUpdate } from '$lib/database.types';
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
+
+  type PartyStatus = Database['public']['Enums']['party_status'];
 
   // State variables
   let party: any = null;
@@ -29,6 +33,24 @@
   let showShareModal = false;
   let partyAdmins: string[] = [];
   let usersLoaded = false;
+  let statusError = '';
+
+  $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
+
+  async function setStatus(next: PartyStatus, reason: string | null = null) {
+    if (!party) return;
+    statusError = '';
+    const patch: TablesUpdate<'party'> = { status: next };
+    if (reason) patch.cancel_reason = reason;
+    const { error: e } = await supabase.from('party').update(patch).eq('id', party.id);
+    if (e) { statusError = e.message; return; }
+    party = { ...party, status: next };
+  }
+  function publish() { setStatus('confirmed'); }
+  function cancelToque() {
+    if (!confirm('¿Cancelar este toque? Dejará de ser visible para el público.')) return;
+    setStatus('cancelled', 'organizer');
+  }
 
   // Derived helpers
   function getSongTitle(songId: number) {
@@ -264,9 +286,22 @@
   {:else if error}
     <div class="text-red-500 p-4">Error: {error}</div>
   {:else if party}
-    <div class="flex flex-row justify-between">
+    <div class="flex flex-row justify-between items-start gap-3">
       <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
+      <StatusBadge status={party.status} />
     </div>
+    {#if canAdmin}
+      <div class="flex flex-wrap items-center gap-3">
+        {#if party.status === 'draft'}
+          <span class="text-cold-light text-sm">Borrador — solo tú lo ves. Publícalo cuando esté listo.</span>
+          <button on:click={publish} class="bg-yellow text-black rounded-lg px-4 py-2 font-medium">Publicar</button>
+        {/if}
+        {#if party.status !== 'cancelled' && party.status !== 'completed'}
+          <button on:click={cancelToque} class="text-red-400 underline text-sm">Cancelar toque</button>
+        {/if}
+        {#if statusError}<span class="text-red-500 text-sm">Error: {statusError}</span>{/if}
+      </div>
+    {/if}
     <div class="">Organizado por: {#if usersLoaded}<img src={getUserAvatar(party.created_by)} alt="User Avatar" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" /><span class="text-cold-light">{getUserNickname(party.created_by)}</span>{/if}</div>
     <div class="text-lg mb-2 text-white">{party.description}</div>
     <div class="mb-2 text-white">{dayjs(party.date).locale('es').format('ddd D [de] MMMM, YYYY')}</div>

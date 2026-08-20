@@ -12,7 +12,7 @@
   let topVenues: any[] = [];
 
   onMount(async () => {
-    const { data: partyData, error: partyErr } = await supabase.from('party').select('id, title, date, venue').order('date', { ascending: true });
+    const { data: partyData, error: partyErr } = await supabase.from('party').select('id, title, date, venue').in('status', ['confirmed', 'live']).order('date', { ascending: true });
     const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address');
     if (partyErr || venueErr) {
       error = partyErr?.message ?? venueErr?.message ?? null;

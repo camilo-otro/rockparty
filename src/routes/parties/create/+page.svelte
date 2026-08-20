@@ -80,13 +80,14 @@
           if (dbError) {
             error = `Database error: ${dbError.message}`;
           } else {
+            const newId = data && data.length > 0 ? data[0].id : null;
             // Add party_admins
-            if (data && data.length > 0 && admins && admins.length > 0) {
-              await supabase.from('party_admin').insert(admins.map((a: string) => ({ party_id: data[0].id, user_id: a })));
+            if (newId && admins && admins.length > 0) {
+              await supabase.from('party_admin').insert(admins.map((a: string) => ({ party_id: newId, user_id: a })));
             }
             success = true;
             setTimeout(() => {
-              window.location.href = '/parties';
+              window.location.href = newId ? `/parties/${newId}` : '/parties';
             }, 1000);
           }
         } catch (e) {
@@ -99,7 +100,7 @@
   {/if}
   {#if success}
     <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nuevo Toque Creado!
+    Borrador creado — revísalo y publícalo.
     </div>
   {/if}
   {#if error}
