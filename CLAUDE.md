@@ -33,12 +33,13 @@ Guidelines that shape what we build and how — weigh new features against these
 
 - **Free-tier-first.** Keep the project runnable on free service tiers as much as
   possible (Supabase free, Netlify free). Weigh every feature against its ongoing
-  cost before reaching for a paid tier.
-- **No media storage — external links only.** Do NOT store user media (photos,
-  audio, video, flyers) in blob storage. Reference external platforms by URL
-  instead: YouTube, Spotify, Instagram, photo-album links, etc. Keeps the app off
-  metered storage/bandwidth. (Supabase Storage is on the plan but deliberately
-  unused for this reason.)
+  cost before reaching for a paid tier. This — not any one technique — is the
+  governing rule.
+- **Media/storage: whatever stays free.** Storage is fine when it's free-tier —
+  Supabase Storage's free tier (already in the stack) is fair game, as is any
+  free-tier service we integrate. External links (YouTube, Spotify, Instagram,
+  photo albums) are a good zero-cost default and the fallback when volume would
+  exceed a free limit. The rule is cost, not a ban on storing media.
 - **Augment the humans, don't automate their judgment.** The app supports the
   people running the scene rather than replacing their decisions — e.g. capacity
   caps over reputation ranking, a "run the show" console over an auto-advancing
