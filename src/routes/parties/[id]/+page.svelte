@@ -290,17 +290,23 @@
       <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
       <StatusBadge status={party.status} />
     </div>
-    {#if canAdmin}
-      <div class="flex flex-wrap items-center gap-3">
-        {#if party.status === 'draft'}
-          <span class="text-cold-light text-sm">Borrador — solo tú lo ves. Publícalo cuando esté listo.</span>
-          <button on:click={publish} class="bg-yellow text-black rounded-lg px-4 py-2 font-medium">Publicar</button>
-        {/if}
-        {#if party.status !== 'cancelled' && party.status !== 'completed'}
-          <button on:click={cancelToque} class="text-red-400 underline text-sm">Cancelar toque</button>
-        {/if}
-        {#if statusError}<span class="text-red-500 text-sm">Error: {statusError}</span>{/if}
+    {#if canAdmin && party.status === 'draft'}
+      <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
+        <p class="text-cold-light text-sm leading-snug">
+          Este toque es un <span class="text-white">borrador</span> — solo tú y sus administradores lo ven.
+        </p>
+        <div class="flex items-center gap-3">
+          <button on:click={publish} class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-2 transition">Publicar toque</button>
+          <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm px-2 py-2 transition">Descartar</button>
+        </div>
       </div>
+    {:else if canAdmin && party.status !== 'completed' && party.status !== 'cancelled'}
+      <div class="flex justify-end">
+        <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque</button>
+      </div>
+    {/if}
+    {#if canAdmin && statusError}
+      <div class="text-red-500 text-sm">Error: {statusError}</div>
     {/if}
     <div class="">Organizado por: {#if usersLoaded}<img src={getUserAvatar(party.created_by)} alt="User Avatar" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" /><span class="text-cold-light">{getUserNickname(party.created_by)}</span>{/if}</div>
     <div class="text-lg mb-2 text-white">{party.description}</div>
