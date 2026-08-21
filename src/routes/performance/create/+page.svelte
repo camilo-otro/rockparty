@@ -8,6 +8,7 @@
     import { get } from 'svelte/store';
     import SongSelect from '$lib/components/SongSelect.svelte';
     import { sanitizeString } from '$lib/sanitize';
+    import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     let submitting = false;
     let songs: any[] = [];
     let loadingSongs = false;
@@ -19,8 +20,6 @@
     let songError = '';
     let refLink = '';
     let key = '';
-    let success = false;
-    let error = '';
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
 
@@ -76,41 +75,40 @@
 
     async function handleSubmit() {
         if (!selectedSong || !partyId || !userId) {
-            error = 'All required fields must be filled.';
+            toastError('Debes seleccionar una canción.');
             return;
         }
-        
+
         // Sanitize inputs
         const safeRefLink = sanitizeString(refLink);
         const safeKey = sanitizeString(key);
         partyId = page.url.searchParams.get('partyId') ?? null;
         submitting = true;
-        error = '';
-        
+
         try {
             const { data, error: dbError } = await supabase
                 .from('performance')
-                .insert([{ 
+                .insert([{
                     party: partyId ? Number(partyId) : null,
                     song: Number(selectedSong),
-                    suggested_by: userId, 
-                    ref_link: safeRefLink || null, 
-                    key: safeKey || null 
+                    suggested_by: userId,
+                    ref_link: safeRefLink || null,
+                    key: safeKey || null
                 }])
                 .select();
-                
+
             if (dbError) {
-                error = `Database error: ${dbError.message}`;
+                reportError(dbError);
             } else {
-                success = true;
+                toastSuccess('¡Agregada al setlist!');
                 setTimeout(() => {
                     window.location.href = `/parties/${partyId}`;
                 }, 1000);
             }
         } catch (e) {
-            error = 'Could not connect to the server.';
+            toastError('No se pudo conectar con el servidor.');
         }
-        
+
         submitting = false;
     }
 
@@ -130,7 +128,6 @@
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para agregar canciones al Setlist.
   </div>
 {:else}
-  {#if !success && !error}
     <form on:submit|preventDefault={handleSubmit}>
         <div class="flex flex-col w-3/4 p-5 mb-4">
             <label for="song" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Canción</label>
@@ -154,18 +151,7 @@
           </button>
         </div>
     </form>
-    <p class="mt-6 text-center text-slate-700">
-      ¿No encuentras tu canción en la lista? <a href="/songs/create?from=performance&partyId={partyId}" class="text-blue-600 underline">Agregala aquí</a>.
+    <p class="mt-6 text-center text-cold-light">
+      ¿No encuentras tu canción en la lista? <a href="/songs/create?from=performance&partyId={partyId}" class="text-cold-light underline">Agrégala aquí</a>.
     </p>
-  {/if}
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Agregada al Setlist!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Error: {error}
-    </div>
-  {/if}
 {/if}

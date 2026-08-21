@@ -136,7 +136,13 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
 
 - Liberal use of `any` types in `.svelte` files instead of generated
   Supabase types
-- Error handling is per-page inline strings, no shared pattern
+- Action/mutation feedback now uses a shared toast pattern
+  (`src/lib/stores/toasts.ts` + `Toasts.svelte`, mounted in the layout;
+  `reportError`/`toastSuccess`/`toastError`/`toastInfo`). Uncaught route errors
+  render the themed `src/routes/+error.svelte`. Page-**load** failures are still
+  inline `{:else if error}` states by design (a toast alone would leave a blank
+  content region). The auth-gate "Debes iniciar sesión" notices are still
+  light-themed inline blocks — not migrated.
 
 ## History snapshot
 

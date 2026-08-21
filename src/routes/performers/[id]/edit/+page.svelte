@@ -3,10 +3,9 @@ import { onMount } from 'svelte';
 import { user } from '$lib/stores/user';
 import PerformerForm from '$lib/components/PerformerForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
+import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
 let submitting = false;
-let success = false;
-let error = '';
 let isAuthenticated = false;
 let email = '';
 let nickname = '';
@@ -45,20 +44,17 @@ function handleBack() {
 {:else}
   <PerformerForm
     submitting={submitting}
-    success={success}
-    error={error}
     initialEmail={email}
     initialNickname={nickname}
     initialAvatarUrl={avatarUrl}
     on:submit={async (e) => {
       submitting = true;
-      error = '';
       const { nickname, email, avatarUrl } = e.detail;
       const uid = userId;
-      if (!uid) { error = 'No autenticado.'; submitting = false; return; }
+      if (!uid) { toastError('No autenticado.'); submitting = false; return; }
       try {
         const { supabase } = await import('$lib/supabaseClient');
-        
+
         // If avatarUrl is empty, try to get it from Google auth
         let finalAvatarUrl = avatarUrl;
         if (!avatarUrl || avatarUrl.trim() === '') {
@@ -67,60 +63,36 @@ function handleBack() {
             finalAvatarUrl = authUser.user_metadata.avatar_url;
           }
         }
-        
+
         // Check if profile exists
         const { data: existingProfile, error: fetchError } = await supabase
           .from('profile')
           .select('id')
           .eq('id', uid)
           .single();
-        
+
         if (fetchError && fetchError.code !== 'PGRST116') {
           // PGRST116 is "not found" error, other errors are actual problems
-          error = `Database error: ${fetchError.message}`;
-        } else if (existingProfile) {
-          // Profile exists, update it
-          const { error: dbError } = await supabase
-            .from('profile')
-            .update({ nickname, avatar_url: finalAvatarUrl, email })
-            .eq('id', uid);
-          if (dbError) {
-            error = `Database error: ${dbError.message}`;
-          } else {
-            success = true;
-            setTimeout(() => {
-              window.location.href = previousPage;
-            }, 500);
-          }
+          reportError(fetchError);
         } else {
-          // Profile doesn't exist, insert new one
-          const { error: dbError } = await supabase
-            .from('profile')
-            .insert({ id: uid, nickname, avatar_url: finalAvatarUrl, email });
+          // Update if the profile exists, otherwise insert a new one.
+          const { error: dbError } = existingProfile
+            ? await supabase.from('profile').update({ nickname, avatar_url: finalAvatarUrl, email }).eq('id', uid)
+            : await supabase.from('profile').insert({ id: uid, nickname, avatar_url: finalAvatarUrl, email });
           if (dbError) {
-            error = `Database error: ${dbError.message}`;
+            reportError(dbError);
           } else {
-            success = true;
+            toastSuccess('¡Perfil actualizado!');
             setTimeout(() => {
               window.location.href = previousPage;
             }, 500);
           }
         }
       } catch (e) {
-        error = 'Could not connect to the server.';
+        toastError('No se pudo conectar con el servidor.');
       }
       submitting = false;
     }}
-    on:error={(e) => error = e.detail}
+    on:error={(e) => toastError(e.detail)}
   />
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center">
-      Perfil actualizado!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center">
-      Error: {error}
-    </div>
-  {/if}
 {/if}

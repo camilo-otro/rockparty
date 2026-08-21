@@ -6,6 +6,7 @@ import { supabase } from '$lib/supabaseClient';
 import PartyForm from '$lib/components/PartyForm.svelte';
 import { user } from '$lib/stores/user';
 import { ChevronLeft } from 'lucide-svelte';
+import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
 // State variables
 let party: any = null;
@@ -13,8 +14,6 @@ let venues: any[] = [];
 let loadingVenues = true;
 let errorVenues: string | null = null;
 let submitting = false;
-let success = false;
-let error = '';
 let partyAdmins: string[] = [];
 let currentUserId: string | null = null;
 
@@ -60,13 +59,10 @@ onMount(async () => {
     initialVenue={party.venue}
     initialAdmins={partyAdmins}
     submitting={submitting}
-    success={success}
-    error={error}
     userId={party.created_by}
     isAuthenticated={true}
     on:submit={async (e) => {
       submitting = true;
-      error = '';
       const { title, description, date, venue, admins } = e.detail;
       try {
         const { error: dbError } = await supabase
@@ -74,7 +70,7 @@ onMount(async () => {
           .update({ title, description, date, venue })
           .eq('id', party.id);
         if (dbError) {
-          error = `Database error: ${dbError.message}`;
+          reportError(dbError);
         } else {
           // Update party_admin table
           const initialSet = new Set(partyAdmins);
@@ -89,26 +85,16 @@ onMount(async () => {
           if (toAdd.length > 0) {
             await supabase.from('party_admin').insert(toAdd.map((a: string) => ({ party_id: party.id, user_id: a })));
           }
-          success = true;
+          toastSuccess('¡Toque actualizado!');
           setTimeout(() => {
             window.location.href = `/parties/${party.id}`;
           }, 1000);
         }
       } catch (e) {
-        error = 'No se pudo conectar con el servidor.';
+        toastError('No se pudo conectar con el servidor.');
       }
       submitting = false;
     }}
-    on:error={(e) => error = e.detail}
+    on:error={(e) => toastError(e.detail)}
   />
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center">
-      Fiesta actualizada!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center">
-      Error: {error}
-    </div>
-  {/if}
 {/if}

@@ -4,6 +4,7 @@
   import "../app.css";
   import { scale, fade } from 'svelte/transition';
   import logo from '$lib/assets/images/Logo.png';
+  import Toasts from '$lib/components/Toasts.svelte';
   export let data
 
   $: ({ supabase, session } = data)
@@ -65,3 +66,5 @@
 </nav>
 
 <slot />
+
+<Toasts />

@@ -6,6 +6,7 @@ import { supabase } from '$lib/supabaseClient';
 import VenueForm from '$lib/components/VenueForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
 import { user } from '$lib/stores/user';
+import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
 // State variables
 let venue: any = null;
@@ -14,8 +15,6 @@ let venueAdmins: string[] = [];
 let loadingVenueTypes = true;
 let errorVenueTypes: string | null = null;
 let submitting = false;
-let success = false;
-let error = '';
 let currentUserId: string | null = null;
 
 // Lifecycle
@@ -52,8 +51,6 @@ onMount(async () => {
 {:else}
   <VenueForm
     submitting={submitting}
-    success={success}
-    error={error}
     initialName={venue.name}
     initialAddress={venue.address}
     initialContactName={venue.contact_name}
@@ -69,7 +66,6 @@ onMount(async () => {
     initialAdmins={venueAdmins}
     on:submit={async (e) => {
       submitting = true;
-      error = '';
       const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
       try {
         const { error: dbError } = await supabase
@@ -77,7 +73,7 @@ onMount(async () => {
           .update({ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals })
           .eq('id', venue.id);
         if (dbError) {
-          error = `Error de base de datos: ${dbError.message}`;
+          reportError(dbError);
         } else {
           // Update venue_admin table
           const initialSet = new Set(venueAdmins);
@@ -92,26 +88,16 @@ onMount(async () => {
           if (toAdd.length > 0) {
             await supabase.from('venue_admin').insert(toAdd.map((a: string) => ({ venue_id: venue.id, user_id: a })));
           }
-          success = true;
+          toastSuccess('¡Local actualizado!');
           setTimeout(() => {
             window.location.href = `/venues/${venue.id}`;
           }, 1000);
         }
       } catch (e) {
-        error = 'No se pudo conectar con el servidor.';
+        toastError('No se pudo conectar con el servidor.');
       }
       submitting = false;
     }}
-    on:error={(e) => error = e.detail}
+    on:error={(e) => toastError(e.detail)}
   />
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center">
-      Local actualizado!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center">
-      Error: {error}
-    </div>
-  {/if}
 {/if}

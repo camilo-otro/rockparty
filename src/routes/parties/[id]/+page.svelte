@@ -10,6 +10,7 @@
   import ShareModal from '$lib/components/ShareModal.svelte';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
+  import { reportError, toastSuccess } from '$lib/stores/toasts';
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
 
@@ -33,23 +34,24 @@
   let showShareModal = false;
   let partyAdmins: string[] = [];
   let usersLoaded = false;
-  let statusError = '';
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
 
-  async function setStatus(next: PartyStatus, reason: string | null = null) {
-    if (!party) return;
-    statusError = '';
+  async function setStatus(next: PartyStatus, reason: string | null = null): Promise<boolean> {
+    if (!party) return false;
     const patch: TablesUpdate<'party'> = { status: next };
     if (reason) patch.cancel_reason = reason;
     const { error: e } = await supabase.from('party').update(patch).eq('id', party.id);
-    if (e) { statusError = e.message; return; }
+    if (e) { reportError(e); return false; }
     party = { ...party, status: next };
+    return true;
   }
-  function publish() { setStatus('confirmed'); }
-  function cancelToque() {
+  async function publish() {
+    if (await setStatus('confirmed')) toastSuccess('Toque publicado.');
+  }
+  async function cancelToque() {
     if (!confirm('¿Cancelar este toque? Dejará de ser visible para el público.')) return;
-    setStatus('cancelled', 'organizer');
+    if (await setStatus('cancelled', 'organizer')) toastSuccess('Toque cancelado.');
   }
 
   // Derived helpers
@@ -304,9 +306,6 @@
       <div class="flex justify-end">
         <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque</button>
       </div>
-    {/if}
-    {#if canAdmin && statusError}
-      <div class="text-red-500 text-sm">Error: {statusError}</div>
     {/if}
     <div class="">Organizado por: {#if usersLoaded}<img src={getUserAvatar(party.created_by)} alt="User Avatar" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" /><span class="text-cold-light">{getUserNickname(party.created_by)}</span>{/if}</div>
     <div class="text-lg mb-2 text-white">{party.description}</div>

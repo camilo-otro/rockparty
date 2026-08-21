@@ -1,9 +1,9 @@
 <script lang="ts">
     import { ChevronLeft } from 'lucide-svelte';
-    import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
+    import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import VenueForm from '$lib/components/VenueForm.svelte';
 
     let submitting = false;
@@ -13,8 +13,6 @@
     let contact = '';
     let whatsapp = '';
     let instagram = '';
-    let success = false;
-    let error = '';
     let userId: string | null = null;
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
@@ -61,11 +59,8 @@
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un local.
   </div>
 {:else}
-  {#if !success && !error}
-    <VenueForm
+  <VenueForm
       submitting={submitting}
-      success={success}
-      error={error}
       initialName={name}
       initialAddress={address}
       initialContactName={contactName}
@@ -81,7 +76,6 @@
       initialAdmins={[]}
       on:submit={async (e) => {
         submitting = true;
-        error = '';
         const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
         try {
           const { supabase } = await import('$lib/supabaseClient');
@@ -90,33 +84,22 @@
             .insert([{ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals, created_by: userId }])
             .select();
           if (dbError) {
-            error = `Error de base de datos: ${dbError.message}`;
+            reportError(dbError);
           } else {
             // Add venue_admins
             if (data && data.length > 0 && admins && admins.length > 0) {
               await supabase.from('venue_admin').insert(admins.map((a: string) => ({ venue_id: data[0].id, user_id: a })));
             }
-            success = true;
+            toastSuccess('¡Nuevo local creado!');
             setTimeout(() => {
               window.location.href = '/venues';
             }, 1000);
           }
         } catch (e) {
-          error = 'No se pudo conectar con el servidor.';
+          toastError('No se pudo conectar con el servidor.');
         }
         submitting = false;
       }}
-      on:error={(e) => error = e.detail}
+      on:error={(e) => toastError(e.detail)}
     />
-  {/if}
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nuevo Local Creado!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Error: {error}
-    </div>
-  {/if}
 {/if}

@@ -7,6 +7,7 @@
     import { get } from 'svelte/store';
     import { page } from '$app/stores';
     import { supabase } from '$lib/supabaseClient';
+    import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
     import { sanitizeString } from '$lib/sanitize';
     let submitting = false;
@@ -20,8 +21,6 @@
     let userId: string | null = null;
     let fromPerformance = false;
     let partyId: string | null = null;
-    let success = false;
-    let error = '';
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
 
@@ -41,26 +40,25 @@
 
     async function handleSubmit() {
         if (!title || !artist) {
-            error = 'Todos los campos son obligatorios.';
+            toastError('Todos los campos son obligatorios.');
             return;
         }
         // Sanitize inputs
         const safeTitle = sanitizeString(title);
         const safeArtist = sanitizeString(artist);
         submitting = true;
-        error = '';
-        
+
         try {
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('song')
                 .insert([{ title: safeTitle, artist: safeArtist, added_by: userId, ref_link: reflink }])
                 .select();
-                
+
             if (dbError) {
-                error = `Database error: ${dbError.message}`;
+                reportError(dbError);
             } else {
-                success = true;
+                toastSuccess('¡Nueva canción creada!');
                 setTimeout(() => {
                     if (fromPerformance && partyId) {
                         window.location.href = `/performance/create?partyId=${partyId}`;
@@ -70,9 +68,9 @@
                 }, 500);
             }
         } catch (e) {
-            error = 'Could not connect to the server.';
+            toastError('No se pudo conectar con el servidor.');
         }
-        
+
         submitting = false;
     }
 
@@ -118,7 +116,6 @@
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear una canción.
   </div>
 {:else}
-  {#if !success && !error}
     <form on:submit|preventDefault={handleSubmit}>
         <input type="hidden" name="added_by" value={userId} />
         <div class="flex flex-col w-3/4 p-5 mb-4">
@@ -147,15 +144,4 @@
             {submitting ? 'Creando...' : 'Crear Canción'}
         </button>
     </form>
-  {/if}
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nueva Canción Creada!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Error: {error}
-    </div>
-  {/if}
 {/if}

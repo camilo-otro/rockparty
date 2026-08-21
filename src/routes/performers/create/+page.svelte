@@ -1,10 +1,10 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
-    import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
     import { sanitizeString } from '$lib/sanitize';
+    import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import PerformerForm from '$lib/components/PerformerForm.svelte';
 
     let submitting = false;
@@ -12,8 +12,6 @@
     let authId: string = '';
     let userId: string | null = null;
     let nickname = '';
-    let success = false;
-    let error = '';
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
     let avatarUrl = '';
@@ -36,7 +34,7 @@
 
     async function handleSubmit() {
         if (!nickname || !authId || !email) {
-            error = 'All fields are required.';
+            toastError('Todos los campos son obligatorios.');
             return;
         }
         // Sanitize inputs
@@ -44,27 +42,26 @@
         const safeAuthId = sanitizeString(authId);
         const safeEmail = sanitizeString(email);
         submitting = true;
-        error = '';
-        
+
         try {
             const { supabase } = await import('$lib/supabaseClient');
             const { data, error: dbError } = await supabase
                 .from('profile')
                 .insert([{ id: authId, nickname: safeNickname, email: safeEmail }])
                 .select();
-                
+
             if (dbError) {
-                error = `Database error: ${dbError.message}`;
+                reportError(dbError);
             } else {
-                success = true;
+                toastSuccess('¡Nuevo intérprete creado!');
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 1000);
             }
         } catch (e) {
-            error = 'Could not connect to the server.';
+            toastError('No se pudo conectar con el servidor.');
         }
-        
+
         submitting = false;
     }
 
@@ -86,17 +83,13 @@
     Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un intérprete.
   </div>
 {:else}
-  {#if !success && !error}
-    <PerformerForm
+  <PerformerForm
       submitting={submitting}
-      success={success}
-      error={error}
       initialEmail={email}
       initialNickname={nickname}
       initialAvatarUrl={avatarUrl}
       on:submit={async (e) => {
         submitting = true;
-        error = '';
         const { nickname, email, avatar_url } = e.detail;
         try {
           const { supabase } = await import('$lib/supabaseClient');
@@ -105,29 +98,18 @@
             .insert([{ id: authId, nickname, email, avatar_url }])
             .select();
           if (dbError) {
-            error = `Database error: ${dbError.message}`;
+            reportError(dbError);
           } else {
-            success = true;
+            toastSuccess('¡Nuevo intérprete creado!');
             setTimeout(() => {
               window.location.href = '/';
             }, 1000);
           }
         } catch (e) {
-          error = 'Could not connect to the server.';
+          toastError('No se pudo conectar con el servidor.');
         }
         submitting = false;
       }}
-      on:error={(e) => error = e.detail}
+      on:error={(e) => toastError(e.detail)}
     />
-  {/if}
-  {#if success}
-    <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Nuevo Intérprete Creado!
-    </div>
-  {/if}
-  {#if error}
-    <div class="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-center" in:fly={{ y: -20, duration: 400 }}>
-    Error: {error}
-    </div>
-  {/if}
 {/if}
