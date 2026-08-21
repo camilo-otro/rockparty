@@ -316,30 +316,6 @@ export type Database = {
           },
         ]
       }
-      temp_spotify_songs: {
-        Row: {
-          artist: string | null
-          duration: number | null
-          id: number
-          ref_link: string | null
-          title: string | null
-        }
-        Insert: {
-          artist?: string | null
-          duration?: number | null
-          id?: number
-          ref_link?: string | null
-          title?: string | null
-        }
-        Update: {
-          artist?: string | null
-          duration?: number | null
-          id?: number
-          ref_link?: string | null
-          title?: string | null
-        }
-        Relationships: []
-      }
       venue: {
         Row: {
           address: string | null
