@@ -1,58 +1,59 @@
 <script lang="ts">
 import { onMount } from 'svelte';
-import { user } from '$lib/stores/user';
+import { goto } from '$app/navigation';
+import { supabase } from '$lib/supabaseClient';
 import PerformerForm from '$lib/components/PerformerForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
 import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
+// 'loading' until auth is definitively known, so we never flash the
+// logged-out gate during the session-restore race.
+let authState: 'loading' | 'in' | 'out' = 'loading';
 let submitting = false;
-let isAuthenticated = false;
 let email = '';
 let nickname = '';
 let avatarUrl = '';
 let userId: string | null = null;
-let unsubscribeUser: () => void;
-let previousPage = '/'; // fallback to home
 let instruments: any[] = [];
 let initialInstruments: number[] = [];
-let dataLoaded = false;
 
 onMount(async () => {
-  // Store the previous page, fallback to home if no referrer
-  previousPage = document.referrer || '/';
-
-  unsubscribeUser = user.subscribe(u => {
-    isAuthenticated = !!u?.id;
-    userId = u?.id ?? null;
-    email = u?.email ?? '';
-    nickname = u?.nickname ?? '';
-    avatarUrl = u?.avatarUrl ?? '';
-  });
-
-  // Load the instrument lookup + this performer's current instruments before
-  // rendering the form (PerformerForm copies initialInstruments at init).
-  const { supabase } = await import('$lib/supabaseClient');
-  const { data: instrData } = await supabase.from('instrument').select('id, name').order('id');
-  instruments = instrData ?? [];
-  if (userId) {
-    const { data: mine } = await supabase.from('profile_instrument').select('instrument_id').eq('profile_id', userId);
-    initialInstruments = (mine ?? []).map((r: any) => r.instrument_id);
+  // getSession() awaits session restoration from storage, so this is the
+  // definitive auth check (unlike the layout store, which can be briefly null).
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
+    authState = 'out';
+    return;
   }
-  dataLoaded = true;
+  userId = session.user.id;
+  email = session.user.email ?? '';
+
+  // Load the profile fields + instrument lookup + current instruments before
+  // rendering the form (PerformerForm copies initialInstruments at init).
+  const [{ data: prof }, { data: instrData }, { data: mine }] = await Promise.all([
+    supabase.from('profile').select('nickname, avatar_url').eq('id', userId).single(),
+    supabase.from('instrument').select('id, name').order('id'),
+    supabase.from('profile_instrument').select('instrument_id').eq('profile_id', userId)
+  ]);
+  nickname = prof?.nickname ?? '';
+  avatarUrl = prof?.avatar_url ?? session.user.user_metadata?.avatar_url ?? '';
+  instruments = instrData ?? [];
+  initialInstruments = (mine ?? []).map((r: any) => r.instrument_id);
+  authState = 'in';
 });
 </script>
 
 <div class="mb-4 mx-4">
-  <a href="/performers" class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
+  <a href={userId ? `/performers/${userId}` : '/'} class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
   <h2 class="text-yellow text-2xl">EDITAR PERFIL</h2>
 </div>
 
-{#if !isAuthenticated}
+{#if authState === 'loading'}
+  <div class="text-white p-6 mx-4">Cargando...</div>
+{:else if authState === 'out'}
   <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
     Debes iniciar sesión para editar tu perfil.
   </div>
-{:else if !dataLoaded}
-  <div class="text-white p-6 mx-4">Cargando...</div>
 {:else}
   <PerformerForm
     submitting={submitting}
@@ -67,8 +68,6 @@ onMount(async () => {
       const uid = userId;
       if (!uid) { toastError('No autenticado.'); submitting = false; return; }
       try {
-        const { supabase } = await import('$lib/supabaseClient');
-
         // If avatarUrl is empty, try to get it from Google auth
         let finalAvatarUrl = avatarUrl;
         if (!avatarUrl || avatarUrl.trim() === '') {
@@ -108,9 +107,7 @@ onMount(async () => {
               await supabase.from('profile_instrument').insert(toAdd.map((i) => ({ profile_id: uid, instrument_id: i })));
             }
             toastSuccess('¡Perfil actualizado!');
-            setTimeout(() => {
-              window.location.href = previousPage;
-            }, 500);
+            setTimeout(() => goto(`/performers/${uid}`), 500);
           }
         }
       } catch (e) {
