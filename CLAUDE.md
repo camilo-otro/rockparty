@@ -124,11 +124,13 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
   push to `main` is the ONLY thing that deploys.
 - **Keep `main` always-deployable** — don't merge unless `pnpm run check` is
   clean and the app runs.
-- **Review gate before merging:** run the **`code-review`** skill on the `dev` vs
-  `main` diff (`git diff main...dev`) and clear any 🔴 blocking findings first. The
-  skill encodes this repo's real risk areas (RLS security, Svelte legacy-mode
-  reactivity traps, dark-theme/token rules, unbounded queries, the toast pattern,
-  migration/type discipline).
+- **Review gate — per issue (primary):** run the **`code-review`** skill as each
+  issue is finished, *before* committing/closing it (`git diff` / `--staged`),
+  and clear any 🔴 blocking findings first. Small per-issue diffs catch more than a
+  big end-of-phase sweep. A lighter pass on the full `dev` vs `main` diff before
+  merging confirms the batch is coherent. The skill encodes this repo's real risk
+  areas (RLS security, Svelte legacy-mode reactivity traps, dark-theme/token
+  rules, unbounded queries, the toast pattern, migration/type discipline).
 - `main` is the GitHub default branch and Netlify's production branch. Keep
   Netlify **branch deploys OFF** (default) so `dev` never builds; test locally
   instead.

@@ -22,20 +22,41 @@ and the frontend is Svelte 5 running in legacy (`export let`) mode with its own
 reactivity traps. Those two facts drive most of what matters here.
 
 ## When to run
-- **Before every `dev` → `main` merge** (the deploy gate) — this is the primary use.
+- **As each issue is completed** — this is the PRIMARY cadence. Review the issue's
+  changes *before* committing and closing it, while the diff is small, focused,
+  and the context is fresh. Small per-issue diffs catch far more than one big
+  end-of-phase sweep. Make this a standing step: finish the work → run this skill
+  → clear 🔴 blockers → commit + close the issue.
+- **Before a `dev` → `main` merge** — a lighter final pass (the per-issue reviews
+  already did the deep work; here just confirm the batch is coherent and
+  `pnpm run check` is clean).
 - On request: "review this", "check for bugs", a specific file, or a diff/PR.
 
 ## What to review (scope)
-Default to the **deploy candidate**: the diff of `dev` vs `main`.
+Pick the tightest scope that covers the finished work:
 
-```bash
-git fetch origin main --quiet 2>/dev/null; git diff main...dev --stat
-git diff main...dev            # the full diff to review
-```
+1. **Per-issue, pre-commit (preferred):** the working-tree changes for the issue
+   you just finished.
+   ```bash
+   git status --short
+   git diff                 # unstaged
+   git diff --staged        # staged
+   ```
+2. **Per-issue, already committed:** the commit(s) for this issue, e.g. the last N
+   on `dev` since the issue work began.
+   ```bash
+   git log --oneline -8
+   git diff <base>..HEAD    # <base> = commit before this issue's work
+   ```
+3. **Deploy candidate (final pass):** the whole `dev` vs `main` diff.
+   ```bash
+   git fetch origin main --quiet 2>/dev/null; git diff main...dev --stat
+   git diff main...dev
+   ```
 
-If the user names a narrower scope (staged changes `git diff --staged`, a commit
-range, or specific files), review that instead. Read the **full changed files**,
-not just the hunks — a reactivity or RLS bug is often visible only in context.
+If the user names specific files or a range, review that. Read the **full changed
+files**, not just the hunks — a reactivity or RLS bug is often visible only in
+context.
 
 ## How to review
 1. Pull the diff and read each changed file in full.
