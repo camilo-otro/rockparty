@@ -79,8 +79,8 @@
     <a href="/performers" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
-    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un intérprete.
+  <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
+    Debes <button type="button" class="text-cold-light underline" on:click={loginWithGoogle}>iniciar sesión</button> para crear un intérprete.
   </div>
 {:else}
   <PerformerForm

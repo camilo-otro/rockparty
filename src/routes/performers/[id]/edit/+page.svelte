@@ -38,7 +38,7 @@ function handleBack() {
 </div>
   
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 bg-yellow-100 text-yellow-800 rounded-lg text-center">
+  <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
     Debes iniciar sesión para editar tu perfil.
   </div>
 {:else}

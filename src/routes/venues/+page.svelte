@@ -52,6 +52,6 @@
         </div>
     </section>
     <div class="flex justify-center p-4">
-        <a class="btn btn-accent text-center bg-slate-700 text-slate-200 w-2/3 p-4 rounded-lg" href="/venues/create">Agregar un local</a>
+        <a class="text-center bg-cold-base text-white w-2/3 p-4 rounded-lg" href="/venues/create">Agregar un local</a>
     </div>
 </div>

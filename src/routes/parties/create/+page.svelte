@@ -47,8 +47,8 @@
 <a href="/parties" class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
 <h2 class="text-yellow text-2xl px-5 py-2">CREAR UN TOQUE</h2>
 {#if !isAuthenticated}
-  <div class="mt-8 p-6 text-white rounded-lg text-center">
-    Debes <a href="#" class="text-blue-600 underline" on:click={loginWithGoogle}>iniciar sesión</a> para crear un toque.
+  <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
+    Debes <button type="button" class="text-cold-light underline" on:click={loginWithGoogle}>iniciar sesión</button> para crear un toque.
   </div>
 {:else}
   <PartyForm
