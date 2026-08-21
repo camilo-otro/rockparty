@@ -29,7 +29,7 @@
     <h2 class="text-3xl text-white m-4 mb-2">CÓMO FUNCIONA</h2>
     <p class="text-cold-light mx-4 mb-6">
       Rock the House conecta a músicos para organizar toques: encuentra un evento,
-      arma el setlist con tu banda y sube al escenario.
+      súmate al setlist junto a otros músicos y sube al escenario.
     </p>
     <ol class="flex flex-col gap-[1px] rounded-lg overflow-clip">
       {#each steps as step, i}
