@@ -51,7 +51,7 @@
   </div>
   {#if session}
     <div class="relative basis-1/4 flex justify-end items-center gap-4">
-      <img src={session.user?.user_metadata?.avatar_url && session.user.user_metadata.avatar_url.trim() !== '' ? session.user.user_metadata.avatar_url : '/images/avatar-default.svg'} alt="User Avatar" class="w-8 h-8 mx-3 rounded-full cursor-pointer" on:click={toggleMenu} />
+      <img src={session.user?.user_metadata?.avatar_url && session.user.user_metadata.avatar_url.trim() !== '' ? session.user.user_metadata.avatar_url : '/images/avatar-default.svg'} alt="User Avatar" class="w-8 h-8 mx-3 rounded-full cursor-pointer ring-2 ring-yellow ring-offset-2 ring-offset-base-950" on:click={toggleMenu} />
       {#if showMenu}
         <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-base-900 rounded-lg shadow-lg z-10" in:scale={{ duration: 200 }}>
           <a href={`/performers/${session.user.id}`} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-slate-100">Ver mi perfil</a>

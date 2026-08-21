@@ -43,6 +43,14 @@
 </script>
 
 <div class="max-w-2xl mx-auto mt-8 flex flex-col gap-8">
+  <section class="mx-4">
+    <div class="bg-base-900 rounded-lg p-6 text-center">
+      <p class="text-white text-lg leading-snug">
+        Conéctate con <span class="font-bold">músicos</span>, encuentra <span class="font-bold">locales</span> y lleva tu música al <span class="font-bold">siguiente nivel</span>.
+      </p>
+      <a href="/como-funciona" class="text-cold-light inline-block mt-3 hover:underline">Aprende cómo funciona</a>
+    </div>
+  </section>
   <section>
     <h2 class="text-3xl text-white m-4 mb-4">PRÓXIMOS TOQUES</h2>
     <div class="m-4 rounded-lg overflow-clip flex flex-col">
