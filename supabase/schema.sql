@@ -158,6 +158,15 @@ create table if not exists public.performance_user (
   primary key (performance_id, instrument_id, user_id)
 );
 
+-- profile_instrument — the instruments a performer plays (profile-level, not
+-- per-song). Junction of profile × instrument. Owner-managed via RLS.
+create table if not exists public.profile_instrument (
+  profile_id    uuid   not null references public.profile (id) on delete cascade,
+  instrument_id bigint not null references public.instrument (id),
+  created_at    timestamptz not null default now(),
+  primary key (profile_id, instrument_id)
+);
+
 -- ---- foreign-key covering indexes (advisor fix 2026-08-11) ------------------
 -- venue_admin.venue_id is covered by its composite PK, so it's omitted here.
 create index if not exists idx_party_created_by            on public.party (created_by);
@@ -168,6 +177,7 @@ create index if not exists idx_performance_song            on public.performance
 create index if not exists idx_performance_suggested_by    on public.performance (suggested_by);
 create index if not exists idx_performance_user_instrument on public.performance_user (instrument_id);
 create index if not exists idx_performance_user_user_id    on public.performance_user (user_id);
+create index if not exists idx_profile_instrument_instrument on public.profile_instrument (instrument_id);
 create index if not exists idx_profile_role                on public.profile (role);
 create index if not exists idx_song_added_by               on public.song (added_by);
 create index if not exists idx_venue_created_by            on public.venue (created_by);
@@ -240,6 +250,7 @@ alter table public.party_admin       enable row level security;
 alter table public.song              enable row level security;
 alter table public.performance       enable row level security;
 alter table public.performance_user  enable row level security;
+alter table public.profile_instrument enable row level security;
 
 -- ---- song -------------------------------------------------------------------
 create policy "allow select to all users" on public.song
@@ -357,13 +368,31 @@ create policy "Enable update for authenticated users only" on public.performance
 create policy "allow delete to own user" on public.performance_user
   for delete to authenticated using (user_id = (select auth.uid()));
 
+-- ---- profile_instrument -----------------------------------------------------
+-- Readable by all; a performer manages only their own rows. No UPDATE policy
+-- (add/remove only), so updates stay denied.
+create policy "allow select to all users" on public.profile_instrument
+  for select to anon, authenticated using (true);
+create policy "allow insert to own profile" on public.profile_instrument
+  for insert to authenticated with check (profile_id = (select auth.uid()));
+create policy "allow delete to own profile" on public.profile_instrument
+  for delete to authenticated using (profile_id = (select auth.uid()));
+
 -- ---- profile ----------------------------------------------------------------
+-- Rows are world-readable, BUT the `email` column is hidden from client SELECT
+-- (see migrations/20260821_profile_email_privacy.sql): table-level SELECT is
+-- revoked and re-granted per-column for everything except email. Nothing reads
+-- another user's email; the current user's comes from the auth session. Writes
+-- are unaffected.
 create policy "allow select to all users" on public.profile
   for select to anon, authenticated using (true);
 create policy "allow insert to authenticated users" on public.profile
   for insert to authenticated with check (true);
 create policy "allow update to own user" on public.profile
   for update to authenticated using (id = (select auth.uid()));
+revoke select on public.profile from anon, authenticated;
+grant select (id, created_at, nickname, role, avatar_url)
+  on public.profile to anon, authenticated;
 
 -- ---- instrument -------------------------------------------------------------
 create policy "Enable read access for all users" on public.instrument

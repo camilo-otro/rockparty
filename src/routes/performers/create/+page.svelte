@@ -15,6 +15,7 @@
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
     let avatarUrl = '';
+    let instruments: any[] = [];
 
     const userObj = get(user);
     email = userObj?.email ?? '';
@@ -26,6 +27,9 @@
         isAuthenticated = !!u?.id;
         userId = u?.id ?? null;
       });
+      const { supabase } = await import('$lib/supabaseClient');
+      const { data: instrData } = await supabase.from('instrument').select('id, name').order('id');
+      instruments = instrData ?? [];
     });
 
     onDestroy(() => {
@@ -48,7 +52,7 @@
             const { data, error: dbError } = await supabase
                 .from('profile')
                 .insert([{ id: authId, nickname: safeNickname, email: safeEmail }])
-                .select();
+                .select('id');
 
             if (dbError) {
                 reportError(dbError);
@@ -88,18 +92,25 @@
       initialEmail={email}
       initialNickname={nickname}
       initialAvatarUrl={avatarUrl}
+      instruments={instruments}
       on:submit={async (e) => {
         submitting = true;
-        const { nickname, email, avatar_url } = e.detail;
+        const { nickname, email, avatarUrl, instruments: selected } = e.detail;
         try {
           const { supabase } = await import('$lib/supabaseClient');
           const { data, error: dbError } = await supabase
             .from('profile')
-            .insert([{ id: authId, nickname, email, avatar_url }])
-            .select();
+            .insert([{ id: authId, nickname, email, avatar_url: avatarUrl }])
+            .select('id');
           if (dbError) {
             reportError(dbError);
           } else {
+            // Attach the chosen instruments to the new profile.
+            if (selected && selected.length > 0) {
+              await supabase.from('profile_instrument').insert(
+                selected.map((i: number) => ({ profile_id: authId, instrument_id: i }))
+              );
+            }
             toastSuccess('¡Nuevo intérprete creado!');
             setTimeout(() => {
               window.location.href = '/';

@@ -2,6 +2,8 @@
 // To refresh: regenerate types from Supabase (MCP `generate_typescript_types`
 // or `supabase gen types typescript`) and replace this file.
 // Do not edit by hand.
+// Note: `profile.email` is present here (types reflect columns, not grants) but
+// its SELECT is revoked from anon/authenticated — do not select it client-side.
 
 export type Json =
   | string
@@ -256,6 +258,39 @@ export type Database = {
             columns: ["role"]
             isOneToOne: false
             referencedRelation: "role"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_instrument: {
+        Row: {
+          created_at: string
+          instrument_id: number
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          instrument_id: number
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          instrument_id?: number
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_instrument_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "instrument"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_instrument_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
             referencedColumns: ["id"]
           },
         ]
