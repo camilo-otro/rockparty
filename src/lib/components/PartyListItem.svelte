@@ -1,14 +1,19 @@
 <script lang="ts">
   import { MapPin, ChevronRight } from 'lucide-svelte';
+  import StatusBadge from './StatusBadge.svelte';
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
   export let party: any;
   export let venueName: string;
+  export let showStatus = false;
 </script>
 <a href={`/parties/${party.id}`} class="block">
-  <li class="flex flex-rowbg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-2">
+  <li class="flex flex-row bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-2">
     <div class="grow">
-      <div class="text-2xl text-yellow">{party.title}</div>
+      <div class="flex flex-row items-center gap-2 flex-wrap">
+        <div class="text-2xl text-yellow">{party.title}</div>
+        {#if showStatus && party.status}<StatusBadge status={party.status} />{/if}
+      </div>
       {#if party.description}
         <div class="text-sm text-white">{party.description}</div>
       {/if}
