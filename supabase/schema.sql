@@ -329,7 +329,8 @@ create policy "allow delete for venue admins" on public.venue_admin
 
 -- ---- party ------------------------------------------------------------------
 -- Public statuses are world-readable; drafts/pending/cancelled only to the
--- owner, party admins, or the venue's admins (see docs/specs/party-status.md).
+-- owner, party admins, or the venue's owner/admins (see docs/specs/party-status.md).
+-- The venue OWNER is checked explicitly because venue creators aren't in venue_admin.
 create policy "select party: public statuses or owner/admins" on public.party
   for select to anon, authenticated
   using (
@@ -337,6 +338,8 @@ create policy "select party: public statuses or owner/admins" on public.party
     or created_by = (select auth.uid())
     or exists (select 1 from public.party_admin pa
                where pa.party_id = party.id and pa.user_id = (select auth.uid()))
+    or exists (select 1 from public.venue v
+               where v.id = party.venue and v.created_by = (select auth.uid()))
     or exists (select 1 from public.venue_admin va
                where va.venue_id = party.venue and va.user_id = (select auth.uid()))
   );
