@@ -65,11 +65,11 @@
     isAuthenticated={isAuthenticated}
     on:submit={async (e) => {
       submitting = true;
-      const { title, description, date, venue, admins } = e.detail;
+      const { title, description, date, venue, admins, performerApproval } = e.detail;
       try {
         const { data, error: dbError } = await supabase
           .from('party')
-          .insert([{ date, venue, created_by: userId, title, description }])
+          .insert([{ date, venue, created_by: userId, title, description, performer_approval: performerApproval }])
           .select();
         if (dbError) {
           reportError(dbError);

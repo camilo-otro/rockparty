@@ -15,8 +15,17 @@
   export let userId: string | null = null;
   export let isAuthenticated: boolean = false;
   export let initialAdmins: string[] = [];
+  export let initialPerformerApproval: string = 'auto';
 
   const dispatch = createEventDispatcher();
+
+  // How musicians get onto a song (#29).
+  const approvalModes = [
+    { value: 'auto', label: 'Abierto — cualquiera puede sumarse' },
+    { value: 'organizer', label: 'El organizador aprueba cada inscripción' },
+    { value: 'proponent', label: 'Quien sugiere la canción aprueba a sus músicos' },
+    { value: 'invite_only', label: 'Solo por invitación — sin inscripciones abiertas' }
+  ];
 
   // Local YYYY-MM-DD, used to block scheduling a toque in the past.
   const now = new Date();
@@ -26,6 +35,7 @@
   let description = initialDescription;
   let date = initialDate;
   let selectedVenue = initialVenue;
+  let performerApproval = initialPerformerApproval;
   let admins: any[] = [];
   let userOptions: any[] = [];
   let adminInput = '';
@@ -76,7 +86,8 @@
       description: safeDescription,
       date: safeDate,
       venue: selectedVenue,
-      admins: admins.map(a => a.id)
+      admins: admins.map(a => a.id),
+      performerApproval
     });
   }
 </script>
@@ -102,6 +113,14 @@
         {/each}
       </select>
     {/if}
+    <label for="performer_approval" class="mb-1 mt-4">¿Cómo se suman los músicos?</label>
+    <select id="performer_approval" bind:value={performerApproval} class="p-2 mb-1 border rounded-lg">
+      {#each approvalModes as m}
+        <option value={m.value}>{m.label}</option>
+      {/each}
+    </select>
+    <span class="text-sm text-cold-light mb-4">Los administradores del toque siempre pueden aprobar y sumar músicos.</span>
+
     <label for="admins" class="mb-1 mt-4">Administradores del toque</label>
     <div class="mb-2">
       <input id="admins" type="text" bind:value={adminInput} on:input={handleAdminInput} placeholder="Buscar usuario..." class="p-2 mb-4 border rounded-lg w-full" />
