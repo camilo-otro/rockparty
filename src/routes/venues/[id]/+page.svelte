@@ -132,11 +132,11 @@
         {:else}
           <ul class="flex flex-col gap-2">
             {#each equipment as item}
-              <li class="flex flex-row flex-wrap items-baseline gap-2">
-                <span class="px-3 py-1 rounded-full text-sm bg-cold-base text-white">
+              <li>
+                <span class="px-3 py-1 rounded-full text-sm bg-cold-base text-white inline-block">
                   {item.name}{#if item.quantity} ×{item.quantity}{/if}
                 </span>
-                {#if item.notes}<span class="text-cold-light text-sm">{item.notes}</span>{/if}
+                {#if item.notes}<div class="text-cold-light text-sm mt-1 break-words">{item.notes}</div>{/if}
               </li>
             {/each}
           </ul>

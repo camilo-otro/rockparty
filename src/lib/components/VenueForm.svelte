@@ -65,7 +65,7 @@
         id: opt.id,
         name: opt.name,
         selected: !!cur,
-        quantity: cur?.quantity ?? null,
+        quantity: cur?.quantity ?? 1, // default to 1; stepper enforces min 1
         notes: cur?.notes ?? ''
       };
     });
@@ -88,9 +88,15 @@
     }
   });
 
-  function toggleEquipment(row: { selected: boolean }) {
+  function toggleEquipment(row: { selected: boolean; quantity: number | null }) {
     row.selected = !row.selected;
+    if (row.selected && (row.quantity ?? 0) < 1) row.quantity = 1;
     equipmentRows = equipmentRows; // nudge reactivity
+  }
+
+  function stepQuantity(row: { quantity: number | null }, delta: number) {
+    row.quantity = Math.max(1, (row.quantity ?? 1) + delta);
+    equipmentRows = equipmentRows;
   }
 
   function handleAdminInput(e: Event) {
@@ -211,9 +217,21 @@
             {row.name}
           </button>
           {#if row.selected}
-            <div class="flex flex-row gap-2 mt-2">
-              <input type="number" min="1" bind:value={row.quantity} placeholder="Cant." class="p-2 border rounded-lg w-20" aria-label="Cantidad de {row.name}" />
-              <input type="text" bind:value={row.notes} placeholder="Marca, modelo, tamaño..." class="p-2 border rounded-lg flex-1" aria-label="Descripción de {row.name}" />
+            <div class="mt-3 flex flex-col gap-2">
+              <div class="flex flex-row items-center gap-3">
+                <span class="text-sm text-cold-light">Cantidad</span>
+                <div class="inline-flex items-center rounded-lg border overflow-hidden">
+                  <button type="button" on:click={() => stepQuantity(row, -1)} disabled={(row.quantity ?? 1) <= 1}
+                    class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950 disabled:opacity-40 disabled:hover:bg-transparent"
+                    aria-label="Disminuir cantidad de {row.name}">−</button>
+                  <span class="px-3 min-w-[2.5ch] text-center text-white" aria-live="polite">{row.quantity ?? 1}</span>
+                  <button type="button" on:click={() => stepQuantity(row, 1)}
+                    class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950"
+                    aria-label="Aumentar cantidad de {row.name}">+</button>
+                </div>
+              </div>
+              <textarea bind:value={row.notes} rows="2" maxlength="200" placeholder="Marca, modelo, tamaño..."
+                class="p-2 border rounded-lg w-full resize-none" aria-label="Descripción de {row.name}"></textarea>
             </div>
           {/if}
         </div>
