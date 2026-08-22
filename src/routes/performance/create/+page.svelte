@@ -121,7 +121,7 @@
       });
     }
 </script>
-<a href="/parties" class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
+<a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
 <h2 class="text-yellow text-2xl px-5 py-2">AGREGA UNA CANCIÓN AL SETLIST</h2>
 {#if !isAuthenticated}
   <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
