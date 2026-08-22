@@ -145,7 +145,7 @@
             <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Tonalidad</label>
             <input id="key" type="text" bind:value={key} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 150 }} />
         </div>
-        <div class="flex justify-center" in:fly={{ y: -30, duration: 400, delay: 200 }}>
+        <div class="flex justify-center mb-8" in:fly={{ y: -30, duration: 400, delay: 200 }}>
           <button class="bg-cold-base text-white text-sm rounded-full mx-auto p-2 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
               {submitting ? 'Creando...' : 'Agregar'}
           </button>

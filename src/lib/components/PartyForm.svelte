@@ -122,7 +122,7 @@
       </div>
     </div>
   </div>
-  <div class="flex justify-center">
+  <div class="flex justify-center mb-8">
     <button class="bg-cold-base text-white text-sm rounded-full mx-4 p-2 px-6" type="submit" disabled={submitting}>
       {submitting ? 'Creando...' : 'Crear Toque'}
     </button>

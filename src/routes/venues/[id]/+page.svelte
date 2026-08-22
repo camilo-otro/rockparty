@@ -16,10 +16,10 @@
   let equipment: { name: string; quantity: number | null; notes: string | null }[] = [];
 
   const engagementLabels: Record<string, string> = {
-    free: 'Gratis / sin pago',
+    free: 'Sin costo (gratis)',
     door_split: 'Reparto de taquilla',
-    guarantee: 'Garantía fija',
-    pay_to_play: 'Pago por tocar',
+    guarantee: 'Pago fijo (garantía)',
+    pay_to_play: 'Cuota para tocar',
     tips: 'Propinas',
     bar_minimum: 'Consumo mínimo',
     other: 'Otro'
@@ -145,7 +145,7 @@
 
       {#if venue.engagement_model || venue.engagement_notes}
         <div class="mb-3">
-          <div class="text-white mb-1">Modelo de pago</div>
+          <div class="text-white mb-1">Modelo económico</div>
           {#if venue.engagement_model}<div class="text-cold-light">{engagementLabels[venue.engagement_model] ?? venue.engagement_model}</div>{/if}
           {#if venue.engagement_notes}<div class="text-cold-light text-sm whitespace-pre-line">{venue.engagement_notes}</div>{/if}
         </div>

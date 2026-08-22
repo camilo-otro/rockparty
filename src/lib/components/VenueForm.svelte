@@ -29,10 +29,10 @@
   const dispatch = createEventDispatcher();
 
   const engagementModels = [
-    { value: 'free', label: 'Gratis / sin pago' },
+    { value: 'free', label: 'Sin costo (gratis)' },
     { value: 'door_split', label: 'Reparto de taquilla' },
-    { value: 'guarantee', label: 'Garantía fija' },
-    { value: 'pay_to_play', label: 'Pago por tocar' },
+    { value: 'guarantee', label: 'Pago fijo (garantía)' },
+    { value: 'pay_to_play', label: 'Cuota para tocar' },
     { value: 'tips', label: 'Propinas' },
     { value: 'bar_minimum', label: 'Consumo mínimo' },
     { value: 'other', label: 'Otro' }
@@ -201,6 +201,27 @@
       <label for="allows_rehearsals" class="cursor-pointer">Permite ensayos</label>
     </div>
 
+    <!-- Administradores del local -->
+    <h3 class="text-lg text-yellow mt-4 mb-2">Administradores del local</h3>
+    <div class="mb-2">
+      <input id="venue_admins" type="text" bind:value={adminInput} on:input={handleAdminInput} placeholder="Buscar usuario..." aria-label="Buscar administrador" class="p-2 border rounded-lg w-full" />
+      {#if adminInput && filteredOptions.length > 0}
+        <ul class="bg-base-950 border rounded-lg shadow mt-1">
+          {#each filteredOptions as option}
+            <li class="p-2 cursor-pointer hover:bg-base-900" on:click={() => addAdmin(option)}>{option.nickname}</li>
+          {/each}
+        </ul>
+      {/if}
+      <div class="flex flex-wrap gap-2 mt-2">
+        {#each admins as admin}
+          <span class="bg-cold-base text-white rounded-lg px-2 py-1 flex items-center gap-1">
+            {admin.nickname}
+            <button type="button" class="ml-1 text-yellow" on:click={() => removeAdmin(admin.id)}>✕</button>
+          </span>
+        {/each}
+      </div>
+    </div>
+
     <!-- Equipo / backline (#30) -->
     <h3 class="text-lg text-yellow mt-4 mb-2">Equipo disponible</h3>
     <div class="flex flex-col gap-2 mb-2">
@@ -238,17 +259,17 @@
       {/each}
     </div>
 
-    <!-- Modelo de pago (#30) -->
-    <h3 class="text-lg text-yellow mt-4 mb-2">Modelo de pago</h3>
-    <label for="engagement_model" class="mb-1">¿Cómo se le paga a los músicos?</label>
+    <!-- Modelo económico (#30) -->
+    <h3 class="text-lg text-yellow mt-4 mb-2">Modelo económico</h3>
+    <label for="engagement_model" class="mb-1">¿Qué condiciones económicas pone el local para tocar?</label>
     <select id="engagement_model" bind:value={engagementModel} class="p-2 border rounded-lg mb-2">
       <option value="">Sin especificar</option>
       {#each engagementModels as m}
         <option value={m.value}>{m.label}</option>
       {/each}
     </select>
-    <label for="engagement_notes" class="mb-1">Detalles del pago (opcional)</label>
-    <textarea id="engagement_notes" bind:value={engagementNotes} rows="2" class="p-2 border rounded-lg mb-2" placeholder="Monto de la cover, % del reparto, mínimos..."></textarea>
+    <label for="engagement_notes" class="mb-1">Detalles (opcional)</label>
+    <textarea id="engagement_notes" bind:value={engagementNotes} rows="2" class="p-2 border rounded-lg mb-2" placeholder="Cuota de reserva, % del reparto, consumo mínimo..."></textarea>
 
     <!-- Restricciones (#30) -->
     <h3 class="text-lg text-yellow mt-4 mb-2">Restricciones</h3>
@@ -269,28 +290,8 @@
         <span class="block text-sm text-cold-light">Si está activo, los toques quedan pendientes hasta que un admin del local los apruebe.</span>
       </label>
     </div>
-
-    <label for="venue_admins" class="mb-1 mt-4">Administradores del local</label>
-    <div class="mb-2">
-      <input id="venue_admins" type="text" bind:value={adminInput} on:input={handleAdminInput} placeholder="Buscar usuario..." class="p-2 border rounded-lg w-full" />
-      {#if adminInput && filteredOptions.length > 0}
-        <ul class="bg-base-950 border rounded-lg shadow mt-1">
-          {#each filteredOptions as option}
-            <li class="p-2 cursor-pointer hover:bg-base-900" on:click={() => addAdmin(option)}>{option.nickname}</li>
-          {/each}
-        </ul>
-      {/if}
-      <div class="flex flex-wrap gap-2 mt-2">
-        {#each admins as admin}
-          <span class="bg-cold-base text-white rounded-lg px-2 py-1 flex items-center gap-1">
-            {admin.nickname}
-            <button type="button" class="ml-1 text-yellow" on:click={() => removeAdmin(admin.id)}>✕</button>
-          </span>
-        {/each}
-      </div>
-    </div>
   </div>
-  <button class="bg-cold-base text-white rounded-lg mx-4 p-4 px-6" type="submit" disabled={submitting}>
+  <button class="bg-cold-base text-white rounded-lg mx-4 mb-8 p-4 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Guardando...' : 'Guardar Local'}
   </button>
 </form>

@@ -52,7 +52,7 @@
       {/each}
     </div>
   </div>
-  <button class="bg-cold-base text-white text-sm rounded-full mx-4 p-2 px-6" type="submit" disabled={submitting}>
+  <button class="bg-cold-base text-white text-sm rounded-full mx-4 mb-8 p-2 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Guardando...' : 'Guardar'}
   </button>
 </form>
