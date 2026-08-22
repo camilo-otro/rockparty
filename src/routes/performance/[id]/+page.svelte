@@ -6,6 +6,7 @@
   import { ArrowLeft, Share2, Trash2 } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
+  import { reportError, toastSuccess, toastInfo } from '$lib/stores/toasts';
 
   let performance: any = null;
   let songTitle: string = '';
@@ -19,9 +20,23 @@
   let showShareModal = false;
   let unsubscribeUser: () => void;
   let currentUserId: string | null = null;
+  let party: any = null;
+  let partyAdmins: string[] = [];
+
+  // How musicians get onto this song (#29). Mirrors the DB trigger so the UI
+  // frames the action right; the trigger is the actual enforcement.
+  $: mode = party?.performer_approval ?? 'auto';
+  $: isPartyAdmin = !!currentUserId && !!party && (currentUserId === party.created_by || partyAdmins.includes(currentUserId));
+  $: isProponent = !!currentUserId && !!performance && performance.suggested_by === currentUserId;
+  $: autoApprove = mode === 'auto' || isPartyAdmin || (mode === 'proponent' && isProponent);
+  $: canSelfSignup = mode !== 'invite_only' || isPartyAdmin || isProponent;
+  // Declined rows are shown to their owner as a re-request affordance, not as
+  // participants; everyone else only sees approved + pending (via RLS).
+  $: participants = signedUpUsers.filter((u) => u.status !== 'declined');
+  $: myDeclined = signedUpUsers.filter((u) => currentUserId && u.user_id === currentUserId && u.status === 'declined');
 
   async function fetchSignedUpUsers(performanceId: string) {
-    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id').eq('performance_id', Number(performanceId));
+    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, status').eq('performance_id', Number(performanceId));
     const users: any[] = [];
     for (const perfUser of perfUsers ?? []) {
       const { data: userData } = await supabase.from('profile').select('nickname').eq('id', perfUser.user_id).single();
@@ -30,7 +45,8 @@
         nickname: userData?.nickname ?? perfUser.user_id,
         instrument: instrumentData?.name ?? '',
         instrument_id: perfUser.instrument_id,
-        user_id: perfUser.user_id
+        user_id: perfUser.user_id,
+        status: perfUser.status
       });
     }
     return users;
@@ -50,6 +66,13 @@
       if (performance?.song) {
         const { data: songData } = await supabase.from('song').select('title').eq('id', performance.song).single();
         songTitle = songData?.title ?? '';
+      }
+      // Fetch the parent party's approval mode + admins (drives request framing).
+      if (performance?.party) {
+        const { data: partyData } = await supabase.from('party').select('id, created_by, performer_approval').eq('id', performance.party).single();
+        party = partyData;
+        const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', performance.party);
+        partyAdmins = (adminData ?? []).map((a) => a.user_id);
       }
       // Fetch suggested by user nickname from user table
       if (performance?.suggested_by) {
@@ -78,31 +101,47 @@
     showModal = true;
   }
 
-  function selectInstrument(instrument: any) {
+  async function selectInstrument(instrument: any) {
     const userId = get(user)?.id;
     if (!userId || !performance?.id) {
         showModal = false;
         return;
     }
-    supabase.from('performance_user').upsert({
+    const { data, error: e } = await supabase.from('performance_user').upsert({
         performance_id: performance.id,
         user_id: userId,
         instrument_id: instrument.id
-    }, { onConflict: 'performance_id,user_id,instrument_id' })
-    .then(() => {
-        showModal = false;
-        refreshSignedUpUsers();
-    });
+    }, { onConflict: 'performance_id,user_id,instrument_id' }).select('status');
+    showModal = false;
+    // The trigger can reject (e.g. invite-only) or set status to 'pending'.
+    if (e) { reportError(e); return; }
+    if (data?.[0]?.status === 'pending') toastInfo('Solicitud enviada. Un organizador debe aprobarte.');
+    else toastSuccess('¡Te inscribiste para tocar!');
+    await refreshSignedUpUsers();
   }
 
-  function removeInstrument(userId: string, instrumentId: string) {
-    supabase.from('performance_user').delete()
+  // Re-request after a decline: the row still exists as 'declined', so delete it
+  // and insert fresh to run the INSERT path of the trigger (→ pending/approved).
+  async function reRequest(instrumentId: string) {
+    if (!currentUserId || !performance?.id) return;
+    const { error: delErr } = await supabase.from('performance_user').delete()
+      .eq('performance_id', performance.id).eq('user_id', currentUserId).eq('instrument_id', Number(instrumentId));
+    if (delErr) { reportError(delErr); return; }
+    const { data, error: e } = await supabase.from('performance_user')
+      .insert({ performance_id: performance.id, user_id: currentUserId, instrument_id: Number(instrumentId) }).select('status');
+    if (e) { reportError(e); return; }
+    if (data?.[0]?.status === 'pending') toastInfo('Solicitud reenviada. Pendiente de aprobación.');
+    else toastSuccess('¡Te inscribiste para tocar!');
+    await refreshSignedUpUsers();
+  }
+
+  async function removeInstrument(userId: string, instrumentId: string) {
+    const { error: e } = await supabase.from('performance_user').delete()
       .eq('performance_id', performance.id)
       .eq('user_id', userId)
-      .eq('instrument_id', Number(instrumentId))
-      .then(() => {
-        refreshSignedUpUsers();
-      });
+      .eq('instrument_id', Number(instrumentId));
+    if (e) { reportError(e); return; }
+    await refreshSignedUpUsers();
   }
 
   function closeModal() {
@@ -161,25 +200,36 @@
       {/if}
       <h3 class="text-2xl text-white font-medium mt-6 mb-2">Participantes</h3>
       <ul class="mb-4">
-        {#each signedUpUsers as u}
+        {#each participants as u}
           <li class="mb-2 p-2 bg-cold-base rounded-lg flex gap-2 items-center justify-between">
             <div>
               <span class="font-semibold text-yellow">{u.nickname}</span>
               <span class="text-cold-light">— {u.instrument}</span>
+              {#if u.status === 'pending'}<span class="text-yellow text-sm ml-1">· pendiente</span>{/if}
             </div>
-            {#if currentUserId && get(user)?.id === u.user_id}
-              <button class="bg-cold-base text-white rounded-lg px-3 py-1 ml-2" on:click={() => removeInstrument(u.user_id, u.instrument_id)}>eliminar <Trash2 class="inline" size={16} /></button>
+            {#if currentUserId && u.user_id === currentUserId}
+              <button class="bg-cold-base text-white rounded-lg px-3 py-1 ml-2" on:click={() => removeInstrument(u.user_id, u.instrument_id)}>{u.status === 'pending' ? 'cancelar' : 'eliminar'} <Trash2 class="inline" size={16} /></button>
             {/if}
           </li>
         {/each}
-        {#if signedUpUsers.length === 0}
+        {#if participants.length === 0}
           <li class="text-cold-light">Nadie se ha anotado aún.</li>
         {/if}
       </ul>
-      {#if currentUserId}
-        <div class="w-full flex justify-center">
-          <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>Inscríbete para tocar</button>
+      {#each myDeclined as u}
+        <div class="mb-3 p-3 bg-base-950 rounded-lg flex items-center justify-between gap-2">
+          <span class="text-cold-light text-sm">Tu solicitud para <span class="text-white">{u.instrument}</span> fue rechazada.</span>
+          <button class="bg-cold-base text-white rounded-lg px-3 py-1 shrink-0" on:click={() => reRequest(u.instrument_id)}>Solicitar de nuevo</button>
         </div>
+      {/each}
+      {#if currentUserId}
+        {#if canSelfSignup}
+          <div class="w-full flex justify-center">
+            <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>{autoApprove ? 'Inscríbete para tocar' : 'Solicitar para tocar'}</button>
+          </div>
+        {:else}
+          <div class="w-full text-center text-cold-light mb-4">Este toque es solo por invitación.</div>
+        {/if}
       {:else}
         <div class="w-full flex justify-center">
           <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
