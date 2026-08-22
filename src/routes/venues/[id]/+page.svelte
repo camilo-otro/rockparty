@@ -13,6 +13,17 @@
   let venueAdmins: string[] = [];
   let currentUserId: string | null = null;
   let upcomingParties: any[] = [];
+  let equipment: { name: string; quantity: number | null; notes: string | null }[] = [];
+
+  const engagementLabels: Record<string, string> = {
+    free: 'Gratis / sin pago',
+    door_split: 'Reparto de taquilla',
+    guarantee: 'Garantía fija',
+    pay_to_play: 'Pago por tocar',
+    tips: 'Propinas',
+    bar_minimum: 'Consumo mínimo',
+    other: 'Otro'
+  };
 
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -34,6 +45,12 @@
       // Fetch venue admins
       const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id));
       venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
+
+      // Fetch this venue's equipment (with quantity + description)
+      const { data: equipData } = await supabase.from('venue_equipment').select('quantity, notes, equipment(name)').eq('venue_id', Number(id));
+      equipment = (equipData ?? [])
+        .map((r: any) => ({ name: r.equipment?.name, quantity: r.quantity, notes: r.notes }))
+        .filter((e: any) => e.name);
 
       // Fetch this venue's upcoming toques (public statuses, future-dated)
       const { data: partyData } = await supabase
@@ -103,6 +120,58 @@
       {#if venue.allow_rehearsal}
         <div class="mb-2 text-cold-light">Permite ensayos</div>
       {/if}
+    </div>
+
+    <div class="px-6 p-4 bg-base-900 rounded-lg shadow mx-4 mt-4">
+      <h3 class="text-xl text-yellow mb-3">Información para músicos</h3>
+
+      <div class="mb-3">
+        <div class="text-white mb-1">Equipo disponible</div>
+        {#if equipment.length === 0}
+          <div class="text-cold-light text-sm">No especificado.</div>
+        {:else}
+          <ul class="flex flex-col gap-2">
+            {#each equipment as item}
+              <li class="flex flex-row flex-wrap items-baseline gap-2">
+                <span class="px-3 py-1 rounded-full text-sm bg-cold-base text-white">
+                  {item.name}{#if item.quantity} ×{item.quantity}{/if}
+                </span>
+                {#if item.notes}<span class="text-cold-light text-sm">{item.notes}</span>{/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
+      {#if venue.engagement_model || venue.engagement_notes}
+        <div class="mb-3">
+          <div class="text-white mb-1">Modelo de pago</div>
+          {#if venue.engagement_model}<div class="text-cold-light">{engagementLabels[venue.engagement_model] ?? venue.engagement_model}</div>{/if}
+          {#if venue.engagement_notes}<div class="text-cold-light text-sm whitespace-pre-line">{venue.engagement_notes}</div>{/if}
+        </div>
+      {/if}
+
+      {#if venue.min_age != null || venue.curfew || venue.capacity != null}
+        <div class="mb-3">
+          <div class="text-white mb-1">Restricciones</div>
+          {#if venue.min_age != null}<div class="text-cold-light">Edad mínima: {venue.min_age === 0 ? 'Todo público' : `${venue.min_age}+`}</div>{/if}
+          {#if venue.curfew}<div class="text-cold-light">Hora límite de música: {String(venue.curfew).slice(0, 5)}</div>{/if}
+          {#if venue.capacity != null}<div class="text-cold-light">Aforo: {venue.capacity}</div>{/if}
+        </div>
+      {/if}
+
+      {#if venue.house_rules}
+        <div class="mb-3">
+          <div class="text-white mb-1">Reglas de la casa</div>
+          <div class="text-cold-light text-sm whitespace-pre-line">{venue.house_rules}</div>
+        </div>
+      {/if}
+
+      <div class="text-sm text-cold-light">
+        {venue.requires_approval
+          ? 'Agendar un toque aquí requiere aprobación del local.'
+          : 'Los toques se pueden agendar sin aprobación previa.'}
+      </div>
     </div>
 
     <section class="mt-6 mx-4">

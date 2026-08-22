@@ -80,12 +80,13 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
 - **Schema:** `supabase/schema.sql` is the AUTHORITATIVE schema, captured
   2026-08-11 from the live DB via the SQL Editor (see
   `supabase/dump-authoritative.sql` to refresh it). It includes types, keys,
-  FKs, indexes, and full RLS policies. **12 tables:**
+  FKs, indexes, and full RLS policies. **14 tables:**
   - Core: `party`, `venue`, `song`, `performance`, `profile`
   - Admin/permissions (enforced by RLS): `venue_admin`, `party_admin`
   - Junction: `performance_user` (performer × instrument × performance),
-    `profile_instrument` (performer × instrument they play — owner-managed, #28)
-  - Lookups (publicly readable): `role`, `venue_type`, `instrument`
+    `profile_instrument` (performer × instrument they play — owner-managed, #28),
+    `venue_equipment` (venue × equipment — venue-admin-managed, #30)
+  - Lookups (publicly readable): `role`, `venue_type`, `instrument`, `equipment`
 - **There is NO `performer` table.** "Performers" are `profile` rows; a
   performer is attached to a set-list slot via `performance_user`.
   `/performers/[id]` is a profile view. Older notes implying a `performer`

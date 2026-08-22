@@ -12,32 +12,32 @@ import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 let venue: any = null;
 let venueTypes: any[] = [];
 let venueAdmins: string[] = [];
-let loadingVenueTypes = true;
 let errorVenueTypes: string | null = null;
 let submitting = false;
 let currentUserId: string | null = null;
+let equipmentOptions: any[] = [];
+let initialEquipment: { equipment_id: number; quantity: number | null; notes: string | null }[] = [];
 
 // Lifecycle
 onMount(async () => {
   const id = page.params.id;
-  // Fetch venue
-  const { data: venueData, error: venueErr } = await supabase.from('venue').select('*').eq('id', Number(id)).single();
-  venue = venueData;
-  // Fetch venue types
-  const { data: typesData, error: typesError } = await supabase.from('venue_type').select('id, name');
+  user.subscribe(u => { currentUserId = u?.id ?? null; })();
+
+  const [{ data: venueData }, { data: typesData, error: typesError }, { data: adminData }, { data: equipData }, { data: veData }] =
+    await Promise.all([
+      supabase.from('venue').select('*').eq('id', Number(id)).single(),
+      supabase.from('venue_type').select('id, name'),
+      supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id)),
+      supabase.from('equipment').select('id, name, category').order('id'),
+      supabase.from('venue_equipment').select('equipment_id, quantity, notes').eq('venue_id', Number(id))
+    ]);
   venueTypes = typesData ?? [];
   if (typesError) errorVenueTypes = typesError.message;
-  // Fetch venue admins
-  const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id));
   venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
-  // Get current user id
-  user.subscribe(u => {
-    currentUserId = u?.id ?? null;
-  })();
-  loadingVenueTypes = false;
+  equipmentOptions = equipData ?? [];
+  initialEquipment = (veData ?? []).map((r: any) => ({ equipment_id: r.equipment_id, quantity: r.quantity, notes: r.notes }));
+  venue = venueData; // set last so the form mounts with everything ready
 });
-
-// Render
 </script>
 
 <div class="bg-cold-base p-4 flex-row">
@@ -64,29 +64,47 @@ onMount(async () => {
     userId={venue.created_by}
     isAuthenticated={true}
     initialAdmins={venueAdmins}
+    equipmentOptions={equipmentOptions}
+    initialEquipment={initialEquipment}
+    initialRequiresApproval={venue.requires_approval ?? true}
+    initialEngagementModel={venue.engagement_model ?? ''}
+    initialEngagementNotes={venue.engagement_notes ?? ''}
+    initialMinAge={venue.min_age ?? null}
+    initialCurfew={venue.curfew ?? ''}
+    initialCapacity={venue.capacity ?? null}
+    initialHouseRules={venue.house_rules ?? ''}
     on:submit={async (e) => {
       submitting = true;
-      const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins } = e.detail;
+      const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
+              equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules } = e.detail;
       try {
         const { error: dbError } = await supabase
           .from('venue')
-          .update({ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals })
+          .update({ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals,
+                    requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules })
           .eq('id', venue.id);
         if (dbError) {
           reportError(dbError);
         } else {
           // Update venue_admin table
-          const initialSet = new Set(venueAdmins);
-          const updatedSet = new Set(admins);
-          // Admins to remove
-          const toRemove = venueAdmins.filter(a => !updatedSet.has(a));
-          // Admins to add
-          const toAdd = admins.filter((a: string) => !initialSet.has(a));
-          if (toRemove.length > 0) {
-            await supabase.from('venue_admin').delete().eq('venue_id', venue.id).in('user_id', toRemove);
+          const initialAdminSet = new Set(venueAdmins);
+          const updatedAdminSet = new Set(admins);
+          const adminsToRemove = venueAdmins.filter(a => !updatedAdminSet.has(a));
+          const adminsToAdd = admins.filter((a: string) => !initialAdminSet.has(a));
+          if (adminsToRemove.length > 0) {
+            await supabase.from('venue_admin').delete().eq('venue_id', venue.id).in('user_id', adminsToRemove);
           }
-          if (toAdd.length > 0) {
-            await supabase.from('venue_admin').insert(toAdd.map((a: string) => ({ venue_id: venue.id, user_id: a })));
+          if (adminsToAdd.length > 0) {
+            await supabase.from('venue_admin').insert(adminsToAdd.map((a: string) => ({ venue_id: venue.id, user_id: a })));
+          }
+          // Replace venue_equipment. The set is small and quantity/notes can
+          // change on already-selected items, so delete-all + insert is simpler
+          // and more correct than diffing three fields.
+          await supabase.from('venue_equipment').delete().eq('venue_id', venue.id);
+          if (equipment && equipment.length > 0) {
+            await supabase.from('venue_equipment').insert(
+              (equipment as any[]).map((eq) => ({ venue_id: venue.id, equipment_id: eq.equipment_id, quantity: eq.quantity, notes: eq.notes }))
+            );
           }
           toastSuccess('¡Local actualizado!');
           setTimeout(() => {

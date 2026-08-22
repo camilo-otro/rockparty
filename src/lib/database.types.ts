@@ -21,6 +21,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      equipment: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: number
+          name: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: number
+          name: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
       instrument: {
         Row: {
           created_at: string
@@ -356,13 +377,22 @@ export type Database = {
           address: string | null
           allow_party: boolean
           allow_rehearsal: boolean
+          capacity: number | null
           contact: string | null
           contact_name: string | null
           created_at: string
           created_by: string | null
+          curfew: string | null
+          engagement_model:
+            | Database["public"]["Enums"]["engagement_model"]
+            | null
+          engagement_notes: string | null
+          house_rules: string | null
           id: number
           instagram: string | null
+          min_age: number | null
           name: string | null
+          requires_approval: boolean
           venue_type: number | null
           whatsapp: string | null
         }
@@ -370,13 +400,22 @@ export type Database = {
           address?: string | null
           allow_party?: boolean
           allow_rehearsal?: boolean
+          capacity?: number | null
           contact?: string | null
           contact_name?: string | null
           created_at?: string
           created_by?: string | null
+          curfew?: string | null
+          engagement_model?:
+            | Database["public"]["Enums"]["engagement_model"]
+            | null
+          engagement_notes?: string | null
+          house_rules?: string | null
           id?: number
           instagram?: string | null
+          min_age?: number | null
           name?: string | null
+          requires_approval?: boolean
           venue_type?: number | null
           whatsapp?: string | null
         }
@@ -384,13 +423,22 @@ export type Database = {
           address?: string | null
           allow_party?: boolean
           allow_rehearsal?: boolean
+          capacity?: number | null
           contact?: string | null
           contact_name?: string | null
           created_at?: string
           created_by?: string | null
+          curfew?: string | null
+          engagement_model?:
+            | Database["public"]["Enums"]["engagement_model"]
+            | null
+          engagement_notes?: string | null
+          house_rules?: string | null
           id?: number
           instagram?: string | null
+          min_age?: number | null
           name?: string | null
+          requires_approval?: boolean
           venue_type?: number | null
           whatsapp?: string | null
         }
@@ -444,6 +492,45 @@ export type Database = {
           },
         ]
       }
+      venue_equipment: {
+        Row: {
+          created_at: string
+          equipment_id: number
+          notes: string | null
+          quantity: number | null
+          venue_id: number
+        }
+        Insert: {
+          created_at?: string
+          equipment_id: number
+          notes?: string | null
+          quantity?: number | null
+          venue_id: number
+        }
+        Update: {
+          created_at?: string
+          equipment_id?: number
+          notes?: string | null
+          quantity?: number | null
+          venue_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_equipment_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_equipment_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_type: {
         Row: {
           created_at: string
@@ -475,6 +562,14 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
+      engagement_model:
+        | "free"
+        | "door_split"
+        | "guarantee"
+        | "pay_to_play"
+        | "tips"
+        | "bar_minimum"
+        | "other"
       party_status:
         | "draft"
         | "pending_venue"
@@ -609,6 +704,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      engagement_model: [
+        "free",
+        "door_split",
+        "guarantee",
+        "pay_to_play",
+        "tips",
+        "bar_minimum",
+        "other",
+      ],
       party_status: [
         "draft",
         "pending_venue",
