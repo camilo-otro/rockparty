@@ -39,6 +39,10 @@ create type public.party_status as enum
 create type public.engagement_model as enum
   ('free', 'door_split', 'guarantee', 'pay_to_play', 'tips', 'bar_minimum', 'other');
 
+-- how signups get onto a song / signup state (see docs/specs/musician-approval.md, #29)
+create type public.performer_approval as enum ('auto', 'organizer', 'proponent', 'invite_only');
+create type public.signup_status as enum ('pending', 'approved', 'declined');
+
 -- ============================ LOOKUP TABLES ==================================
 
 create table if not exists public.role (
@@ -131,7 +135,8 @@ create table if not exists public.party (
   status            public.party_status not null default 'draft',
   status_changed_at timestamptz not null default now(),
   cancel_reason     text,           -- coded: 'venue_declined' / 'organizer'
-  cancel_note       text            -- optional free-text reason (shown to organizer)
+  cancel_note       text,           -- optional free-text reason (shown to organizer)
+  performer_approval public.performer_approval not null default 'auto'  -- who approves players (#29)
 );
 
 -- party_admin — who may administer a party (besides its creator).
@@ -176,6 +181,7 @@ create table if not exists public.performance_user (
   created_at     timestamptz not null default now(),
   instrument_id  bigint not null references public.instrument (id),
   user_id        uuid   not null references public.profile (id),
+  status         public.signup_status not null default 'approved',  -- trigger-owned (#29)
   primary key (performance_id, instrument_id, user_id)
 );
 
@@ -246,6 +252,53 @@ create trigger party_status_changed
 
 -- (public.auto_add_admin also exists: a trigger that auto-adds a party's
 --  creator as a party_admin on insert.)
+
+-- performance_user.status is trigger-owned (not client-writable) — #29.
+-- INSERT: approved if mode is 'auto', or the inserter is a party admin, or (in
+-- proponent mode) the song's proponent; invite_only rejects a non-admin/proponent
+-- self-signup; otherwise pending. UPDATE: only admins (or the proponent, in
+-- proponent mode) may change status. security invoker: lookups run under the
+-- acting user's RLS (a toque they can act on is one they can see).
+create or replace function public.set_signup_status()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+declare
+  v_party bigint; v_mode public.performer_approval; v_proponent uuid;
+  v_is_admin boolean; v_is_prop boolean;
+begin
+  select perf.party, pt.performer_approval, perf.suggested_by
+    into v_party, v_mode, v_proponent
+  from public.performance perf join public.party pt on pt.id = perf.party
+  where perf.id = new.performance_id;
+
+  v_is_admin :=
+    exists (select 1 from public.party pt where pt.id = v_party and pt.created_by = auth.uid())
+    or exists (select 1 from public.party_admin pa where pa.party_id = v_party and pa.user_id = auth.uid());
+  v_is_prop := (v_proponent is not null and v_proponent = auth.uid());
+
+  if tg_op = 'INSERT' then
+    if v_mode = 'invite_only' and not (v_is_admin or v_is_prop) then
+      raise exception 'Las inscripciones a este toque son solo por invitación';
+    end if;
+    if v_mode = 'auto' or v_is_admin or (v_mode = 'proponent' and v_is_prop) then
+      new.status := 'approved';
+    else
+      new.status := 'pending';
+    end if;
+    return new;
+  elsif tg_op = 'UPDATE' then
+    if new.status is distinct from old.status
+       and not (v_is_admin or (v_mode = 'proponent' and v_is_prop)) then
+      raise exception 'No puedes cambiar el estado de esta inscripción';
+    end if;
+    return new;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger performance_user_set_status
+  before insert or update on public.performance_user
+  for each row execute function public.set_signup_status();
 
 -- =============================================================================
 -- ROW LEVEL SECURITY
@@ -408,14 +461,59 @@ create policy "Enable Update for authenticated users only" on public.performance
   );
 
 -- ---- performance_user -------------------------------------------------------
-create policy "allow select to all users" on public.performance_user
-  for select to anon, authenticated using (true);
-create policy "allow insert to authenticated users" on public.performance_user
-  for insert to authenticated with check (true);
-create policy "Enable update for authenticated users only" on public.performance_user
-  for update to authenticated using (user_id = (select auth.uid()));
-create policy "allow delete to own user" on public.performance_user
-  for delete to authenticated using (user_id = (select auth.uid()));
+-- Signups (#29): approved rows are public; pending/declined only to the row's
+-- user and the toque's approvers (creator/admins, or the song's proponent in
+-- proponent mode). Same predicate gates INSERT/UPDATE/DELETE (self OR approver);
+-- the invite_only guard + status ownership live in the set_signup_status trigger.
+create policy "signup select: approved public, else owner/approvers" on public.performance_user
+  for select to anon, authenticated using (
+    status = 'approved'
+    or user_id = (select auth.uid())
+    or exists (
+      select 1 from public.performance perf join public.party pt on pt.id = perf.party
+      where perf.id = performance_user.performance_id and (
+        pt.created_by = (select auth.uid())
+        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+      )
+    )
+  );
+create policy "signup insert: self, admin, or proponent" on public.performance_user
+  for insert to authenticated with check (
+    user_id = (select auth.uid())
+    or exists (
+      select 1 from public.performance perf join public.party pt on pt.id = perf.party
+      where perf.id = performance_user.performance_id and (
+        pt.created_by = (select auth.uid())
+        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+      )
+    )
+  );
+create policy "signup update: self, admin, or proponent" on public.performance_user
+  for update to authenticated using (
+    user_id = (select auth.uid())
+    or exists (
+      select 1 from public.performance perf join public.party pt on pt.id = perf.party
+      where perf.id = performance_user.performance_id and (
+        pt.created_by = (select auth.uid())
+        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+      )
+    )
+  );
+create policy "signup delete: self, admin, or proponent" on public.performance_user
+  for delete to authenticated using (
+    user_id = (select auth.uid())
+    or exists (
+      select 1 from public.performance perf join public.party pt on pt.id = perf.party
+      where perf.id = performance_user.performance_id and (
+        pt.created_by = (select auth.uid())
+        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+      )
+    )
+  );
 
 -- ---- profile_instrument -----------------------------------------------------
 -- Readable by all; a performer manages only their own rows. No UPDATE policy

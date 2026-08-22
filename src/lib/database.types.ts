@@ -70,6 +70,7 @@ export type Database = {
           date: string | null
           description: string | null
           id: number
+          performer_approval: Database["public"]["Enums"]["performer_approval"]
           status: Database["public"]["Enums"]["party_status"]
           status_changed_at: string
           title: string | null
@@ -84,6 +85,7 @@ export type Database = {
           date?: string | null
           description?: string | null
           id?: number
+          performer_approval?: Database["public"]["Enums"]["performer_approval"]
           status?: Database["public"]["Enums"]["party_status"]
           status_changed_at?: string
           title?: string | null
@@ -98,6 +100,7 @@ export type Database = {
           date?: string | null
           description?: string | null
           id?: number
+          performer_approval?: Database["public"]["Enums"]["performer_approval"]
           status?: Database["public"]["Enums"]["party_status"]
           status_changed_at?: string
           title?: string | null
@@ -213,18 +216,21 @@ export type Database = {
           created_at: string
           instrument_id: number
           performance_id: number
+          status: Database["public"]["Enums"]["signup_status"]
           user_id: string
         }
         Insert: {
           created_at?: string
           instrument_id: number
           performance_id: number
+          status?: Database["public"]["Enums"]["signup_status"]
           user_id: string
         }
         Update: {
           created_at?: string
           instrument_id?: number
           performance_id?: number
+          status?: Database["public"]["Enums"]["signup_status"]
           user_id?: string
         }
         Relationships: [
@@ -580,6 +586,8 @@ export type Database = {
         | "live"
         | "completed"
         | "cancelled"
+      performer_approval: "auto" | "organizer" | "proponent" | "invite_only"
+      signup_status: "pending" | "approved" | "declined"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -724,6 +732,8 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      performer_approval: ["auto", "organizer", "proponent", "invite_only"],
+      signup_status: ["pending", "approved", "declined"],
     },
   },
 } as const
