@@ -35,6 +35,10 @@
   let partyAdmins: string[] = [];
   let venueAdmins: string[] = [];
   let usersLoaded = false;
+  // In-app confirm/reason dialog (native prompt()/confirm() are blocked in some
+  // browser contexts — mobile/webviews — where they throw and do nothing).
+  let confirmDialog: { title: string; body?: string; withReason: boolean; confirmLabel: string; run: (note: string | null) => Promise<void> | void } | null = null;
+  let dialogNote = '';
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
   // Venue admin of THIS party's venue (its creator or a listed venue_admin).
@@ -60,9 +64,25 @@
       if (await setStatus('confirmed')) toastSuccess('Toque publicado.');
     }
   }
-  async function cancelToque() {
-    if (!confirm('¿Cancelar este toque? Dejará de ser visible para el público.')) return;
-    if (await setStatus('cancelled', 'organizer')) toastSuccess('Toque cancelado.');
+  function openDialog(d: NonNullable<typeof confirmDialog>) { confirmDialog = d; dialogNote = ''; }
+  function closeDialog() { confirmDialog = null; dialogNote = ''; }
+  async function runDialog() {
+    const d = confirmDialog;
+    const note = dialogNote.trim() || null;
+    closeDialog();
+    if (d) await d.run(note);
+  }
+
+  function cancelToque() {
+    openDialog({
+      title: '¿Cancelar este toque?',
+      body: 'Dejará de ser visible para el público.',
+      withReason: false,
+      confirmLabel: 'Sí, cancelar',
+      run: async () => {
+        if (await setStatus('cancelled', 'organizer')) toastSuccess('Toque cancelado.');
+      }
+    });
   }
   // Venue-admin decisions on a pending_venue toque.
   async function approveToque() {
@@ -73,18 +93,22 @@
     party = { ...party, status: 'confirmed', approved_by_venue: true };
     toastSuccess('Toque aprobado.');
   }
-  async function declineToque() {
-    // Optional reason the organizer will see. prompt() returns null if dismissed.
-    const note = prompt('Motivo del rechazo (opcional) — el organizador lo verá:');
-    if (note === null) return;
-    const trimmed = note.trim() || null;
-    const { data, error: e } = await supabase.from('party')
-      .update({ status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: trimmed })
-      .eq('id', party.id).select('id');
-    if (e) { reportError(e); return; }
-    if (!data || data.length === 0) { toastError('No tienes permiso para rechazar este toque.'); return; }
-    party = { ...party, status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: trimmed };
-    toastSuccess('Toque rechazado.');
+  function declineToque() {
+    openDialog({
+      title: 'Rechazar este toque',
+      body: 'El organizador verá tu decisión. Su setlist se conserva.',
+      withReason: true,
+      confirmLabel: 'Rechazar',
+      run: async (note) => {
+        const { data, error: e } = await supabase.from('party')
+          .update({ status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: note })
+          .eq('id', party.id).select('id');
+        if (e) { reportError(e); return; }
+        if (!data || data.length === 0) { toastError('No tienes permiso para rechazar este toque.'); return; }
+        party = { ...party, status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: note };
+        toastSuccess('Toque rechazado.');
+      }
+    });
   }
 
   // Derived helpers
@@ -451,6 +475,21 @@
     </div>
     {#if showShareModal}
       <ShareModal url={window.location.href} title={party?.title} on:close={closeShareModal} />
+    {/if}
+    {#if confirmDialog}
+      <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" on:click={closeDialog}>
+        <div class="bg-base-900 rounded-lg p-6 max-w-md w-full flex flex-col gap-3" on:click|stopPropagation>
+          <h3 class="text-xl text-white">{confirmDialog.title}</h3>
+          {#if confirmDialog.body}<p class="text-cold-light text-sm">{confirmDialog.body}</p>{/if}
+          {#if confirmDialog.withReason}
+            <textarea bind:value={dialogNote} rows="2" maxlength="300" placeholder="Motivo (opcional)" class="p-2 border rounded-lg w-full resize-none"></textarea>
+          {/if}
+          <div class="flex justify-end gap-3 mt-1">
+            <button on:click={closeDialog} class="text-cold-light px-3 py-2">Volver</button>
+            <button on:click={runDialog} class="bg-cold-base text-white rounded-lg px-4 py-2">{confirmDialog.confirmLabel}</button>
+          </div>
+        </div>
+      </div>
     {/if}
     <div class="flex flex-row items-center">
       <a href="/parties" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft />VOLVER</a>
