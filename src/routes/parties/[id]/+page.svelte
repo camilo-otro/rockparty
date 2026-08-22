@@ -10,7 +10,7 @@
   import ShareModal from '$lib/components/ShareModal.svelte';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
-  import { reportError, toastSuccess } from '$lib/stores/toasts';
+  import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
 
@@ -44,8 +44,10 @@
     if (!party) return false;
     const patch: TablesUpdate<'party'> = { status: next };
     if (reason) patch.cancel_reason = reason;
-    const { error: e } = await supabase.from('party').update(patch).eq('id', party.id);
+    // .select() so we can tell a silent RLS denial (0 rows) from a real update.
+    const { data, error: e } = await supabase.from('party').update(patch).eq('id', party.id).select('id');
     if (e) { reportError(e); return false; }
+    if (!data || data.length === 0) { toastError('No tienes permiso para cambiar el estado de este toque.'); return false; }
     party = { ...party, status: next };
     return true;
   }
@@ -65,14 +67,24 @@
   // Venue-admin decisions on a pending_venue toque.
   async function approveToque() {
     if (!party) return;
-    const { error: e } = await supabase.from('party').update({ status: 'confirmed', approved_by_venue: true }).eq('id', party.id);
+    const { data, error: e } = await supabase.from('party').update({ status: 'confirmed', approved_by_venue: true }).eq('id', party.id).select('id');
     if (e) { reportError(e); return; }
+    if (!data || data.length === 0) { toastError('No tienes permiso para aprobar este toque.'); return; }
     party = { ...party, status: 'confirmed', approved_by_venue: true };
     toastSuccess('Toque aprobado.');
   }
   async function declineToque() {
-    if (!confirm('¿Rechazar este toque? Se marcará como cancelado.')) return;
-    if (await setStatus('cancelled', 'venue_declined')) toastSuccess('Toque rechazado.');
+    // Optional reason the organizer will see. prompt() returns null if dismissed.
+    const note = prompt('Motivo del rechazo (opcional) — el organizador lo verá:');
+    if (note === null) return;
+    const trimmed = note.trim() || null;
+    const { data, error: e } = await supabase.from('party')
+      .update({ status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: trimmed })
+      .eq('id', party.id).select('id');
+    if (e) { reportError(e); return; }
+    if (!data || data.length === 0) { toastError('No tienes permiso para rechazar este toque.'); return; }
+    party = { ...party, status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: trimmed };
+    toastSuccess('Toque rechazado.');
   }
 
   // Derived helpers
@@ -351,6 +363,13 @@
     {:else if canAdmin && party.status !== 'completed' && party.status !== 'cancelled'}
       <div class="flex justify-end">
         <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque</button>
+      </div>
+    {/if}
+    {#if party.status === 'cancelled' && party.cancel_reason === 'venue_declined'}
+      <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-2">
+        <p class="text-white">Este toque fue <span class="text-red-400">rechazado por el local</span>.</p>
+        {#if party.cancel_note}<p class="text-cold-light text-sm">Motivo: {party.cancel_note}</p>{/if}
+        <p class="text-cold-light text-sm">El setlist se conserva más abajo. Puedes <a href={`/venues/${party.venue}`} class="text-cold-light underline">contactar al local</a> o crear un nuevo toque.</p>
       </div>
     {/if}
     <div class="">Organizado por: {#if usersLoaded}<img src={getUserAvatar(party.created_by)} alt="User Avatar" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" /><span class="text-cold-light">{getUserNickname(party.created_by)}</span>{/if}</div>

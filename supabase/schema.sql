@@ -130,7 +130,8 @@ create table if not exists public.party (
   created_by        uuid references public.profile (id),
   status            public.party_status not null default 'draft',
   status_changed_at timestamptz not null default now(),
-  cancel_reason     text
+  cancel_reason     text,           -- coded: 'venue_declined' / 'organizer'
+  cancel_note       text            -- optional free-text reason (shown to organizer)
 );
 
 -- party_admin — who may administer a party (besides its creator).
@@ -341,14 +342,19 @@ create policy "select party: public statuses or owner/admins" on public.party
   );
 create policy "allow insert to authenticated users" on public.party
   for insert to authenticated with check (true);
--- Creator, party admins, OR the venue's admins (the last so venue admins can
--- approve/decline a pending_venue toque — #31).
+-- Creator, party admins, OR the venue's owner/admins (the last two so a venue's
+-- people can approve/decline a pending_venue toque — #31). The venue OWNER is
+-- checked explicitly because venue creators aren't auto-added to venue_admin.
 create policy "allow update to party admins" on public.party
   for update to authenticated using (
     (created_by = (select auth.uid()))
     or exists (
       select 1 from public.party_admin
       where party_admin.party_id = party.id and party_admin.user_id = (select auth.uid())
+    )
+    or exists (
+      select 1 from public.venue v
+      where v.id = party.venue and v.created_by = (select auth.uid())
     )
     or exists (
       select 1 from public.venue_admin

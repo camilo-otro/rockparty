@@ -63,6 +63,7 @@ export type Database = {
       party: {
         Row: {
           approved_by_venue: boolean
+          cancel_note: string | null
           cancel_reason: string | null
           created_at: string
           created_by: string | null
@@ -76,6 +77,7 @@ export type Database = {
         }
         Insert: {
           approved_by_venue?: boolean
+          cancel_note?: string | null
           cancel_reason?: string | null
           created_at?: string
           created_by?: string | null
@@ -89,6 +91,7 @@ export type Database = {
         }
         Update: {
           approved_by_venue?: boolean
+          cancel_note?: string | null
           cancel_reason?: string | null
           created_at?: string
           created_by?: string | null
