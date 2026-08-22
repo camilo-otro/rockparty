@@ -7,11 +7,21 @@
   // 'loading' until auth is known, so we don't flash the logged-out gate.
   let authState: 'loading' | 'in' | 'out' = 'loading';
   let parties: any[] = [];
+  // Toques the user plays in (has a signup) but does NOT organize (#29).
+  let playParties: any[] = [];
+  let signupBadgeByParty: Record<number, { text: string; cls: string }> = {};
   let venues: Record<number, string> = {};
 
   const IN_PROGRESS = ['draft', 'pending_venue'];
   const UPCOMING = ['confirmed', 'live'];
   const PAST = ['completed', 'cancelled'];
+
+  // One badge per toque, by precedence: playing (approved) > pending > declined.
+  function signupBadge(statuses: Set<string>): { text: string; cls: string } {
+    if (statuses.has('approved')) return { text: 'Tocas', cls: 'bg-cold-base text-white' };
+    if (statuses.has('pending')) return { text: 'Pendiente', cls: 'bg-yellow text-black' };
+    return { text: 'Rechazado', cls: 'bg-warm-base text-white' };
+  }
 
   onMount(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -23,8 +33,32 @@
       .select('id, title, description, date, venue, status')
       .eq('created_by', uid);
     parties = data ?? [];
+    const organizedIds = new Set(parties.map((p) => p.id));
 
-    const venueIds = [...new Set(parties.map((p) => p.venue).filter(Boolean))];
+    // Toques where the user has at least one signup (any status).
+    const { data: myRows } = await supabase.from('performance_user').select('performance_id, status').eq('user_id', uid);
+    const perfIds = [...new Set((myRows ?? []).map((r) => r.performance_id))];
+    if (perfIds.length) {
+      const { data: perfRows } = await supabase.from('performance').select('id, party').in('id', perfIds);
+      const partyByPerf = Object.fromEntries((perfRows ?? []).map((p: any) => [p.id, p.party]));
+      const statusByParty: Record<number, Set<string>> = {};
+      for (const r of myRows ?? []) {
+        const pid = partyByPerf[r.performance_id];
+        if (pid == null || organizedIds.has(pid)) continue; // skip toques you organize
+        (statusByParty[pid] ??= new Set()).add(r.status);
+      }
+      const playIds = Object.keys(statusByParty).map(Number);
+      if (playIds.length) {
+        const { data: pData } = await supabase
+          .from('party')
+          .select('id, title, description, date, venue, status')
+          .in('id', playIds);
+        playParties = pData ?? [];
+        signupBadgeByParty = Object.fromEntries(playIds.map((id) => [id, signupBadge(statusByParty[id])]));
+      }
+    }
+
+    const venueIds = [...new Set([...parties, ...playParties].map((p) => p.venue).filter(Boolean))];
     if (venueIds.length) {
       const { data: vData } = await supabase.from('venue').select('id, name').in('id', venueIds);
       venues = Object.fromEntries((vData ?? []).map((v: any) => [v.id, v.name]));
@@ -39,6 +73,11 @@
   $: enProceso = parties.filter((p) => IN_PROGRESS.includes(p.status)).sort(byDateAsc);
   $: proximos = parties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
   $: pasados = parties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
+  // "Toco" toques: upcoming first, then past (drafts you can't see aren't here).
+  $: tocoProximos = playParties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
+  $: tocoPasados = playParties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
+  $: hasOrganizo = parties.length > 0;
+  $: hasToco = playParties.length > 0;
 
   function venueName(id: number) {
     return venues[id] ?? 'Sin local';
@@ -58,35 +97,58 @@
       <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
         Debes iniciar sesión para ver tus toques.
       </div>
-    {:else if parties.length === 0}
+    {:else if !hasOrganizo && !hasToco}
       <div class="mx-4 p-6 bg-base-900 text-white rounded-lg text-center flex flex-col gap-3">
-        <span>Aún no has organizado ningún toque.</span>
+        <span>Aún no organizas ni tocas en ningún toque.</span>
         <a href="/parties/create" class="bg-cold-base text-white rounded-lg px-4 py-2 self-center">Organiza un toque</a>
       </div>
     {:else}
-      {#if enProceso.length}
-        <h3 class="text-xl text-yellow mx-4 mb-2">EN PROCESO</h3>
-        <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
-          {#each enProceso as party}
-            <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
-          {/each}
-        </ul>
+      {#if hasOrganizo}
+        <h2 class="text-2xl text-cold-light mx-4 mb-3 tracking-widest">ORGANIZO</h2>
+        {#if enProceso.length}
+          <h3 class="text-xl text-yellow mx-4 mb-2">EN PROCESO</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each enProceso as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
+            {/each}
+          </ul>
+        {/if}
+        {#if proximos.length}
+          <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each proximos as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
+            {/each}
+          </ul>
+        {/if}
+        {#if pasados.length}
+          <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each pasados as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
+            {/each}
+          </ul>
+        {/if}
       {/if}
-      {#if proximos.length}
-        <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
-        <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
-          {#each proximos as party}
-            <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
-          {/each}
-        </ul>
-      {/if}
-      {#if pasados.length}
-        <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
-        <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
-          {#each pasados as party}
-            <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
-          {/each}
-        </ul>
+
+      {#if hasToco}
+        <h2 class="text-2xl text-cold-light mx-4 mb-3 mt-6 tracking-widest">TOCO</h2>
+        {#if tocoProximos.length}
+          <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each tocoProximos as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
+            {/each}
+          </ul>
+        {/if}
+        {#if tocoPasados.length}
+          <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each tocoPasados as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
+            {/each}
+          </ul>
+        {/if}
       {/if}
     {/if}
   </section>
