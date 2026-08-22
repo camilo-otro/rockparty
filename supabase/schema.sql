@@ -341,12 +341,18 @@ create policy "select party: public statuses or owner/admins" on public.party
   );
 create policy "allow insert to authenticated users" on public.party
   for insert to authenticated with check (true);
+-- Creator, party admins, OR the venue's admins (the last so venue admins can
+-- approve/decline a pending_venue toque — #31).
 create policy "allow update to party admins" on public.party
   for update to authenticated using (
     (created_by = (select auth.uid()))
     or exists (
       select 1 from public.party_admin
       where party_admin.party_id = party.id and party_admin.user_id = (select auth.uid())
+    )
+    or exists (
+      select 1 from public.venue_admin
+      where venue_admin.venue_id = party.venue and venue_admin.user_id = (select auth.uid())
     )
   ) with check (true);
 

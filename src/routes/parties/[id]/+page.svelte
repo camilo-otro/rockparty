@@ -33,9 +33,12 @@
   let sortableList: HTMLElement;
   let showShareModal = false;
   let partyAdmins: string[] = [];
+  let venueAdmins: string[] = [];
   let usersLoaded = false;
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
+  // Venue admin of THIS party's venue (its creator or a listed venue_admin).
+  $: isVenueAdmin = !!currentUserId && (venue?.created_by === currentUserId || venueAdmins.includes(currentUserId));
 
   async function setStatus(next: PartyStatus, reason: string | null = null): Promise<boolean> {
     if (!party) return false;
@@ -47,11 +50,29 @@
     return true;
   }
   async function publish() {
-    if (await setStatus('confirmed')) toastSuccess('Toque publicado.');
+    // If the venue requires approval and the organizer isn't a venue admin,
+    // the toque goes to the venue's queue; otherwise it's confirmed directly.
+    if (venue?.requires_approval && !isVenueAdmin) {
+      if (await setStatus('pending_venue')) toastSuccess('Enviado al local para aprobación.');
+    } else {
+      if (await setStatus('confirmed')) toastSuccess('Toque publicado.');
+    }
   }
   async function cancelToque() {
     if (!confirm('¿Cancelar este toque? Dejará de ser visible para el público.')) return;
     if (await setStatus('cancelled', 'organizer')) toastSuccess('Toque cancelado.');
+  }
+  // Venue-admin decisions on a pending_venue toque.
+  async function approveToque() {
+    if (!party) return;
+    const { error: e } = await supabase.from('party').update({ status: 'confirmed', approved_by_venue: true }).eq('id', party.id);
+    if (e) { reportError(e); return; }
+    party = { ...party, status: 'confirmed', approved_by_venue: true };
+    toastSuccess('Toque aprobado.');
+  }
+  async function declineToque() {
+    if (!confirm('¿Rechazar este toque? Se marcará como cancelado.')) return;
+    if (await setStatus('cancelled', 'venue_declined')) toastSuccess('Toque rechazado.');
   }
 
   // Derived helpers
@@ -174,10 +195,13 @@
     } else {
       party = data;
       if (party?.venue) {
-        const { data: venueData, error: venueErr } = await supabase.from('venue').select('name, address').eq('id', party.venue).single();
+        const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address, requires_approval, created_by').eq('id', party.venue).single();
         if (!venueErr) {
           venue = venueData;
         }
+        // Load the venue's admins so we can offer approve/decline to them.
+        const { data: vAdminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', party.venue);
+        venueAdmins = vAdminData ? vAdminData.map(a => a.user_id) : [];
       }
       // Fetch performances for this party
       const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', Number(id));
@@ -296,10 +320,32 @@
       <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
         <p class="text-cold-light text-sm leading-snug">
           Este toque es un <span class="text-white">borrador</span> — solo tú y sus administradores lo ven.
+          {#if venue?.requires_approval && !isVenueAdmin}
+            Al publicar, el local deberá aprobarlo antes de que sea visible.
+          {/if}
         </p>
         <div class="flex items-center gap-3">
           <button on:click={publish} class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-2 transition">Publicar toque</button>
           <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm px-2 py-2 transition">Descartar</button>
+        </div>
+      </div>
+    {:else if party.status === 'pending_venue' && isVenueAdmin}
+      <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
+        <p class="text-cold-light text-sm leading-snug">
+          Este toque está <span class="text-white">pendiente de tu aprobación</span> como administrador del local.
+        </p>
+        <div class="flex items-center gap-3">
+          <button on:click={approveToque} class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-2 transition">Aprobar</button>
+          <button on:click={declineToque} class="text-red-400 hover:text-red-300 text-sm px-2 py-2 transition">Rechazar</button>
+        </div>
+      </div>
+    {:else if party.status === 'pending_venue' && canAdmin}
+      <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
+        <p class="text-cold-light text-sm leading-snug">
+          Esperando la <span class="text-white">aprobación del local</span>. Te avisaremos cuando decidan.
+        </p>
+        <div class="flex justify-end">
+          <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm px-2 py-2 transition">Cancelar toque</button>
         </div>
       </div>
     {:else if canAdmin && party.status !== 'completed' && party.status !== 'cancelled'}

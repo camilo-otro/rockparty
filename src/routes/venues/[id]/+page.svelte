@@ -13,7 +13,10 @@
   let venueAdmins: string[] = [];
   let currentUserId: string | null = null;
   let upcomingParties: any[] = [];
+  let pendingParties: any[] = [];
   let equipment: { name: string; quantity: number | null; notes: string | null }[] = [];
+
+  $: isVenueAdmin = !!currentUserId && (venue?.created_by === currentUserId || venueAdmins.includes(currentUserId));
 
   const engagementLabels: Record<string, string> = {
     free: 'Sin costo (gratis)',
@@ -61,6 +64,16 @@
         .gte('date', todayStr)
         .order('date', { ascending: true });
       upcomingParties = partyData ?? [];
+
+      // Pending-approval queue (only venue admins can read pending_venue toques
+      // for this venue, per the party SELECT policy).
+      const { data: pendingData } = await supabase
+        .from('party')
+        .select('id, title, date, venue')
+        .eq('venue', Number(id))
+        .eq('status', 'pending_venue')
+        .order('date', { ascending: true });
+      pendingParties = pendingData ?? [];
     }
     user.subscribe(u => {
       currentUserId = u?.id ?? null;
@@ -173,6 +186,17 @@
           : 'Los toques se pueden agendar sin aprobación previa.'}
       </div>
     </div>
+
+    {#if isVenueAdmin && pendingParties.length > 0}
+      <section class="mt-6 mx-4">
+        <h3 class="text-2xl text-yellow mb-3 tracking-wide">POR APROBAR</h3>
+        <ul class="p-0 space-y-[1px] rounded-lg overflow-clip">
+          {#each pendingParties as party}
+            <PartyListItem party={party} venueName={venue.name} />
+          {/each}
+        </ul>
+      </section>
+    {/if}
 
     <section class="mt-6 mx-4">
       <h3 class="text-2xl text-white mb-3 tracking-wide">PRÓXIMOS TOQUES</h3>
