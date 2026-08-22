@@ -18,9 +18,11 @@
     return performers.find(p => p.instrument_id === instrumentId);
   }
   
-  // Separate available and filled instruments
-  $: availableInstruments = defaultInstruments.filter(instrument => !getPerformerForInstrument(instrument.id));
-  $: filledInstruments = defaultInstruments.filter(instrument => getPerformerForInstrument(instrument.id));
+  // Separate available and filled instruments. NB: reference `performers`
+  // directly (not via getPerformerForInstrument) so Svelte's legacy reactivity
+  // tracks it as a dependency and these recompute when the prop changes.
+  $: availableInstruments = defaultInstruments.filter(instrument => !performers.some(p => p.instrument_id === instrument.id));
+  $: filledInstruments = defaultInstruments.filter(instrument => performers.some(p => p.instrument_id === instrument.id));
 </script>
 
 <h4 class="text-lg text-yellow font-medium mb-1">{title}</h4>

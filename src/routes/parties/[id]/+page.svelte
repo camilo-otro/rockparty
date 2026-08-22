@@ -3,7 +3,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, ChevronUp, ChevronDown, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -30,6 +30,8 @@
   let unsubscribeUser: () => void;
   let reorderMode = false;
   let justMovedId: number | null = null;
+  let instrumentsById: Record<number, string> = {};
+  let expandedApprovals = new Set<number>();
   let showShareModal = false;
   let partyAdmins: string[] = [];
   let venueAdmins: string[] = [];
@@ -156,6 +158,41 @@
     if (err) reportError(err);
   }
 
+  // Per-song approval (#29). An approver is a party admin, or — in proponent
+  // mode — the song's proponent.
+  function canApproveSong(perf: any): boolean {
+    return canAdmin || (party?.performer_approval === 'proponent' && !!currentUserId && perf?.suggested_by === currentUserId);
+  }
+  function toggleApprovals(perfId: number) {
+    if (expandedApprovals.has(perfId)) expandedApprovals.delete(perfId);
+    else expandedApprovals.add(perfId);
+    expandedApprovals = new Set(expandedApprovals);
+  }
+  function pendingByInstrument(pending: any[]): { instrument_id: number; applicants: any[] }[] {
+    const map: Record<number, any[]> = {};
+    for (const a of pending) (map[a.instrument_id] ??= []).push(a);
+    return Object.entries(map).map(([id, applicants]) => ({ instrument_id: Number(id), applicants }));
+  }
+  async function decideSignup(perf: any, applicant: any, decision: 'approved' | 'declined') {
+    const { data, error: e } = await supabase.from('performance_user')
+      .update({ status: decision })
+      .eq('performance_id', perf.id).eq('user_id', applicant.user_id).eq('instrument_id', applicant.instrument_id)
+      .select('user_id');
+    if (e) { reportError(e); return; }
+    if (!data || data.length === 0) { toastError('No tienes permiso para aprobar aquí.'); return; }
+    // Rebuild the affected performance as a NEW object so the keyed {#each}
+    // re-pushes `performers` into PerformanceListItem (mutating in place doesn't).
+    performances = performances.map((p: any) => {
+      if (p.id !== perf.id) return p;
+      const pending = p.pending.filter((x: any) => !(x.user_id === applicant.user_id && x.instrument_id === applicant.instrument_id));
+      const performers = decision === 'approved'
+        ? [...p.performers, { instrument_id: applicant.instrument_id, user_id: applicant.user_id, user_avatar: getUserAvatar(applicant.user_id) }]
+        : p.performers;
+      return { ...p, pending, performers };
+    });
+    toastSuccess(decision === 'approved' ? 'Músico aprobado.' : 'Solicitud rechazada.');
+  }
+
   function handleShare() {
     const url = window.location.href;
     const title = party?.title || 'te invito a esta Rock Party';
@@ -220,8 +257,9 @@
         userIds.push(party.created_by);
         const { data: songData } = await supabase.from('song').select('id, title, artist').in('id', songIds);
         
-        // Fetch performers and their instruments first
-        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, performance_id').in('performance_id', performances.map(p => p.id));
+        // Fetch performers and their instruments first (status: RLS returns
+        // approved to everyone, and pending/declined to approvers — #29).
+        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status').in('performance_id', performances.map(p => p.id));
         
         // Add all performer user IDs to the userIds array
         const performerUserIds = [...new Set((perfUsers ?? []).map(p => p.user_id))];
@@ -229,40 +267,36 @@
         
         const { data: userData } = await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds);
         const { data: instrumentData } = await supabase.from('instrument').select('id, name');
+        instrumentsById = Object.fromEntries((instrumentData ?? []).map((i: any) => [i.id, i.name]));
         songs = songData ?? [];
         users = userData ?? [];
         usersLoaded = true;
-      
-        // Group by user and count songs
+
+        // The "MÚSICOS" lineup counts only APPROVED signups.
         const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
         for (const perfUser of perfUsers ?? []) {
+          if (perfUser.status !== 'approved') continue;
           if (!performerMap[perfUser.user_id]) {
             performerMap[perfUser.user_id] = { user_id: perfUser.user_id, instruments: [], songCount: 0 };
           }
-          const inst = instrumentData?.find(i => i.id === perfUser.instrument_id);
-          if (inst && inst.name) {
-            const instName = inst.name;
-            // Only add instrument if not already present
-            if (!performerMap[perfUser.user_id].instruments.includes(instName)) {
-              performerMap[perfUser.user_id].instruments.push(instName);
-            }
+          const instName = instrumentsById[perfUser.instrument_id];
+          if (instName && !performerMap[perfUser.user_id].instruments.includes(instName)) {
+            performerMap[perfUser.user_id].instruments.push(instName);
           }
           performerMap[perfUser.user_id].songCount += 1;
         }
         partyPerformers = Object.values(performerMap).sort((a, b) => b.songCount - a.songCount);
 
-        // Add performers data to each performance
+        // Per song: approved performers (shown) + pending applicants (for approvers).
         performances = performances.map(perf => {
-          const perfMusicians = (perfUsers ?? []).filter(u => u.performance_id === perf.id);
-          
-          // Create performers array with user avatars
-          const performers = perfMusicians.map(pm => ({
-            instrument_id: pm.instrument_id,
-            user_id: pm.user_id,
-            user_avatar: getUserAvatar(pm.user_id)
+          const rows = (perfUsers ?? []).filter(u => u.performance_id === perf.id);
+          const performers = rows.filter(r => r.status === 'approved').map(pm => ({
+            instrument_id: pm.instrument_id, user_id: pm.user_id, user_avatar: getUserAvatar(pm.user_id)
           }));
-          
-          return { ...perf, performers };
+          const pending = rows.filter(r => r.status === 'pending').map(pm => ({
+            instrument_id: pm.instrument_id, user_id: pm.user_id
+          }));
+          return { ...perf, performers, pending };
         });
       }
       loadingPerformances = false;
@@ -405,6 +439,29 @@
                     </div>
                   </div>
                 </a>
+                {#if canApproveSong(perf) && perf.pending && perf.pending.length}
+                  <button on:click={() => toggleApprovals(perf.id)} class="mt-1 text-sm text-yellow flex items-center gap-1">
+                    {perf.pending.length} por aprobar
+                    {#if expandedApprovals.has(perf.id)}<ChevronUp size={16} />{:else}<ChevronDown size={16} />{/if}
+                  </button>
+                  {#if expandedApprovals.has(perf.id)}
+                    <div class="mt-2 flex flex-col gap-3">
+                      {#each pendingByInstrument(perf.pending) as group}
+                        <div>
+                          <div class="text-xs text-cold-light uppercase tracking-wide mb-1">{instrumentsById[group.instrument_id] ?? 'Instrumento'}</div>
+                          {#each group.applicants as applicant}
+                            <div class="flex items-center gap-2 py-1">
+                              <img src={getUserAvatar(applicant.user_id)} alt="" class="w-6 h-6 rounded-full border border-cold-base" />
+                              <span class="flex-1 text-white truncate">{getUserNickname(applicant.user_id)}</span>
+                              <button on:click={() => decideSignup(perf, applicant, 'approved')} aria-label="Aprobar" class="p-1 text-green-500 hover:text-green-400"><Check size={20} /></button>
+                              <button on:click={() => decideSignup(perf, applicant, 'declined')} aria-label="Rechazar" class="p-1 text-red-500 hover:text-red-400"><X size={20} /></button>
+                            </div>
+                          {/each}
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                {/if}
               {/if}
             </li>
           {/each}
