@@ -34,7 +34,10 @@ approval is opt-in curation. Toque-level; a venue default can be inherited later
   own row) and re-request.
 
 Approval grain = one `performance_user` row (this person, this instrument, this
-song). Approvers get a batch-approvable queue.
+song), acted on **individually and per song** — there is no "approve all" batch.
+A blanket approval would be indistinguishable from `auto`; the point of a manual
+mode is to choose per song. This holds for organizers and proponents alike — they
+differ only in *which* songs they can approve, not in how.
 
 ## Status is server-enforced (the crux)
 `status` is **not client-writable**. A trigger owns it (same pattern as
@@ -113,8 +116,24 @@ Requested idea: when several people want a slot, weigh them by track record.
 ## Surfaces
 - **Signup control** — in a manual mode the button reads "Request to play" with a
   "pending" state; in `invite_only` there's no public signup, just an invite flow.
-- **Approval queue** — per toque (organizer) or per song (proponent), approve/decline, batch.
+- **Approval — inline, per song (no batch).** Pending applicants appear under
+  their song in the setlist, each approved/declined on its own; a song with
+  pending applicants shows a count so approvers can find them. Organizers see this
+  on every song; proponents only on songs they proposed. There is no flat
+  batch-approve queue (see grain above).
+- **Applicant's side → "Mis toques".** A performer sees the toques they play in
+  and their per-song signup status (pending/approved/declined) in the unified
+  "Mis toques" view (below) — the pull surface until notifications (#57) push it.
 - **Toque settings** — the mode selector (organizer only).
+
+## "Mis toques" as the unified my-events hub
+"Mis toques" (#56) ships as "toques I organize", but it's the natural home for
+*every* relationship a user has to an event, each with its own affordances:
+- **Organizo** (`created_by`) — organizer controls (publish, approve players, cancel).
+- **Toco** (a `performance_user` signup) — my per-song signup status; withdraw / re-request.
+- **Asisto** (RSVP) — *later*, once attendance exists.
+#29 adds the **Toco** section (performer signups + status). RSVP is a separate
+future feature that slots in when built.
 
 ## Notifications (Phase 2 tie-in)
 - Manual signup → the approver notified ("X wants to play bass on <song>").
