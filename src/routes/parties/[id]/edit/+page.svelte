@@ -42,7 +42,7 @@ onMount(async () => {
 
 <div class="bg-cold-base p-4 flex-row">
   <h2 class="text-white text-2xl">EDITAR FIESTA</h2>
-  <a href="/parties" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
+  <a href="/parties/{page.params.id}" class="text-lg text-bold text-cold-light"><ChevronLeft/></a>
 </div>
 {#if !party}
   <div class="mt-8 p-6 text-white">Cargando datos de la fiesta...</div>
