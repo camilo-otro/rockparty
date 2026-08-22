@@ -16,6 +16,8 @@
   export let isAuthenticated: boolean = false;
   export let initialAdmins: string[] = [];
   export let initialPerformerApproval: string = 'auto';
+  export let submitLabel: string = 'Crear Toque';
+  export let submittingLabel: string = 'Creando...';
 
   const dispatch = createEventDispatcher();
 
@@ -143,7 +145,7 @@
   </div>
   <div class="flex justify-center mb-8">
     <button class="bg-cold-base text-white text-sm rounded-full mx-4 p-2 px-6" type="submit" disabled={submitting}>
-      {submitting ? 'Creando...' : 'Crear Toque'}
+      {submitting ? submittingLabel : submitLabel}
     </button>
   </div>
 </form>
