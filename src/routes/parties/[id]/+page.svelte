@@ -3,10 +3,9 @@
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, GripHorizontal, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
-  import Sortable from 'sortablejs';
   import ShareModal from '$lib/components/ShareModal.svelte';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
@@ -29,8 +28,7 @@
   let errorPerformances: string | null = null;
   let currentUserId: string | null = null;
   let unsubscribeUser: () => void;
-  let sortableInstance: Sortable | null = null;
-  let sortableList: HTMLElement;
+  let reorderMode = false;
   let showShareModal = false;
   let partyAdmins: string[] = [];
   let venueAdmins: string[] = [];
@@ -129,66 +127,23 @@
     return usr && usr.avatarUrl ? usr.avatarUrl : '/images/avatar-default.svg';
   }
 
-  // Sortable functionality
-  function initializeSortable() {
-    if (sortableList && party?.created_by === currentUserId) {
-      sortableInstance = new Sortable(sortableList, {
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        chosenClass: 'sortable-chosen',
-        dragClass: 'sortable-drag',
-        handle: '.drag-handle',
-        delay: 200,
-        delayOnTouchOnly: true,
-        onEnd: (evt) => {
-          if (evt.oldIndex !== undefined && evt.newIndex !== undefined && evt.oldIndex !== evt.newIndex) {
-            const newPerformances = [...performances];
-            const draggedItem = newPerformances[evt.oldIndex];
-            const draggableList = evt.to.children;
-            evt.item.onclick = function(event) {
-              event.preventDefault();
-            }
-            updatePerformanceOrder(performances, draggableList);
-          }
-        }
-      });
-    }
-  }
-
-  function destroySortable() {
-    if (sortableInstance) {
-      sortableInstance.destroy();
-      sortableInstance = null;
-    }
-  }
-
-  // Async functions
-  async function updatePerformanceOrder(performanceList = performances, draggableList: HTMLCollection | null) {
-    if(draggableList && draggableList.length>0){
-      for(let i = 0; i<draggableList.length; i++){
-        const id = Number(draggableList[i].getAttribute('data-id'));
-        const perf = performanceList.find(p => p.id === id);
-        if (perf?.order !== i) {
-          perf.order = i;
-          await supabase
-            .from('performance')
-            .update({ order: i })
-            .eq('id', perf.id);
-        }
-      }
-    }
-    else {
-      for (let i = 0; i < performanceList.length; i++) {
-        if (performanceList[i].order !== i) {
-          performanceList[i].order = i;
-          await supabase
-            .from('performance')
-            .update({ order: i })
-            .eq('id', performanceList[i].id);
-        }
-      }
-    }
-    performances = performanceList;
+  // Setlist reordering (#59): a dedicated mode with up/down arrows. Swapping two
+  // adjacent items and re-numbering the array is deterministic — no drag, no
+  // DOM↔data desync. We persist the FULL renumbered list (not just the two moved
+  // rows) so any move leaves the stored order a clean 0..n — this self-heals the
+  // drifted/duplicate/null orders that made the old drag flaky.
+  async function moveSong(index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= performances.length) return;
+    const arr = [...performances];
+    [arr[index], arr[target]] = [arr[target], arr[index]];
+    arr.forEach((p, i) => (p.order = i));
+    performances = arr;
+    const results = await Promise.all(
+      arr.map((p) => supabase.from('performance').update({ order: p.order }).eq('id', p.id))
+    );
+    const err = results.find((r) => r.error)?.error;
+    if (err) reportError(err);
   }
 
   function handleShare() {
@@ -216,9 +171,6 @@
   onMount(async () => {
     unsubscribeUser = user.subscribe(u => {
       currentUserId = u?.id ?? null;
-      // Reinitialize sortable when user changes
-      destroySortable();
-      setTimeout(initializeSortable, 0);
     });
     const id = page.params.id;
     const { data, error: err } = await supabase.from('party').select('*').eq('id', Number(id)).single();
@@ -244,16 +196,14 @@
       if (perfErr) {
         errorPerformances = perfErr.message;
       } else {
-        let performanceList = perfData ?? [];
-        // Check if any performance has a null or undefined order
-        const hasNullOrder = performanceList.some(perf => perf.order === null || perf.order === undefined);
-        if (hasNullOrder) {
-          performanceList.forEach((perf, index) => {
-            perf.order = index;
-          });
-          await updatePerformanceOrder(performanceList, null);
-        }
-        performances = performanceList.sort((a, b) => (a.order || 0) - (b.order || 0));
+        // Sort by stored order, unordered (null) songs last; then normalize to a
+        // clean 0..n locally so display + reorder start sane even if stored orders
+        // drifted (the next move persists a clean 0..n for everyone).
+        const performanceList = (perfData ?? []).sort(
+          (a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
+        );
+        performanceList.forEach((perf, index) => { perf.order = index; });
+        performances = performanceList;
         // Fetch all songs and users referenced in performances
         const songIds = [...new Set(performances.map(p => p.song))];
         const userIds = [...new Set(performances.map(p => p.suggested_by))];
@@ -304,9 +254,6 @@
           
           return { ...perf, performers };
         });
-
-        // Initialize sortable after performances are loaded
-        setTimeout(initializeSortable, 0);
       }
       loadingPerformances = false;
     }
@@ -314,25 +261,9 @@
   });
 
   onDestroy(() => {
-    destroySortable();
     if (unsubscribeUser) unsubscribeUser();
   });
 </script>
-
-<style>
-  :global(.sortable-ghost) {
-    opacity: 0.4;
-  }
-  :global(.sortable-chosen) {
-    transform: scale(1.02);
-  }
-  :global(.sortable-drag) {
-    transform: rotate(2deg);
-  }
-  .drag-handle {
-    touch-action: none;
-  }
-</style>
 
 <div class="mt-2 p-4 flex flex-col gap-4">
   <div class="flex flex-row w-full justify-between">
@@ -406,7 +337,14 @@
         <Share2 class="w-5 h-5" />
       </button>
     </div>
-    <h3 class="text-3xl text-white font-medium tracking-widest mt-4 mb-2">SETLIST</h3>
+    <div class="flex items-center justify-between mt-4 mb-2">
+      <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
+      {#if canAdmin && performances.length > 1}
+        <button on:click={() => reorderMode = !reorderMode} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
+          {reorderMode ? 'Listo' : 'Reordenar'}
+        </button>
+      {/if}
+    </div>
     <div class="bg-base-950 rounded-lg overflow-hidden">
       {#if loadingPerformances}
         <div class="text-white">Cargando Setlist...</div>
@@ -415,35 +353,43 @@
       {:else if performances.length === 0}
         <div class="text-white">No hay canciones en el Setlist.</div>
       {:else}
-        <ul bind:this={sortableList} class="grid grid-cols-1 space-y-[1px]">
+        <ul class="grid grid-cols-1 space-y-[1px]">
           {#each performances as perf, index (perf.id)}
-            <li 
-              class="bg-base-900 px-4 p-3 transition-all duration-200"
-              data-id={perf.id}
-            >
-              <a href={`/performance/${perf.id}`} class="block">
+            <li class="bg-base-900 px-4 p-3">
+              {#if reorderMode}
                 <div class="flex items-center gap-2">
-                  <span class="text-gray-400 text-3xl font-medium mr-2">{index + 1}</span>
-                  <div class="flex-1">
-                    <PerformanceListItem
-                      title={getSongTitle(perf.song)}
-                      artist={getSongArtist(perf.song)}
-                      key={perf.key}
-                      performers={perf.performers || []}
-                    />
+                  <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-lg text-yellow truncate">{getSongTitle(perf.song)}</div>
+                    <div class="text-sm text-cold-light truncate">{getSongArtist(perf.song)}</div>
                   </div>
-                  {#if party?.created_by === currentUserId}
-                    <div class="drag-handle cursor-move">
-                      <GripHorizontal class="text-cold-light" />
-                    </div>
-                  {/if}
+                  <div class="flex flex-col shrink-0">
+                    <button on:click={() => moveSong(index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
+                    <button on:click={() => moveSong(index, 1)} disabled={index === performances.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
+                  </div>
                 </div>
-              </a>
+              {:else}
+                <a href={`/performance/${perf.id}`} class="block">
+                  <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-3xl font-medium mr-2">{index + 1}</span>
+                    <div class="flex-1">
+                      <PerformanceListItem
+                        title={getSongTitle(perf.song)}
+                        artist={getSongArtist(perf.song)}
+                        key={perf.key}
+                        performers={perf.performers || []}
+                      />
+                    </div>
+                  </div>
+                </a>
+              {/if}
             </li>
           {/each}
         </ul>
       {/if}
-      <a href={`/performance/create?partyId=${party.id}`} class="w-full bg-cold-base text-white p-3 inline-block text-center">Sugerir una canción <Plus class="inline-block" /></a>
+      {#if !reorderMode}
+        <a href={`/performance/create?partyId=${party.id}`} class="w-full bg-cold-base text-white p-3 inline-block text-center">Sugerir una canción <Plus class="inline-block" /></a>
+      {/if}
     </div>
     <h3 class="text-3xl text-white font-medium pt-4 mt-2">MÚSICOS</h3>
     <div class="bg-base-950 rounded-lg overflow-hidden mt-2">
