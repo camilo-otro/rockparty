@@ -109,7 +109,7 @@
 </script>
 <div class="bg-cold-base p-4 flex-row">
     <h2 class="text-white text-2xl">AGREGAR NUEVA CANCIÓN</h2>
-    <a href="/songs" class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
+    <a href={fromPerformance && partyId ? `/performance/create?partyId=${partyId}` : '/songs'} class="text-lg text-bold text-cold-light"><ArrowLeft/></a>
 </div>
 {#if !isAuthenticated}
   <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
