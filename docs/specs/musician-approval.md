@@ -116,11 +116,18 @@ Requested idea: when several people want a slot, weigh them by track record.
 ## Surfaces
 - **Signup control** — in a manual mode the button reads "Request to play" with a
   "pending" state; in `invite_only` there's no public signup, just an invite flow.
-- **Approval — inline, per song (no batch).** Pending applicants appear under
-  their song in the setlist, each approved/declined on its own; a song with
-  pending applicants shows a count so approvers can find them. Organizers see this
-  on every song; proponents only on songs they proposed. There is no flat
-  batch-approve queue (see grain above).
+- **Approval — inline, per song, via expand/collapse (no batch, no modal).** A
+  song shows a **"N por aprobar"** count (approvers only) and **expands in place**
+  to reveal pending applicants **grouped by instrument**, each a compact row
+  (avatar + name + ✓/✗ icons). Collapsed by default so a busy song (many
+  instruments × applicants) doesn't bloat the list; acting on one applicant
+  updates inline and decrements the count. No leaving the setlist, and no modal —
+  a large modal on mobile just recreates the song detail we're avoiding, and a
+  small one can't hold a busy song. Organizers see this on every song; proponents
+  only on songs they proposed. There is no flat batch-approve queue (see grain).
+  Build note: the setlist has drag-to-reorder (SortableJS) — the expand toggle
+  (chevron / the pending badge) must be a separate affordance from the drag handle
+  so tap-to-approve never triggers a reorder.
 - **Applicant's side → "Mis toques".** A performer sees the toques they play in
   and their per-song signup status (pending/approved/declined) in the unified
   "Mis toques" view (below) — the pull surface until notifications (#57) push it.
