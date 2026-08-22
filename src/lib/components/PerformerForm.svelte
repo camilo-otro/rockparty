@@ -29,7 +29,7 @@
   }
 </script>
 <form on:submit|preventDefault={handleSubmit}>
-  <div class="flex flex-col w-3/4 p-5 mb-4 gap-1">
+  <div class="flex flex-col w-full p-4 mb-4 gap-1">
     <label for="email" class="mb-1">Email</label>
     <input id="email" type="text" bind:value={email} readonly class="p-2 bg-base-900 border rounded-lg pointer-events-none" />
     <label for="nickname" class="mb-1 mt-3">Nickname</label>
@@ -52,7 +52,7 @@
       {/each}
     </div>
   </div>
-  <button class="bg-cold-base text-white text-sm rounded-full mx-6 p-2 px-6" type="submit" disabled={submitting}>
+  <button class="bg-cold-base text-white text-sm rounded-full mx-4 p-2 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Guardando...' : 'Guardar'}
   </button>
 </form>

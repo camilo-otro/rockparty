@@ -173,7 +173,7 @@
   }
 </script>
 <form on:submit|preventDefault={handleSubmit}>
-  <div class="flex flex-col w-3/4 p-5 mb-4">
+  <div class="flex flex-col w-full p-4 mb-4">
     <label for="name" class="mb-1">Nombre del Local</label>
     <input id="name" type="text" bind:value={name} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre del local')} on:input={clearInvalid} />
     <label for="address" class="mb-1">Dirección</label>
@@ -290,7 +290,7 @@
       </div>
     </div>
   </div>
-  <button class="bg-cold-base text-white rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting}>
+  <button class="bg-cold-base text-white rounded-lg mx-4 p-4 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Guardando...' : 'Guardar Local'}
   </button>
 </form>

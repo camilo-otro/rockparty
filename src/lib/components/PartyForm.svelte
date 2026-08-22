@@ -82,7 +82,7 @@
 </script>
 
 <form on:submit|preventDefault={handleSubmit}>
-  <div class="flex flex-col w-3/4 p-5 mb-4">
+  <div class="flex flex-col w-full p-4 mb-4">
     <label for="title" class="mb-1">Título</label>
     <input id="title" type="text" bind:value={title} required class="p-2 mb-4 border rounded-lg" />
     <label for="description" class="mb-1">Descripción</label>
@@ -123,7 +123,7 @@
     </div>
   </div>
   <div class="flex justify-center">
-    <button class="bg-cold-base text-white text-sm rounded-full mx-6 p-2 px-6" type="submit" disabled={submitting}>
+    <button class="bg-cold-base text-white text-sm rounded-full mx-4 p-2 px-6" type="submit" disabled={submitting}>
       {submitting ? 'Creando...' : 'Crear Toque'}
     </button>
   </div>

@@ -129,7 +129,7 @@
   </div>
 {:else}
     <form on:submit|preventDefault={handleSubmit}>
-        <div class="flex flex-col w-3/4 p-5 mb-4">
+        <div class="flex flex-col w-full p-4 mb-4">
             <label for="song" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Canción</label>
             <SongSelect 
               {songs} 

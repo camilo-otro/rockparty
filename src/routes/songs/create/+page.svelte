@@ -118,7 +118,7 @@
 {:else}
     <form on:submit|preventDefault={handleSubmit}>
         <input type="hidden" name="added_by" value={userId} />
-        <div class="flex flex-col w-3/4 p-5 mb-4">
+        <div class="flex flex-col w-full p-4 mb-4">
             <label for="title" class="mb-1" in:fly={{ y: -30, duration: 400 }}>Título</label>
             <AutocompleteInput 
               id="title" 
@@ -140,7 +140,7 @@
             <label for="reflink" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Referencia</label>
             <input id="reflink" type="text" name="reflink" bind:value={reflink} class="p-2 border rounded-lg" in:fly={{ y: -30, duration: 400, delay: 150 }} />
         </div>
-        <button class="bg-cold-base text-white rounded-lg mx-6 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
+        <button class="bg-cold-base text-white rounded-lg mx-4 p-4 px-6" type="submit" disabled={submitting} in:fly={{ y: -30, duration: 400, delay: 200 }}>
             {submitting ? 'Creando...' : 'Crear Canción'}
         </button>
     </form>
