@@ -1,6 +1,6 @@
 <script lang="ts">
   // Imports
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, ChevronUp, ChevronDown, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
@@ -29,6 +29,7 @@
   let currentUserId: string | null = null;
   let unsubscribeUser: () => void;
   let reorderMode = false;
+  let justMovedId: number | null = null;
   let showShareModal = false;
   let partyAdmins: string[] = [];
   let venueAdmins: string[] = [];
@@ -135,10 +136,15 @@
   async function moveSong(index: number, dir: -1 | 1) {
     const target = index + dir;
     if (target < 0 || target >= performances.length) return;
+    const movedId = performances[index].id;
     const arr = [...performances];
     [arr[index], arr[target]] = [arr[target], arr[index]];
     arr.forEach((p, i) => (p.order = i));
     performances = arr;
+    // Flash the moved row (toggle via tick so the animation restarts on repeats).
+    justMovedId = null;
+    await tick();
+    justMovedId = movedId;
     const results = await Promise.all(
       arr.map((p) => supabase.from('performance').update({ order: p.order }).eq('id', p.id))
     );
@@ -265,6 +271,19 @@
   });
 </script>
 
+<style>
+  /* Reorder cue (#59): the moved row flashes a lighter grey and settles back to
+     base-900. Pure background-color — no layout/transform, so it can't shift the
+     list. Ends exactly at base-900 so there's no snap when the animation clears. */
+  @keyframes flashMove {
+    from { background-color: #3a3a3a; }
+    to   { background-color: #262626; }
+  }
+  .flash-move {
+    animation: flashMove 0.6s ease-out;
+  }
+</style>
+
 <div class="mt-2 p-4 flex flex-col gap-4">
   <div class="flex flex-row w-full justify-between">
     <a href="/parties" class="text-bold text-cold-light flex flex-row"><ChevronLeft />VOLVER</a>
@@ -355,7 +374,7 @@
       {:else}
         <ul class="grid grid-cols-1 space-y-[1px]">
           {#each performances as perf, index (perf.id)}
-            <li class="bg-base-900 px-4 p-3">
+            <li class="bg-base-900 px-4 p-3" class:flash-move={justMovedId === perf.id}>
               {#if reorderMode}
                 <div class="flex items-center gap-2">
                   <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>
