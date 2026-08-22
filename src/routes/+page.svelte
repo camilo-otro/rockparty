@@ -42,7 +42,7 @@
   }
 </script>
 
-<div class="max-w-2xl mx-auto mt-8 flex flex-col gap-8">
+<div class="mt-8 flex flex-col gap-8">
   <section class="mx-4">
     <div class="bg-base-900 rounded-lg p-6 text-center">
       <p class="text-white text-lg leading-snug">

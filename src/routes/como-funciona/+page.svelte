@@ -21,7 +21,7 @@
   ];
 </script>
 
-<div class="max-w-2xl mx-auto">
+<div>
   <div class="flex flex-row items-center">
     <a href="/" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft />VOLVER</a>
   </div>

@@ -133,7 +133,7 @@
   }
 </script>
 
-<div class="max-w-xl mx-auto mt-8">
+<div class="mt-8">
   <div class="mb-4">
     <div class="flex flex-row items-center justify-between">
       <a href="/parties/{performance?.party}" class="text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> VOLVER</a>

@@ -75,7 +75,7 @@
   }
 </script>
 
-<div class="max-w-xl mx-auto mt-2">
+<div class="mt-2">
   <div class="flex flex-row w-full justify-between">
     <a href="/venues" class="text-bold text-cold-light flex flex-row gap-2 mx-4 m-2"><ChevronLeft/>VOLVER</a>
     <div class="flex flex-row w-auto gap-2 m-4">

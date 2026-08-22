@@ -274,7 +274,7 @@
   }
 </style>
 
-<div class="max-w-xl mx-auto mt-2 p-4 flex flex-col gap-4">
+<div class="mt-2 p-4 flex flex-col gap-4">
   <div class="flex flex-row w-full justify-between">
     <a href="/parties" class="text-bold text-cold-light flex flex-row"><ChevronLeft />VOLVER</a>
     {#if currentUserId == party?.created_by || partyAdmins && currentUserId && partyAdmins.includes(currentUserId)}

@@ -21,7 +21,7 @@
   });
 </script>
 
-<div class="max-w-xl mx-auto mt-8">
+<div class="mt-8">
   <div class="mb-4">
     <a href="/songs" class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
   </div>
