@@ -141,9 +141,13 @@
     [arr[index], arr[target]] = [arr[target], arr[index]];
     arr.forEach((p, i) => (p.order = i));
     performances = arr;
-    // Flash the moved row (toggle via tick so the animation restarts on repeats).
+    // Flash the moved row. Remove the class, force a reflow on that row, then
+    // re-add — the reliable way to restart a CSS animation regardless of whether
+    // the keyed list moved this node up or down (a plain toggle can get coalesced).
     justMovedId = null;
     await tick();
+    const el = document.querySelector(`[data-perf-id="${movedId}"]`) as HTMLElement | null;
+    if (el) void el.offsetWidth;
     justMovedId = movedId;
     const results = await Promise.all(
       arr.map((p) => supabase.from('performance').update({ order: p.order }).eq('id', p.id))
@@ -374,7 +378,7 @@
       {:else}
         <ul class="grid grid-cols-1 space-y-[1px]">
           {#each performances as perf, index (perf.id)}
-            <li class="bg-base-900 px-4 p-3" class:flash-move={justMovedId === perf.id}>
+            <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
               {#if reorderMode}
                 <div class="flex items-center gap-2">
                   <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>
