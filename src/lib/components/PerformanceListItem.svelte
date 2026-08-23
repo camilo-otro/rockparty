@@ -3,6 +3,9 @@
   export let artist;
   export let key: string | undefined = undefined;
   export let performers: any[] = []; // Array of { instrument_id, user_id, user_avatar }
+  // Instrument ids the viewer plays (#32) — open slots matching these are
+  // highlighted as "you could fill this" instead of dimmed.
+  export let highlightInstrumentIds: number[] = [];
   
   // Default instruments with their IDs and icon paths
   const defaultInstruments = [
@@ -35,12 +38,13 @@
   </div>
   <div class="flex flex-row -space-x-2 ml-2 self-end">
     {#each availableInstruments as instrument, index}
-      <img 
-        src={instrument.icon} 
-        alt={instrument.name} 
-        class="w-6 h-6 opacity-50 bg-base-900 rounded-full p-0.5"
+      {@const mine = highlightInstrumentIds.includes(instrument.id)}
+      <img
+        src={instrument.icon}
+        alt={instrument.name}
+        class="w-6 h-6 bg-base-900 rounded-full p-0.5 {mine ? 'opacity-100 ring-2 ring-yellow' : 'opacity-50'}"
         style="z-index: {index + 1}"
-        title={`${instrument.name} - Available`}
+        title={mine ? `${instrument.name} — ¡puedes tocar!` : `${instrument.name} - Available`}
       />
     {/each}
     {#each filledInstruments as instrument, index}

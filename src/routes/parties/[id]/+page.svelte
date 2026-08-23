@@ -3,7 +3,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2 } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -32,6 +32,7 @@
   let justMovedId: number | null = null;
   let instrumentsById: Record<number, string> = {};
   let expandedApprovals = new Set<number>();
+  let myInstrumentIds: number[] = []; // instruments the viewer plays (#32)
   let showShareModal = false;
   let partyAdmins: string[] = [];
   let venueAdmins: string[] = [];
@@ -44,6 +45,16 @@
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
   // Venue admin of THIS party's venue (its creator or a listed venue_admin).
   $: isVenueAdmin = !!currentUserId && (venue?.created_by === currentUserId || venueAdmins.includes(currentUserId));
+
+  // Gaps to fill (#32): a slot is open when no APPROVED player holds it. The
+  // alert counts songs with any gap, and — for a logged-in musician — how many
+  // have a gap in an instrument THEY play (the actionable number).
+  $: allInstrumentIds = Object.keys(instrumentsById).map(Number);
+  function openInstrumentIds(perf: any): number[] {
+    return allInstrumentIds.filter((id) => !(perf.performers ?? []).some((p: any) => p.instrument_id === id));
+  }
+  $: songsWithGaps = allInstrumentIds.length ? performances.filter((p) => openInstrumentIds(p).length > 0).length : 0;
+  $: songsForMe = myInstrumentIds.length ? performances.filter((p) => openInstrumentIds(p).some((id) => myInstrumentIds.includes(id))).length : 0;
 
   async function setStatus(next: PartyStatus, reason: string | null = null): Promise<boolean> {
     if (!party) return false;
@@ -320,6 +331,12 @@
       }
       loadingPerformances = false;
     }
+    // The viewer's own instruments (#32) — powers the personalized gap alert +
+    // the "you could play here" highlight on open slots.
+    if (currentUserId) {
+      const { data: pi } = await supabase.from('profile_instrument').select('instrument_id').eq('profile_id', currentUserId);
+      myInstrumentIds = (pi ?? []).map((r: any) => r.instrument_id);
+    }
     loading = false;
   });
 
@@ -421,6 +438,18 @@
         </button>
       {/if}
     </div>
+    {#if !reorderMode && !loadingPerformances && songsWithGaps > 0}
+      <div class="flex items-center gap-3 bg-base-900 rounded-lg px-4 py-3 mb-2">
+        <AlertTriangle class="text-yellow shrink-0" size={20} />
+        <span class="text-white text-sm">
+          {#if songsForMe > 0}
+            {songsForMe === 1 ? '1 canción te necesita' : `${songsForMe} canciones te necesitan`}
+          {:else}
+            {songsWithGaps === 1 ? '1 canción busca músicos' : `${songsWithGaps} canciones buscan músicos`}
+          {/if}
+        </span>
+      </div>
+    {/if}
     <div class="bg-base-950 rounded-lg overflow-hidden">
       {#if loadingPerformances}
         <div class="text-white">Cargando Setlist...</div>
@@ -455,6 +484,7 @@
                         artist={getSongArtist(perf.song)}
                         key={perf.key}
                         performers={perf.performers || []}
+                        highlightInstrumentIds={myInstrumentIds}
                       />
                     </div>
                   </div>

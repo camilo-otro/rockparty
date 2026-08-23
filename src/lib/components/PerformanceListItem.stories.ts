@@ -36,3 +36,14 @@ export const FullBand: Story = {
     performers: [1, 2, 3, 4, 5, 6].map((i) => ({ instrument_id: i, user_id: 'u' + i, user_avatar: null }))
   }
 };
+
+// Open slots the viewer plays (voz=1, bajo=4) get a yellow ring — "you could
+// play here" (#32).
+export const GapsForYou: Story = {
+  args: {
+    title: "Don't Look Back in Anger",
+    artist: 'Oasis',
+    performers: [{ instrument_id: 2, user_id: 'u2', user_avatar: null }],
+    highlightInstrumentIds: [1, 4]
+  }
+};
