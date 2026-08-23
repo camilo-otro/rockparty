@@ -41,6 +41,10 @@
   // by application time (signedUpUsers is fetched created_at-ascending).
   $: pendingApplicants = signedUpUsers.filter((u) => u.status === 'pending');
   $: groupedPending = groupByInstrument(pendingApplicants);
+  // A spot is "taken" once it has an approved player; you can only self-sign-up
+  // for open spots (pending applicants still leave a spot open to compete for).
+  $: takenInstrumentIds = new Set(signedUpUsers.filter((u) => u.status === 'approved').map((u) => u.instrument_id));
+  $: availableInstruments = instruments.filter((i) => !takenInstrumentIds.has(i.id));
 
   function groupByInstrument(rows: any[]): { instrument_id: number; instrument: string; applicants: any[] }[] {
     const map = new Map<number, { instrument_id: number; instrument: string; applicants: any[] }>();
@@ -271,9 +275,13 @@
       {/each}
       {#if currentUserId}
         {#if canSelfSignup}
-          <div class="w-full flex justify-center">
-            <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>{autoApprove ? 'Inscríbete para tocar' : 'Solicitar para tocar'}</button>
-          </div>
+          {#if availableInstruments.length}
+            <div class="w-full flex justify-center">
+              <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>{autoApprove ? 'Inscríbete para tocar' : 'Solicitar para tocar'}</button>
+            </div>
+          {:else}
+            <div class="w-full text-center text-cold-light mb-4">Todos los cupos están tomados.</div>
+          {/if}
         {:else}
           <div class="w-full text-center text-cold-light mb-4">Este toque es solo por invitación.</div>
         {/if}
@@ -293,9 +301,11 @@
       <h3 class="text-xl text-yellow font-bold mb-4">Selecciona tu instrumento</h3>
       {#if loadingInstruments}
         <div class="text-center text-white">Cargando instrumentos...</div>
+      {:else if availableInstruments.length === 0}
+        <div class="text-center text-cold-light">Todos los cupos están tomados.</div>
       {:else}
         <div class="space-y-2">
-          {#each instruments as instrument}
+          {#each availableInstruments as instrument}
             <button 
               class="w-full text-left p-3 border border-cold-base rounded-lg bg-cold-base text-white hover:bg-cold-light transition active:bg-yellow active:text-black"
               on:mousedown={() => instrument._down = true}
