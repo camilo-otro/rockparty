@@ -3,10 +3,10 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft, Share2, Trash2 } from 'lucide-svelte';
+  import { ArrowLeft, Share2, Trash2, Check, X } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
-  import { reportError, toastSuccess, toastInfo } from '$lib/stores/toasts';
+  import { reportError, toastSuccess, toastInfo, toastError } from '$lib/stores/toasts';
 
   let performance: any = null;
   let songTitle: string = '';
@@ -30,13 +30,29 @@
   $: isProponent = !!currentUserId && !!performance && performance.suggested_by === currentUserId;
   $: autoApprove = mode === 'auto' || isPartyAdmin || (mode === 'proponent' && isProponent);
   $: canSelfSignup = mode !== 'invite_only' || isPartyAdmin || isProponent;
-  // Declined rows are shown to their owner as a re-request affordance, not as
-  // participants; everyone else only sees approved + pending (via RLS).
-  $: participants = signedUpUsers.filter((u) => u.status !== 'declined');
+  // An approver is a party admin, or — in proponent mode — this song's proponent.
+  $: canApprove = isPartyAdmin || (mode === 'proponent' && isProponent);
+  // Participantes: approved musicians, plus the current user's own pending row so
+  // an applicant can see (and cancel) their request. Declined rows are shown to
+  // their owner below as a re-request affordance, not here.
+  $: participants = signedUpUsers.filter((u) => u.status === 'approved' || (u.status === 'pending' && u.user_id === currentUserId));
   $: myDeclined = signedUpUsers.filter((u) => currentUserId && u.user_id === currentUserId && u.status === 'declined');
+  // Approver queue: pending applicants grouped by instrument, each group ordered
+  // by application time (signedUpUsers is fetched created_at-ascending).
+  $: pendingApplicants = signedUpUsers.filter((u) => u.status === 'pending');
+  $: groupedPending = groupByInstrument(pendingApplicants);
+
+  function groupByInstrument(rows: any[]): { instrument_id: number; instrument: string; applicants: any[] }[] {
+    const map = new Map<number, { instrument_id: number; instrument: string; applicants: any[] }>();
+    for (const u of rows) {
+      if (!map.has(u.instrument_id)) map.set(u.instrument_id, { instrument_id: u.instrument_id, instrument: u.instrument, applicants: [] });
+      map.get(u.instrument_id)!.applicants.push(u);
+    }
+    return [...map.values()];
+  }
 
   async function fetchSignedUpUsers(performanceId: string) {
-    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, status').eq('performance_id', Number(performanceId));
+    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, status, created_at').eq('performance_id', Number(performanceId)).order('created_at', { ascending: true });
     const users: any[] = [];
     for (const perfUser of perfUsers ?? []) {
       const { data: userData } = await supabase.from('profile').select('nickname').eq('id', perfUser.user_id).single();
@@ -46,7 +62,8 @@
         instrument: instrumentData?.name ?? '',
         instrument_id: perfUser.instrument_id,
         user_id: perfUser.user_id,
-        status: perfUser.status
+        status: perfUser.status,
+        created_at: perfUser.created_at
       });
     }
     return users;
@@ -135,6 +152,19 @@
     await refreshSignedUpUsers();
   }
 
+  // Approve/reject a pending applicant (#29). RLS + the trigger enforce who may;
+  // a 0-row update means the DB refused despite the UI showing the control.
+  async function decideSignup(applicant: any, decision: 'approved' | 'declined') {
+    const { data, error: e } = await supabase.from('performance_user')
+      .update({ status: decision })
+      .eq('performance_id', performance.id).eq('user_id', applicant.user_id).eq('instrument_id', applicant.instrument_id)
+      .select('user_id');
+    if (e) { reportError(e); return; }
+    if (!data || data.length === 0) { toastError('No tienes permiso para aprobar aquí.'); return; }
+    toastSuccess(decision === 'approved' ? 'Músico aprobado.' : 'Solicitud rechazada.');
+    await refreshSignedUpUsers();
+  }
+
   async function removeInstrument(userId: string, instrumentId: string) {
     const { error: e } = await supabase.from('performance_user').delete()
       .eq('performance_id', performance.id)
@@ -216,6 +246,23 @@
           <li class="text-cold-light">Nadie se ha anotado aún.</li>
         {/if}
       </ul>
+      {#if canApprove && pendingApplicants.length}
+        <h3 class="text-2xl text-white font-medium mt-6 mb-2">Por aprobar</h3>
+        <div class="mb-4 flex flex-col gap-3">
+          {#each groupedPending as group}
+            <div>
+              <div class="text-xs text-cold-light uppercase tracking-wide mb-1">{group.instrument}</div>
+              {#each group.applicants as applicant}
+                <div class="flex items-center gap-2 py-1 border-b border-base-950 last:border-0">
+                  <span class="flex-1 text-white truncate">{applicant.nickname}</span>
+                  <button on:click={() => decideSignup(applicant, 'approved')} aria-label="Aprobar" class="p-1 text-green-500 hover:text-green-400"><Check size={20} /></button>
+                  <button on:click={() => decideSignup(applicant, 'declined')} aria-label="Rechazar" class="p-1 text-red-500 hover:text-red-400"><X size={20} /></button>
+                </div>
+              {/each}
+            </div>
+          {/each}
+        </div>
+      {/if}
       {#each myDeclined as u}
         <div class="mb-3 p-3 bg-base-950 rounded-lg flex items-center justify-between gap-2">
           <span class="text-cold-light text-sm">Tu solicitud para <span class="text-white">{u.instrument}</span> fue rechazada.</span>
