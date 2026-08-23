@@ -3,7 +3,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2 } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -156,6 +156,25 @@
     );
     const err = results.find((r) => r.error)?.error;
     if (err) reportError(err);
+  }
+
+  // Remove a song from the setlist (#62). Party admins only (RLS enforces it);
+  // the DELETE cascades to this song's signups. Confirm first, and treat a
+  // 0-row delete as an RLS denial rather than silent success.
+  function removeSong(perf: any) {
+    openDialog({
+      title: '¿Quitar esta canción del setlist?',
+      body: `Se eliminará "${getSongTitle(perf.song)}" y las inscripciones a esta canción.`,
+      withReason: false,
+      confirmLabel: 'Quitar',
+      run: async () => {
+        const { data, error: e } = await supabase.from('performance').delete().eq('id', perf.id).select('id');
+        if (e) { reportError(e); return; }
+        if (!data || data.length === 0) { toastError('No tienes permiso para quitar esta canción.'); return; }
+        performances = performances.filter((p) => p.id !== perf.id);
+        toastSuccess('Canción eliminada del setlist.');
+      }
+    });
   }
 
   // Per-song approval (#29). An approver is a party admin, or — in proponent
@@ -424,6 +443,7 @@
                     <button on:click={() => moveSong(index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
                     <button on:click={() => moveSong(index, 1)} disabled={index === performances.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
                   </div>
+                  <button on:click={() => removeSong(perf)} aria-label="Quitar del setlist" class="p-1 ml-1 text-warm-base hover:text-red-400 shrink-0"><Trash2 size={20} /></button>
                 </div>
               {:else}
                 <a href={`/performance/${perf.id}`} class="block">

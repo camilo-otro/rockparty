@@ -316,8 +316,10 @@ create trigger performance_user_set_status
 --     performance_user UPDATE to the owning user (tightened 2026-08-11; see
 --     migrations/20260811_tighten_performance_update_rls.sql). INSERT remains
 --     open to any authenticated user by design (collaborative suggestions).
---   * Core tables (party, venue, song, profile, performance) have NO DELETE
---     policy, so with RLS on, deletes are denied to anon/authenticated.
+--   * Core tables party, venue, song, profile have NO DELETE policy, so with
+--     RLS on, deletes are denied to anon/authenticated. `performance` is the
+--     exception: it has a DELETE policy scoped to party owner/admins (#62), so a
+--     song can be removed from a setlist.
 --   * The lookup tables `role`, `venue_type`, `instrument` are publicly
 --     readable (SELECT to all). No table is deny-all anymore.
 --   * auth.uid() is wrapped as (select auth.uid()) in the owner/admin policies
@@ -447,6 +449,22 @@ create policy "allow insert to authenticated users" on public.performance
   for insert to authenticated with check (true);
 create policy "Enable Update for authenticated users only" on public.performance
   for update to authenticated using (
+    exists (
+      select 1 from public.party p
+      where p.id = performance.party
+        and (
+          p.created_by = (select auth.uid())
+          or exists (
+            select 1 from public.party_admin pa
+            where pa.party_id = p.id and pa.user_id = (select auth.uid())
+          )
+        )
+    )
+  );
+-- Remove a song from a setlist (#62): same scope as UPDATE — party creator or
+-- admin. Cascades to performance_user (FK ON DELETE CASCADE).
+create policy "delete performance: party admins" on public.performance
+  for delete to authenticated using (
     exists (
       select 1 from public.party p
       where p.id = performance.party
