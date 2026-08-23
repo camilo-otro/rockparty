@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
+    import { goto } from '$app/navigation';
     import { fade, fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { fetchSongTitles, fetchArtistNames } from '$lib/musicbrainz';
@@ -61,9 +62,9 @@
                 toastSuccess('¡Nueva canción creada!');
                 setTimeout(() => {
                     if (fromPerformance && partyId) {
-                        window.location.href = `/performance/create?partyId=${partyId}`;
+                        goto(`/performance/create?partyId=${partyId}`);
                     } else {
-                        window.location.href = '/songs';
+                        goto('/songs');
                     }
                 }, 500);
             }

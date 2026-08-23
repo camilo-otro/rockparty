@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ChevronLeft } from 'lucide-svelte';
+    import { goto } from '$app/navigation';
     import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
@@ -102,7 +103,7 @@
             } else {
                 toastSuccess('¡Agregada al setlist!');
                 setTimeout(() => {
-                    window.location.href = `/parties/${partyId}`;
+                    goto(`/parties/${partyId}`);
                 }, 1000);
             }
         } catch (e) {

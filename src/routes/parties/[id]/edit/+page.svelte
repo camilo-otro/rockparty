@@ -6,6 +6,7 @@ import { supabase } from '$lib/supabaseClient';
 import PartyForm from '$lib/components/PartyForm.svelte';
 import { user } from '$lib/stores/user';
 import { ChevronLeft } from 'lucide-svelte';
+import { goto } from '$app/navigation';
 import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
 // State variables
@@ -90,7 +91,7 @@ onMount(async () => {
           }
           toastSuccess('¡Toque actualizado!');
           setTimeout(() => {
-            window.location.href = `/parties/${party.id}`;
+            goto(`/parties/${party.id}`);
           }, 1000);
         }
       } catch (e) {

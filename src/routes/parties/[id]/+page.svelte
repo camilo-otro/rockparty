@@ -2,6 +2,7 @@
   // Imports
   import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
@@ -236,7 +237,7 @@
 
   function handleEdit() {
     if (party?.id) {
-      window.location.href = `/parties/${party.id}/edit`;
+      goto(`/parties/${party.id}/edit`);
     }
   }
 

@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, Edit, Instagram } from 'lucide-svelte';
+  import { goto } from '$app/navigation';
   import { user } from '$lib/stores/user';
   import PartyListItem from '$lib/components/PartyListItem.svelte';
 
@@ -83,7 +84,7 @@
 
   function handleEdit() {
     if (venue?.id) {
-      window.location.href = `/venues/${venue.id}/edit`;
+      goto(`/venues/${venue.id}/edit`);
     }
   }
 </script>

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ChevronLeft } from 'lucide-svelte';
+    import { goto } from '$app/navigation';
     import { onMount, onDestroy } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
     import { user } from '$lib/stores/user';
@@ -81,7 +82,7 @@
           }
           toastSuccess('Borrador creado — revísalo y publícalo.');
           setTimeout(() => {
-            window.location.href = newId ? `/parties/${newId}` : '/parties';
+            goto(newId ? `/parties/${newId}` : '/parties');
           }, 1000);
         }
       } catch (e) {

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ChevronLeft } from 'lucide-svelte';
+    import { goto } from '$app/navigation';
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
@@ -105,7 +106,7 @@
             }
             toastSuccess('¡Nuevo local creado!');
             setTimeout(() => {
-              window.location.href = '/venues';
+              goto('/venues');
             }, 1000);
           }
         } catch (e) {

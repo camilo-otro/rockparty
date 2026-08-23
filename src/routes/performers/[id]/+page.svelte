@@ -4,6 +4,7 @@
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
   import { ChevronLeft, Edit } from 'lucide-svelte';
+  import { goto } from '$app/navigation';
   import { user } from '$lib/stores/user';
 
   let performer: any = null;
@@ -67,7 +68,7 @@
         <div class="flex justify-center">
           <button
             class="text-center bg-cold-base text-white font-medium px-4 py-2 rounded-lg mt-8"
-            on:click={() => window.location.href = `/performers/${performer.id}/edit`}
+            on:click={() => goto(`/performers/${performer.id}/edit`)}
           >Editar perfil<Edit class="inline ml-2" size={16} /></button>
         </div>
       {/if}

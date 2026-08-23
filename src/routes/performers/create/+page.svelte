@@ -1,5 +1,6 @@
 <script lang="ts">
     import { ArrowLeft } from 'lucide-svelte';
+    import { goto } from '$app/navigation';
     import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
@@ -59,7 +60,7 @@
             } else {
                 toastSuccess('¡Nuevo intérprete creado!');
                 setTimeout(() => {
-                    window.location.href = '/';
+                    goto('/');
                 }, 1000);
             }
         } catch (e) {
@@ -113,7 +114,7 @@
             }
             toastSuccess('¡Nuevo intérprete creado!');
             setTimeout(() => {
-              window.location.href = '/';
+              goto('/');
             }, 1000);
           }
         } catch (e) {

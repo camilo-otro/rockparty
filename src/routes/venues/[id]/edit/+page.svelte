@@ -5,6 +5,7 @@ import { page } from '$app/state';
 import { supabase } from '$lib/supabaseClient';
 import VenueForm from '$lib/components/VenueForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
+import { goto } from '$app/navigation';
 import { user } from '$lib/stores/user';
 import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
@@ -108,7 +109,7 @@ onMount(async () => {
           }
           toastSuccess('¡Local actualizado!');
           setTimeout(() => {
-            window.location.href = `/venues/${venue.id}`;
+            goto(`/venues/${venue.id}`);
           }, 1000);
         }
       } catch (e) {
