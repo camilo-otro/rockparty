@@ -4,7 +4,7 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -141,6 +141,64 @@
         toastSuccess('Toque cancelado.');
       }
     });
+  }
+
+  // Clone a terminal (cancelled/completed) toque into a fresh draft the current
+  // user owns, copying the setlist + its approved lineup so re-proposing doesn't
+  // mean rebuilding by hand (#52). Keeps the old venue/date as a starting point;
+  // the organizer adjusts them before publishing.
+  let cloning = false;
+  async function cloneToque() {
+    if (!party || !currentUserId || cloning) return;
+    cloning = true;
+    try {
+      const { data: np, error: pe } = await supabase.from('party').insert({
+        title: `${party.title ?? 'Toque'} (copia)`,
+        description: party.description,
+        date: party.date,
+        venue: party.venue,
+        created_by: currentUserId,
+        performer_approval: party.performer_approval,
+        status: 'draft'
+      }).select('id').single();
+      if (pe || !np) { reportError(pe ?? new Error('No se pudo crear el borrador.')); return; }
+      const newId = np.id;
+      // Copy the setlist (performances).
+      if (performances.length) {
+        const rows = performances.map((p: any) => ({
+          party: newId, song: p.song, key: p.key, ref_link: p.ref_link,
+          order: p.order, suggested_by: p.suggested_by ?? currentUserId
+        }));
+        const { data: newPerfs, error: perfErr } = await supabase.from('performance').insert(rows).select();
+        if (perfErr) reportError(perfErr);
+        else if (newPerfs) {
+          // Map new performances to their source by order (unique per party), then
+          // copy each song's approved lineup. The status trigger re-approves them
+          // (the cloner is the new draft's admin).
+          const byOrder: Record<number, number> = {};
+          for (const p of newPerfs) if (p.order != null) byOrder[p.order] = p.id;
+          const signupRows: any[] = [];
+          for (const p of performances) {
+            const newPid = p.order != null ? byOrder[p.order] : undefined;
+            if (!newPid) continue;
+            for (const perf of (p.performers ?? [])) {
+              signupRows.push({ performance_id: newPid, user_id: perf.user_id, instrument_id: perf.instrument_id });
+            }
+          }
+          if (signupRows.length) {
+            const { error: suErr } = await supabase.from('performance_user').insert(signupRows);
+            if (suErr) reportError(suErr);
+          }
+        }
+      }
+      toastSuccess('Borrador creado a partir de este toque.');
+      // Full navigation (not goto): the destination is the SAME route with a new
+      // id, so the component wouldn't remount and its onMount data load wouldn't
+      // re-run — leaving the old toque's data on screen.
+      window.location.href = `/parties/${newId}`;
+    } finally {
+      cloning = false;
+    }
   }
 
   // Derived helpers
@@ -440,6 +498,12 @@
         <div class="flex justify-end">
           <button on:click={venueCancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque en el local</button>
         </div>
+      </div>
+    {:else if canAdmin && (party.status === 'cancelled' || party.status === 'completed')}
+      <div class="flex justify-end">
+        <button on:click={cloneToque} disabled={cloning} class="text-cold-light hover:text-white text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition disabled:opacity-50 inline-flex items-center gap-2">
+          <Copy size={16} /> {cloning ? 'Clonando…' : 'Clonar en un nuevo borrador'}
+        </button>
       </div>
     {/if}
     {#if party.status === 'cancelled' && (party.cancel_reason === 'venue_declined' || party.cancel_reason === 'venue_cancelled')}
