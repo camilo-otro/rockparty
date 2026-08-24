@@ -2,6 +2,15 @@ import { supabase } from '$lib/supabaseClient';
 import { user as userStore } from '$lib/stores/user';
 import { redirect } from '@sveltejs/kit';
 
+// Client-only rendering (#48). The app has no server routes and fetches all data
+// client-side (RLS is the security boundary), so SSR added no value — and it was
+// harmful here: this load runs during SSR where there's no localStorage, so
+// getSession() returns null and the app hydrates logged-out until the client
+// restores the session (~1s flash of "Ingresar" / auth gates). Running the load
+// only on the client lets getSession() see the restored session before first
+// render, so the auth state is correct from the first paint.
+export const ssr = false;
+
 export const load = async ({ depends, url }) => {
   depends('supabase:auth');
   const { data: { session } } = await supabase.auth.getSession();
