@@ -42,6 +42,29 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment_suggestion: {
+        Row: {
+          equipment_id: number
+          label: string
+        }
+        Insert: {
+          equipment_id: number
+          label: string
+        }
+        Update: {
+          equipment_id?: number
+          label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_suggestion_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instrument: {
         Row: {
           created_at: string

@@ -92,17 +92,28 @@
     if (initialAdmins && initialAdmins.length > 0) {
       admins = userOptions.filter(u => initialAdmins.includes(u.id));
     }
-    // Build the description-suggestion pool, ranked by frequency per equipment.
-    const { data: notesData } = await supabase.from('venue_equipment').select('equipment_id, notes').not('notes', 'is', null);
+    // Build the description-suggestion pool per equipment: real usage ranked by
+    // frequency first, then the curated catalog (#49) fills the rest.
+    const [{ data: notesData }, { data: sugData }] = await Promise.all([
+      supabase.from('venue_equipment').select('equipment_id, notes').not('notes', 'is', null),
+      supabase.from('equipment_suggestion').select('equipment_id, label')
+    ]);
     const counts: Record<number, Record<string, number>> = {};
     for (const r of notesData ?? []) {
       const n = (r.notes ?? '').trim();
       if (!n || r.equipment_id == null) continue;
       (counts[r.equipment_id] ??= {})[n] = (counts[r.equipment_id][n] ?? 0) + 1;
     }
+    const curated: Record<number, string[]> = {};
+    for (const s of sugData ?? []) (curated[s.equipment_id] ??= []).push(s.label);
     const out: Record<number, string[]> = {};
-    for (const [eid, m] of Object.entries(counts)) {
-      out[Number(eid)] = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n);
+    const eids = new Set<number>([...Object.keys(counts), ...Object.keys(curated)].map(Number));
+    for (const eid of eids) {
+      const realAll = Object.entries(counts[eid] ?? {}).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+      const realSet = new Set(realAll);
+      // Top real usage by frequency, then the whole curated catalog for this type.
+      const extra = (curated[eid] ?? []).filter((l) => !realSet.has(l));
+      out[eid] = [...realAll.slice(0, 8), ...extra];
     }
     notesSuggestions = out;
   });

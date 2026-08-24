@@ -72,6 +72,16 @@ create table if not exists public.equipment (
   category   text
 );
 
+-- equipment_suggestion — curated popular brand/model options per equipment type
+-- (#49). Seeds the venue-equipment description autocomplete; world-readable,
+-- migration-managed only. See migrations/20260824_equipment_suggestions.sql.
+create table if not exists public.equipment_suggestion (
+  equipment_id bigint not null references public.equipment (id) on delete cascade,
+  label        text   not null,
+  primary key (equipment_id, label)
+);
+create index if not exists idx_equipment_suggestion_equipment on public.equipment_suggestion (equipment_id);
+
 -- ============================ CORE ENTITIES ==================================
 
 -- profile — app users / "performers"; PK is the Supabase auth user id.
@@ -340,6 +350,7 @@ alter table public.performance       enable row level security;
 alter table public.performance_user  enable row level security;
 alter table public.profile_instrument enable row level security;
 alter table public.equipment          enable row level security;
+alter table public.equipment_suggestion enable row level security;
 alter table public.venue_equipment    enable row level security;
 
 -- ---- song -------------------------------------------------------------------
@@ -565,6 +576,9 @@ create policy "Enable read access for all users" on public.instrument
 
 -- ---- equipment (public lookup) / venue_equipment ----------------------------
 create policy "allow select to all users" on public.equipment
+  for select to anon, authenticated using (true);
+-- equipment_suggestion: world-readable curated catalog (#49), no write policy.
+create policy "allow select to all users" on public.equipment_suggestion
   for select to anon, authenticated using (true);
 
 create policy "allow select to all users" on public.venue_equipment
