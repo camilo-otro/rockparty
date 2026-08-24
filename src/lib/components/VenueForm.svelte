@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
+  import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
   export let submitting = false;
   export let initialName = '';
   export let initialAddress = '';
@@ -78,6 +79,11 @@
   let capacity: number | null = initialCapacity;
   let houseRules = initialHouseRules;
 
+  // Popular equipment descriptions per equipment type (#49), so venues converge
+  // on consistent gear names. Fetched across venues (venue_equipment.notes is
+  // world-readable) and ranked by frequency; AutocompleteInput filters as you type.
+  let notesSuggestions: Record<number, string[]> = {};
+
   onMount(async () => {
     // Fetch all users for autocomplete
     const { data: users } = await supabase.from('profile').select('id, nickname');
@@ -86,6 +92,19 @@
     if (initialAdmins && initialAdmins.length > 0) {
       admins = userOptions.filter(u => initialAdmins.includes(u.id));
     }
+    // Build the description-suggestion pool, ranked by frequency per equipment.
+    const { data: notesData } = await supabase.from('venue_equipment').select('equipment_id, notes').not('notes', 'is', null);
+    const counts: Record<number, Record<string, number>> = {};
+    for (const r of notesData ?? []) {
+      const n = (r.notes ?? '').trim();
+      if (!n || r.equipment_id == null) continue;
+      (counts[r.equipment_id] ??= {})[n] = (counts[r.equipment_id][n] ?? 0) + 1;
+    }
+    const out: Record<number, string[]> = {};
+    for (const [eid, m] of Object.entries(counts)) {
+      out[Number(eid)] = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n);
+    }
+    notesSuggestions = out;
   });
 
   function toggleEquipment(row: { selected: boolean; quantity: number | null }) {
@@ -251,8 +270,13 @@
                     aria-label="Aumentar cantidad de {row.name}">+</button>
                 </div>
               </div>
-              <textarea bind:value={row.notes} rows="2" maxlength="200" placeholder="Marca, modelo, tamaño..."
-                class="p-2 border rounded-lg w-full resize-none" aria-label="Descripción de {row.name}"></textarea>
+              <AutocompleteInput
+                bind:value={row.notes}
+                suggestions={notesSuggestions[row.id] ?? []}
+                placeholder="Marca, modelo, tamaño..."
+                maxlength={200}
+                ariaLabel={`Descripción de ${row.name}`}
+              />
             </div>
           {/if}
         </div>

@@ -6,6 +6,8 @@
   export let onInput: (value: string) => void = () => {};
   export let required: boolean = false;
   export let id: string = '';
+  export let maxlength: number | undefined = undefined;
+  export let ariaLabel: string | undefined = undefined;
   
   let isOpen = false;
   let inputRef: HTMLInputElement;
@@ -58,6 +60,8 @@
     on:input={handleInput}
     {required}
     {placeholder}
+    {maxlength}
+    aria-label={ariaLabel}
     class="w-full p-2 border rounded-lg"
     autocomplete="off"
   />
