@@ -83,6 +83,41 @@ export type Database = {
         }
         Relationships: []
       }
+      notification: {
+        Row: {
+          created_at: string
+          id: number
+          payload: Json
+          read_at: string | null
+          recipient: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          payload?: Json
+          read_at?: string | null
+          recipient: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          payload?: Json
+          read_at?: string | null
+          recipient?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_recipient_fkey"
+            columns: ["recipient"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       party: {
         Row: {
           approved_by_venue: boolean

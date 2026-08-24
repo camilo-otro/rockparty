@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { invalidate, goto } from '$app/navigation'
+  import { invalidate, goto, afterNavigate } from '$app/navigation'
   import "../app.css";
   import { scale, fade } from 'svelte/transition';
+  import { Bell } from 'lucide-svelte';
   import logo from '$lib/assets/images/Logo.png';
   import Toasts from '$lib/components/Toasts.svelte';
+  import { unreadCount, refreshUnread } from '$lib/stores/notifications';
   export let data
 
   $: ({ supabase, session } = data)
@@ -36,6 +38,9 @@
     });
   }
 
+  // Keep the bell's unread count fresh as the user moves around.
+  afterNavigate(() => refreshUnread());
+
   onMount(() => {
     const { data } = supabase.auth.onAuthStateChange((event, _session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
@@ -44,6 +49,7 @@
     })
 
     document.addEventListener('mousedown', handleClickOutside);
+    refreshUnread();
     return () => {
       data.subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
@@ -59,8 +65,14 @@
       </a>
     </div>
     {#if session}
-      <div class="relative basis-1/4 flex justify-end items-center gap-4">
-        <img src={session.user?.user_metadata?.avatar_url && session.user.user_metadata.avatar_url.trim() !== '' ? session.user.user_metadata.avatar_url : '/images/avatar-default.svg'} alt="User Avatar" class="w-8 h-8 mx-3 rounded-full cursor-pointer ring-2 ring-yellow ring-offset-2 ring-offset-base-950" on:click={toggleMenu} />
+      <div class="relative basis-1/4 flex justify-end items-center gap-2">
+        <a href="/notifications" class="relative text-cold-light hover:text-white p-1" aria-label="Notificaciones">
+          <Bell size={24} />
+          {#if $unreadCount > 0}
+            <span class="absolute -top-0.5 -right-0.5 bg-warm-base text-white text-[0.65rem] leading-none rounded-full min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center">{$unreadCount > 9 ? '9+' : $unreadCount}</span>
+          {/if}
+        </a>
+        <img src={session.user?.user_metadata?.avatar_url && session.user.user_metadata.avatar_url.trim() !== '' ? session.user.user_metadata.avatar_url : '/images/avatar-default.svg'} alt="User Avatar" class="w-8 h-8 rounded-full cursor-pointer ring-2 ring-yellow ring-offset-2 ring-offset-base-950" on:click={toggleMenu} />
         {#if showMenu}
           <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-base-900 rounded-lg shadow-lg z-10 overflow-hidden" in:scale={{ duration: 200 }}>
             <a href="/parties/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis toques</a>
