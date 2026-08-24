@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { invalidate } from '$app/navigation'
+  import { invalidate, goto } from '$app/navigation'
   import "../app.css";
   import { scale, fade } from 'svelte/transition';
   import logo from '$lib/assets/images/Logo.png';
@@ -14,6 +14,13 @@
 
   function toggleMenu() {
     showMenu = !showMenu;
+  }
+
+  async function signOut() {
+    showMenu = false;
+    await supabase.auth.signOut();
+    // Leave any auth-gated page for the public home on logout.
+    goto('/');
   }
 
   function handleClickOutside(event: MouseEvent) {
@@ -58,7 +65,7 @@
           <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-base-900 rounded-lg shadow-lg z-10 overflow-hidden" in:scale={{ duration: 200 }}>
             <a href="/parties/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis toques</a>
             <a href={`/performers/${session.user.id}`} on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Ver mi perfil</a>
-            <button class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950" on:click={() => { supabase.auth.signOut(); showMenu = false; }}>Cerrar sesión</button>
+            <button class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950" on:click={signOut}>Cerrar sesión</button>
           </div>
         {/if}
       </div>
