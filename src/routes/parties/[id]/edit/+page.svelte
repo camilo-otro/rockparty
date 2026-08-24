@@ -21,21 +21,21 @@ let currentUserId: string | null = null;
 // Lifecycle
 onMount(async () => {
   const id = page.params.id;
-  // Fetch party
-  const { data: partyData, error: partyErr } = await supabase.from('party').select('*').eq('id', Number(id)).single();
-  party = partyData;
-  // Fetch venues
-  const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name');
+  // Resolve the current user FIRST so the permission gate never renders with a
+  // null user (which flashed "No tienes permiso" before the check settled).
+  user.subscribe(u => { currentUserId = u?.id ?? null; })();
+
+  const [{ data: partyData }, { data: venueData, error: venueErr }, { data: adminData }] =
+    await Promise.all([
+      supabase.from('party').select('*').eq('id', Number(id)).single(),
+      supabase.from('venue').select('id, name'),
+      supabase.from('party_admin').select('user_id').eq('party_id', Number(id))
+    ]);
   venues = venueData ?? [];
   if (venueErr) errorVenues = venueErr.message;
-  // Fetch party admins
-  const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', Number(id));
   partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
-  // Get current user id
-  user.subscribe(u => {
-    currentUserId = u?.id ?? null;
-  })();
   loadingVenues = false;
+  party = partyData; // set last so the gate sees user + admins already resolved
 });
 
 // Render
