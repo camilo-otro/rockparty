@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
   import { goto } from '$app/navigation';
-  import { ChevronLeft, Bell, CheckCircle2, XCircle, Clock } from 'lucide-svelte';
+  import { ChevronLeft, Bell, CheckCircle2, XCircle, Clock, Zap, CalendarClock } from 'lucide-svelte';
   import { reportError } from '$lib/stores/toasts';
   import { refreshUnread } from '$lib/stores/notifications';
   import dayjs from 'dayjs';
@@ -38,6 +38,10 @@
         return { icon: XCircle, cls: 'text-warm-base', text: `El local canceló tu toque «${title}».`, reason: p.reason ?? null, href };
       case 'party_pending_venue':
         return { icon: Clock, cls: 'text-yellow', text: `El toque «${title}» espera tu aprobación.`, reason: null, href };
+      case 'party_live':
+        return { icon: Zap, cls: 'text-warm-base', text: `¡El show «${title}» está por empezar!`, reason: null, href };
+      case 'party_reminder':
+        return { icon: CalendarClock, cls: 'text-cold-light', text: `Recordatorio: el toque «${title}» es mañana.`, reason: null, href };
       default:
         return { icon: Bell, cls: 'text-cold-light', text: 'Nueva notificación.', reason: null, href };
     }

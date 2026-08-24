@@ -354,6 +354,13 @@ begin
         union
         select va.user_id from public.venue_admin va where va.venue_id = new.venue
       ) recips;
+    elsif new.status = 'live' then
+      insert into public.notification (recipient, type, payload)
+      select distinct pu.user_id, 'party_live',
+             jsonb_build_object('party_id', new.id, 'party_title', new.title)
+      from public.performance perf
+      join public.performance_user pu on pu.performance_id = perf.id
+      where perf.party = new.id and pu.status = 'approved';
     end if;
   end if;
   return new;
@@ -363,6 +370,34 @@ drop trigger if exists party_status_notify on public.party;
 create trigger party_status_notify
   after update on public.party
   for each row execute function public.notify_party_status();
+
+-- notify_upcoming_toques (#51): day-before reminder for confirmed toques →
+-- organizer + approved performers. Scheduled daily via pg_cron (job
+-- 'daily-toque-reminders'); see migrations/20260825_notification_producers.sql.
+create or replace function public.notify_upcoming_toques()
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.notification (recipient, type, payload)
+  select r.uid, 'party_reminder',
+         jsonb_build_object('party_id', p.id, 'party_title', p.title, 'date', p.date)
+  from public.party p
+  join lateral (
+    select p.created_by as uid where p.created_by is not null
+    union
+    select pu.user_id
+    from public.performance perf
+    join public.performance_user pu on pu.performance_id = perf.id
+    where perf.party = p.id and pu.status = 'approved'
+  ) r on true
+  where p.status = 'confirmed'
+    and p.date = (current_date + 1)
+    and not exists (
+      select 1 from public.notification n
+      where n.recipient = r.uid and n.type = 'party_reminder'
+        and (n.payload ->> 'party_id')::bigint = p.id
+    );
+end; $$;
+revoke execute on function public.notify_upcoming_toques() from public;
 
 -- =============================================================================
 -- ROW LEVEL SECURITY
