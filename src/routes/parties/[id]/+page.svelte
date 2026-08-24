@@ -318,6 +318,37 @@
     }
   }
 
+  // RSVP / attendance (#58). A row = "going"; count is public.
+  let rsvpCount = 0;
+  let iAmGoing = false;
+  let rsvpBusy = false;
+  async function loadRsvp() {
+    if (!party?.id) return;
+    const { count } = await supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', party.id);
+    rsvpCount = count ?? 0;
+    if (currentUserId) {
+      const { data } = await supabase.from('party_rsvp').select('user_id').eq('party_id', party.id).eq('user_id', currentUserId).maybeSingle();
+      iAmGoing = !!data;
+    }
+  }
+  async function toggleRsvp() {
+    if (!currentUserId || !party?.id || rsvpBusy) return;
+    rsvpBusy = true;
+    try {
+      if (iAmGoing) {
+        const { error: e } = await supabase.from('party_rsvp').delete().eq('party_id', party.id).eq('user_id', currentUserId);
+        if (e) { reportError(e); return; }
+        iAmGoing = false; rsvpCount = Math.max(0, rsvpCount - 1);
+      } else {
+        const { error: e } = await supabase.from('party_rsvp').insert({ party_id: party.id, user_id: currentUserId });
+        if (e) { reportError(e); return; }
+        iAmGoing = true; rsvpCount += 1;
+      }
+    } finally {
+      rsvpBusy = false;
+    }
+  }
+
   function closeShareModal() {
     showShareModal = false;
   }
@@ -415,6 +446,7 @@
       const { data: pi } = await supabase.from('profile_instrument').select('instrument_id').eq('profile_id', currentUserId);
       myInstrumentIds = (pi ?? []).map((r: any) => r.instrument_id);
     }
+    await loadRsvp();
     loading = false;
   });
 
@@ -517,6 +549,17 @@
     <div class="text-lg mb-2 text-white">{party.description}</div>
     <div class="mb-2 text-white">{dayjs(party.date).locale('es').format('ddd D [de] MMMM, YYYY')}</div>
     <div class="mb-2 text-cold-light"><MapPin class="inline-block" size={18} /> {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
+    {#if party.status === 'confirmed' || party.status === 'live'}
+      <div class="flex items-center gap-3 mt-2 mb-1">
+        {#if currentUserId}
+          <button on:click={toggleRsvp} disabled={rsvpBusy}
+            class="rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 inline-flex items-center gap-2 {iAmGoing ? 'bg-cold-base text-white' : 'border border-cold-light/50 text-cold-light hover:border-cold-light'}">
+            {#if iAmGoing}<Check size={18} /> Vas a asistir{:else}Voy{/if}
+          </button>
+        {/if}
+        <span class="text-cold-light text-sm">{rsvpCount} {rsvpCount === 1 ? 'asistente' : 'asistentes'}</span>
+      </div>
+    {/if}
     <div class="mt-2 w-full flex items-center">
       <button on:click={handleShare} class="bg-cold-base text-white rounded-lg p-2 px-6 inline-flex items-center gap-2 m-auto">
         Compartir

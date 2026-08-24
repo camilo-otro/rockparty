@@ -229,6 +229,16 @@ create table if not exists public.notification (
 create index if not exists idx_notification_recipient on public.notification (recipient, created_at desc);
 create index if not exists idx_notification_unread     on public.notification (recipient) where read_at is null;
 
+-- party_rsvp — a user marks they're attending a toque (#58). A row = going;
+-- owner-managed, attendance public. See migrations/20260825_party_rsvp.sql.
+create table if not exists public.party_rsvp (
+  party_id   bigint not null references public.party (id) on delete cascade,
+  user_id    uuid   not null references public.profile (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (party_id, user_id)
+);
+create index if not exists idx_party_rsvp_user on public.party_rsvp (user_id);
+
 -- ---- foreign-key covering indexes (advisor fix 2026-08-11) ------------------
 -- venue_admin.venue_id is covered by its composite PK, so it's omitted here.
 create index if not exists idx_party_created_by            on public.party (created_by);
@@ -442,6 +452,7 @@ alter table public.equipment          enable row level security;
 alter table public.equipment_suggestion enable row level security;
 alter table public.venue_equipment    enable row level security;
 alter table public.notification       enable row level security;
+alter table public.party_rsvp         enable row level security;
 
 -- ---- song -------------------------------------------------------------------
 create policy "allow select to all users" on public.song
@@ -708,3 +719,12 @@ create policy "notification update own" on public.notification
   for update to authenticated using (recipient = (select auth.uid()));
 create policy "notification delete own" on public.notification
   for delete to authenticated using (recipient = (select auth.uid()));
+
+-- ---- party_rsvp -------------------------------------------------------------
+-- Attendance is public (counts/lists); users add/remove only their own. #58.
+create policy "allow select to all users" on public.party_rsvp
+  for select to anon, authenticated using (true);
+create policy "rsvp insert self" on public.party_rsvp
+  for insert to authenticated with check (user_id = (select auth.uid()));
+create policy "rsvp delete self" on public.party_rsvp
+  for delete to authenticated using (user_id = (select auth.uid()));

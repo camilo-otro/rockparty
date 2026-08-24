@@ -10,6 +10,8 @@
   // Toques the user plays in (has a signup) but does NOT organize (#29).
   let playParties: any[] = [];
   let signupBadgeByParty: Record<number, { text: string; cls: string }> = {};
+  // Toques the user is attending via RSVP (#58), not organizing.
+  let asistoParties: any[] = [];
   let venues: Record<number, string> = {};
 
   const IN_PROGRESS = ['draft', 'pending_venue'];
@@ -58,7 +60,18 @@
       }
     }
 
-    const venueIds = [...new Set([...parties, ...playParties].map((p) => p.venue).filter(Boolean))];
+    // Toques the user is attending (RSVP), excluding ones they organize.
+    const { data: rsvpRows } = await supabase.from('party_rsvp').select('party_id').eq('user_id', uid);
+    const rsvpIds = [...new Set((rsvpRows ?? []).map((r) => r.party_id))].filter((id) => !organizedIds.has(id));
+    if (rsvpIds.length) {
+      const { data: aData } = await supabase
+        .from('party')
+        .select('id, title, description, date, venue, status')
+        .in('id', rsvpIds);
+      asistoParties = aData ?? [];
+    }
+
+    const venueIds = [...new Set([...parties, ...playParties, ...asistoParties].map((p) => p.venue).filter(Boolean))];
     if (venueIds.length) {
       const { data: vData } = await supabase.from('venue').select('id, name').in('id', venueIds);
       venues = Object.fromEntries((vData ?? []).map((v: any) => [v.id, v.name]));
@@ -76,8 +89,12 @@
   // "Toco" toques: upcoming first, then past (drafts you can't see aren't here).
   $: tocoProximos = playParties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
   $: tocoPasados = playParties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
+  // "Asisto" toques (RSVP): upcoming first, then past.
+  $: asistoProximos = asistoParties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
+  $: asistoPasados = asistoParties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
   $: hasOrganizo = parties.length > 0;
   $: hasToco = playParties.length > 0;
+  $: hasAsisto = asistoParties.length > 0;
 
   function venueName(id: number) {
     return venues[id] ?? 'Sin local';
@@ -97,9 +114,9 @@
       <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
         Debes iniciar sesión para ver tus toques.
       </div>
-    {:else if !hasOrganizo && !hasToco}
+    {:else if !hasOrganizo && !hasToco && !hasAsisto}
       <div class="mx-4 p-6 bg-base-900 text-white rounded-lg text-center flex flex-col gap-3">
-        <span>Aún no organizas ni tocas en ningún toque.</span>
+        <span>Aún no organizas, tocas ni asistes a ningún toque.</span>
         <a href="/parties/create" class="bg-cold-base text-white rounded-lg px-4 py-2 self-center">Organiza un toque</a>
       </div>
     {:else}
@@ -146,6 +163,26 @@
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each tocoPasados as party}
               <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
+            {/each}
+          </ul>
+        {/if}
+      {/if}
+
+      {#if hasAsisto}
+        <h2 class="text-2xl text-cold-light mx-4 mb-3 mt-6 tracking-widest">ASISTO</h2>
+        {#if asistoProximos.length}
+          <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each asistoProximos as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} />
+            {/each}
+          </ul>
+        {/if}
+        {#if asistoPasados.length}
+          <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each asistoPasados as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} />
             {/each}
           </ul>
         {/if}

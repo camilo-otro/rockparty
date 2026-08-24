@@ -214,6 +214,39 @@ export type Database = {
           },
         ]
       }
+      party_rsvp: {
+        Row: {
+          created_at: string
+          party_id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          party_id: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          party_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_rsvp_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_rsvp_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       performance: {
         Row: {
           created_at: string
@@ -625,6 +658,7 @@ export type Database = {
     }
     Functions: {
       can_see_party: { Args: { pid: number }; Returns: boolean }
+      notify_upcoming_toques: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
