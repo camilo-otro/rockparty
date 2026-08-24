@@ -75,7 +75,9 @@
   </div>
 </nav>
 
-<div class="max-w-2xl mx-auto w-full">
+<!-- Bottom clearance so content never sits flush against OS UI (home indicator,
+     gesture bar). Respects the safe-area inset when available, else ~3rem. -->
+<div class="max-w-2xl mx-auto w-full" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 3rem)">
   <slot />
 </div>
 
