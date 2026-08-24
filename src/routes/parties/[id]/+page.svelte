@@ -123,6 +123,25 @@
       }
     });
   }
+  // A venue owner/admin cancelling a CONFIRMED/LIVE toque at their venue (#53).
+  // Distinct reason from an organizer cancel or a pre-approval decline.
+  function venueCancelToque() {
+    openDialog({
+      title: 'Cancelar este toque en tu local',
+      body: 'El toque se cancelará y el organizador verá tu decisión. Su setlist se conserva.',
+      withReason: true,
+      confirmLabel: 'Cancelar toque',
+      run: async (note) => {
+        const { data, error: e } = await supabase.from('party')
+          .update({ status: 'cancelled', cancel_reason: 'venue_cancelled', cancel_note: note })
+          .eq('id', party.id).select('id');
+        if (e) { reportError(e); return; }
+        if (!data || data.length === 0) { toastError('No tienes permiso para cancelar este toque.'); return; }
+        party = { ...party, status: 'cancelled', cancel_reason: 'venue_cancelled', cancel_note: note };
+        toastSuccess('Toque cancelado.');
+      }
+    });
+  }
 
   // Derived helpers
   function getSongTitle(songId: number) {
@@ -413,10 +432,19 @@
       <div class="flex justify-end">
         <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque</button>
       </div>
+    {:else if isVenueAdmin && (party.status === 'confirmed' || party.status === 'live')}
+      <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
+        <p class="text-cold-light text-sm leading-snug">
+          Este toque está <span class="text-white">confirmado en tu local</span>. Como administrador del local puedes cancelarlo si es necesario.
+        </p>
+        <div class="flex justify-end">
+          <button on:click={venueCancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque en el local</button>
+        </div>
+      </div>
     {/if}
-    {#if party.status === 'cancelled' && party.cancel_reason === 'venue_declined'}
+    {#if party.status === 'cancelled' && (party.cancel_reason === 'venue_declined' || party.cancel_reason === 'venue_cancelled')}
       <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-2">
-        <p class="text-white">Este toque fue <span class="text-red-400">rechazado por el local</span>.</p>
+        <p class="text-white">Este toque fue <span class="text-red-400">{party.cancel_reason === 'venue_declined' ? 'rechazado' : 'cancelado'} por el local</span>.</p>
         {#if party.cancel_note}<p class="text-cold-light text-sm">Motivo: {party.cancel_note}</p>{/if}
         <p class="text-cold-light text-sm">El setlist se conserva más abajo. Puedes <a href={`/venues/${party.venue}`} class="text-cold-light underline">contactar al local</a> o crear un nuevo toque.</p>
       </div>
