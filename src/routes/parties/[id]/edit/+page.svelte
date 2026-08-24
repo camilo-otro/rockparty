@@ -60,6 +60,7 @@ onMount(async () => {
     initialVenue={party.venue}
     initialAdmins={partyAdmins}
     initialPerformerApproval={party.performer_approval}
+    excludePartyId={party.id}
     submitLabel="Guardar"
     submittingLabel="Guardando..."
     submitting={submitting}

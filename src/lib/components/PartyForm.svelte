@@ -18,8 +18,19 @@
   export let initialPerformerApproval: string = 'auto';
   export let submitLabel: string = 'Crear Toque';
   export let submittingLabel: string = 'Creando...';
+  // When editing, the toque being edited shouldn't flag itself as a conflict.
+  export let excludePartyId: number | null = null;
 
   const dispatch = createEventDispatcher();
+
+  // Scheduled toques used to warn about venue/date conflicts (#54). Only counts
+  // toques that occupy the venue (confirmed/pending/live); RLS limits these to
+  // public ones plus the viewer's own / their venues'.
+  let scheduled: { id: number; venue: number | null; date: string | null }[] = [];
+  $: busyVenues = date
+    ? new Set(scheduled.filter((s) => s.date === date && s.id !== excludePartyId && s.venue != null).map((s) => s.venue as number))
+    : new Set<number>();
+  $: selectedVenueBusy = !!date && selectedVenue !== '' && busyVenues.has(Number(selectedVenue));
 
   // How musicians get onto a song (#29).
   const approvalModes = [
@@ -51,6 +62,13 @@
     if (initialAdmins && initialAdmins.length > 0) {
       admins = userOptions.filter(u => initialAdmins.includes(u.id));
     }
+    // Upcoming toques that occupy a venue, for the conflict warning (#54).
+    const { data: sched } = await supabase
+      .from('party')
+      .select('id, venue, date')
+      .in('status', ['confirmed', 'pending_venue', 'live'])
+      .gte('date', todayStr);
+    scheduled = sched ?? [];
   });
 
   function handleAdminInput(e: Event) {
@@ -108,12 +126,17 @@
     {:else if errorVenues}
       <div class="text-red-600">Error: {errorVenues}</div>
     {:else}
-      <select id="venue" bind:value={selectedVenue} required class="p-2 mb-4 border rounded-lg">
+      <select id="venue" bind:value={selectedVenue} required class="p-2 mb-1 border rounded-lg">
         <option value="" disabled selected>Selecciona un venue</option>
         {#each venues as venue}
-          <option value={venue.id}>{venue.name}</option>
+          <option value={venue.id}>{venue.name}{busyVenues.has(venue.id) ? ' · ocupado ese día' : ''}</option>
         {/each}
       </select>
+      {#if selectedVenueBusy}
+        <span class="text-sm text-yellow mb-4">Este local ya tiene un toque ese día. Puedes continuar; el local podrá confirmarlo o rechazarlo.</span>
+      {:else}
+        <div class="mb-4"></div>
+      {/if}
     {/if}
     <label for="performer_approval" class="mb-1 mt-4">¿Cómo se suman los músicos?</label>
     <select id="performer_approval" bind:value={performerApproval} class="p-2 mb-1 border rounded-lg">
