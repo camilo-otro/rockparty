@@ -3,13 +3,33 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft, Share2, Trash2, Check, X } from 'lucide-svelte';
+  import { ArrowLeft, Share2, Trash2, Check, X, ExternalLink } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
   import { reportError, toastSuccess, toastInfo, toastError } from '$lib/stores/toasts';
 
   let performance: any = null;
   let songTitle: string = '';
+  let songArtist: string = '';
+  let songSpotify: string | null = null; // the song's Spotify link (all songs have one)
+
+  // Deterministic "learn this song" search links (#66) — free, no API/scraping.
+  // YouTube uses the ENGLISH instrument term (surfaces far more tutorials).
+  const TUTORIAL_INSTRUMENTS = [
+    { es: 'Voz', en: 'vocals' },
+    { es: 'Guitarra líder', en: 'lead guitar' },
+    { es: 'Guitarra rítmica', en: 'rhythm guitar' },
+    { es: 'Bajo', en: 'bass' },
+    { es: 'Teclado', en: 'keyboard' },
+    { es: 'Batería', en: 'drums' }
+  ];
+  $: songQuery = `${songArtist} ${songTitle}`.trim();
+  $: ugLink = songQuery ? `https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(songQuery)}` : null;
+  // Reference songQuery directly so these recompute when the song data loads.
+  $: tutorials = TUTORIAL_INSTRUMENTS.map((t) => ({
+    es: t.es,
+    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${songQuery} ${t.en} tutorial`)}`
+  }));
   let loading = true;
   let error: string | null = null;
   let suggestedBy: any = null;
@@ -85,8 +105,10 @@
       performance = data;
       // Fetch song title
       if (performance?.song) {
-        const { data: songData } = await supabase.from('song').select('title').eq('id', performance.song).single();
+        const { data: songData } = await supabase.from('song').select('title, artist, ref_link').eq('id', performance.song).single();
         songTitle = songData?.title ?? '';
+        songArtist = songData?.artist ?? '';
+        songSpotify = songData?.ref_link ?? null;
       }
       // Fetch the parent party's approval mode + admins (drives request framing).
       if (performance?.party) {
@@ -230,8 +252,27 @@
         <div class="mb-2 text-cold-light">Tonalidad: {performance.key}</div>
       {/if}
       {#if performance.ref_link}
-        <a href={performance.ref_link} target="_blank" class="text-yellow underline">Ver referencia</a>
+        <a href={performance.ref_link} target="_blank" rel="noopener" class="text-yellow underline">Ver referencia</a>
       {/if}
+
+      <div class="mt-4 bg-base-950 rounded-lg p-3">
+        <div class="text-xs text-cold-light uppercase tracking-wide mb-2">Aprender esta canción</div>
+        <div class="flex flex-wrap gap-2 mb-3">
+          {#if songSpotify}
+            <a href={songSpotify} target="_blank" rel="noopener" class="text-sm text-white hover:text-cold-light inline-flex items-center gap-1 border border-cold-light/30 rounded-lg px-3 py-1">Escuchar en Spotify <ExternalLink size={14} /></a>
+          {/if}
+          {#if ugLink}
+            <a href={ugLink} target="_blank" rel="noopener" class="text-sm text-white hover:text-cold-light inline-flex items-center gap-1 border border-cold-light/30 rounded-lg px-3 py-1">Acordes (Ultimate Guitar) <ExternalLink size={14} /></a>
+          {/if}
+        </div>
+        <div class="text-xs text-cold-light mb-1">Tutoriales en YouTube por instrumento:</div>
+        <div class="flex flex-wrap gap-2">
+          {#each tutorials as t}
+            <a href={t.url} target="_blank" rel="noopener" class="text-xs text-cold-light hover:text-white border border-cold-light/30 rounded-full px-3 py-1">{t.es}</a>
+          {/each}
+        </div>
+      </div>
+
       <h3 class="text-2xl text-white font-medium mt-6 mb-2">Participantes</h3>
       <ul class="mb-4">
         {#each participants as u}
