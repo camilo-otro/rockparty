@@ -353,6 +353,69 @@
     showShareModal = false;
   }
 
+  // Load / reload just the setlist (songs + signups). Extracted so Realtime (#63)
+  // can refresh it live without re-fetching the whole party. Never touches
+  // reorderMode / expandedApprovals, so an in-progress interaction isn't clobbered.
+  let perfIdSet = new Set<number>(); // this party's performance ids, for filtering
+  async function loadSetlist(pid: number) {
+    const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', pid);
+    if (perfErr) { errorPerformances = perfErr.message; return; }
+    const perfs = (perfData ?? []).sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+    perfs.forEach((perf, index) => { perf.order = index; });
+    const songIds = [...new Set(perfs.map((p) => p.song).filter((x): x is number => x != null))];
+    const userIds = [...new Set(perfs.map((p) => p.suggested_by).filter((x): x is string => x != null))];
+    if (party?.created_by) userIds.push(party.created_by);
+    const { data: songData } = songIds.length ? await supabase.from('song').select('id, title, artist').in('id', songIds) : { data: [] as any[] };
+    const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
+    const performerUserIds = [...new Set((perfUsers ?? []).map((p) => p.user_id))];
+    const allUserIds = [...new Set([...userIds, ...performerUserIds])];
+    const { data: userData } = allUserIds.length ? await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds) : { data: [] as any[] };
+    const { data: instrumentData } = await supabase.from('instrument').select('id, name');
+    instrumentsById = Object.fromEntries((instrumentData ?? []).map((i: any) => [i.id, i.name]));
+    songs = songData ?? [];
+    users = userData ?? [];
+    usersLoaded = true;
+
+    // "MÚSICOS" lineup counts only APPROVED signups.
+    const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
+    for (const perfUser of perfUsers ?? []) {
+      if (perfUser.status !== 'approved') continue;
+      if (!performerMap[perfUser.user_id]) performerMap[perfUser.user_id] = { user_id: perfUser.user_id, instruments: [], songCount: 0 };
+      const instName = instrumentsById[perfUser.instrument_id];
+      if (instName && !performerMap[perfUser.user_id].instruments.includes(instName)) performerMap[perfUser.user_id].instruments.push(instName);
+      performerMap[perfUser.user_id].songCount += 1;
+    }
+    partyPerformers = Object.values(performerMap).sort((a, b) => b.songCount - a.songCount);
+
+    performances = perfs.map((perf) => {
+      const rows = (perfUsers ?? []).filter((u) => u.performance_id === perf.id);
+      const performers = rows.filter((r) => r.status === 'approved').map((pm) => ({ instrument_id: pm.instrument_id, user_id: pm.user_id, user_avatar: getUserAvatar(pm.user_id) }));
+      const pending = rows.filter((r) => r.status === 'pending').map((pm) => ({ instrument_id: pm.instrument_id, user_id: pm.user_id }));
+      return { ...perf, performers, pending };
+    });
+    perfIdSet = new Set(performances.map((p) => p.id));
+  }
+
+  // Live setlist (#63): another user's signup/approval/song-change refreshes the
+  // list. Defer while the viewer is mid-reorder or has a dialog open, then flush.
+  let setlistChannel: any = null;
+  let pendingReload = false;
+  function scheduleReload() {
+    if (reorderMode || confirmDialog) { pendingReload = true; return; }
+    loadSetlist(Number(page.params.id));
+  }
+  $: if (pendingReload && !reorderMode && !confirmDialog) { pendingReload = false; loadSetlist(Number(page.params.id)); }
+  function subscribeSetlist(pid: number) {
+    setlistChannel = supabase
+      .channel(`setlist-${pid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'performance', filter: `party=eq.${pid}` }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'performance_user' }, (payload: any) => {
+        const rid = payload.new?.performance_id ?? payload.old?.performance_id;
+        if (rid && perfIdSet.has(rid)) scheduleReload();
+      })
+      .subscribe();
+  }
+
   // Lifecycle
   onMount(async () => {
     unsubscribeUser = user.subscribe(u => {
@@ -377,68 +440,10 @@
         const { data: vAdminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', party.venue);
         venueAdmins = vAdminData ? vAdminData.map(a => a.user_id) : [];
       }
-      // Fetch performances for this party
-      const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', Number(id));
-      if (perfErr) {
-        errorPerformances = perfErr.message;
-      } else {
-        // Sort by stored order, unordered (null) songs last; then normalize to a
-        // clean 0..n locally so display + reorder start sane even if stored orders
-        // drifted (the next move persists a clean 0..n for everyone).
-        const performanceList = (perfData ?? []).sort(
-          (a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
-        );
-        performanceList.forEach((perf, index) => { perf.order = index; });
-        performances = performanceList;
-        // Fetch all songs and users referenced in performances
-        const songIds = [...new Set(performances.map(p => p.song))];
-        const userIds = [...new Set(performances.map(p => p.suggested_by))];
-        userIds.push(party.created_by);
-        const { data: songData } = await supabase.from('song').select('id, title, artist').in('id', songIds);
-        
-        // Fetch performers and their instruments first (status: RLS returns
-        // approved to everyone, and pending/declined to approvers — #29).
-        const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status').in('performance_id', performances.map(p => p.id));
-        
-        // Add all performer user IDs to the userIds array
-        const performerUserIds = [...new Set((perfUsers ?? []).map(p => p.user_id))];
-        const allUserIds = [...new Set([...userIds, ...performerUserIds])];
-        
-        const { data: userData } = await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds);
-        const { data: instrumentData } = await supabase.from('instrument').select('id, name');
-        instrumentsById = Object.fromEntries((instrumentData ?? []).map((i: any) => [i.id, i.name]));
-        songs = songData ?? [];
-        users = userData ?? [];
-        usersLoaded = true;
-
-        // The "MÚSICOS" lineup counts only APPROVED signups.
-        const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
-        for (const perfUser of perfUsers ?? []) {
-          if (perfUser.status !== 'approved') continue;
-          if (!performerMap[perfUser.user_id]) {
-            performerMap[perfUser.user_id] = { user_id: perfUser.user_id, instruments: [], songCount: 0 };
-          }
-          const instName = instrumentsById[perfUser.instrument_id];
-          if (instName && !performerMap[perfUser.user_id].instruments.includes(instName)) {
-            performerMap[perfUser.user_id].instruments.push(instName);
-          }
-          performerMap[perfUser.user_id].songCount += 1;
-        }
-        partyPerformers = Object.values(performerMap).sort((a, b) => b.songCount - a.songCount);
-
-        // Per song: approved performers (shown) + pending applicants (for approvers).
-        performances = performances.map(perf => {
-          const rows = (perfUsers ?? []).filter(u => u.performance_id === perf.id);
-          const performers = rows.filter(r => r.status === 'approved').map(pm => ({
-            instrument_id: pm.instrument_id, user_id: pm.user_id, user_avatar: getUserAvatar(pm.user_id)
-          }));
-          const pending = rows.filter(r => r.status === 'pending').map(pm => ({
-            instrument_id: pm.instrument_id, user_id: pm.user_id
-          }));
-          return { ...perf, performers, pending };
-        });
-      }
+      // Load the setlist (extracted into loadSetlist so Realtime can reload it).
+      await loadSetlist(Number(id));
       loadingPerformances = false;
+      subscribeSetlist(Number(id));
     }
     // The viewer's own instruments (#32) — powers the personalized gap alert +
     // the "you could play here" highlight on open slots.
@@ -452,6 +457,7 @@
 
   onDestroy(() => {
     if (unsubscribeUser) unsubscribeUser();
+    if (setlistChannel) supabase.removeChannel(setlistChannel);
   });
 </script>
 
