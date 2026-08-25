@@ -6,7 +6,7 @@
   import { Bell } from 'lucide-svelte';
   import logo from '$lib/assets/images/Logo.png';
   import Toasts from '$lib/components/Toasts.svelte';
-  import { unreadCount, refreshUnread } from '$lib/stores/notifications';
+  import { unreadCount, refreshUnread, subscribeUnread, unsubscribeUnread } from '$lib/stores/notifications';
   export let data
 
   $: ({ supabase, session } = data)
@@ -41,18 +41,30 @@
   // Keep the bell's unread count fresh as the user moves around.
   afterNavigate(() => refreshUnread());
 
+  // Re-count the bell when the tab regains focus (#63) — cheap catch-up for
+  // anything that landed while the tab was hidden.
+  function onVisible() {
+    if (document.visibilityState === 'visible') refreshUnread();
+  }
+
   onMount(() => {
     const { data } = supabase.auth.onAuthStateChange((event, _session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         invalidate('supabase:auth')
+        if (event === 'SIGNED_IN') { refreshUnread(); subscribeUnread(); }
+        else unsubscribeUnread();
       }
     })
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('visibilitychange', onVisible);
     refreshUnread();
+    subscribeUnread();
     return () => {
       data.subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('visibilitychange', onVisible);
+      unsubscribeUnread();
     }
   })
 </script>
