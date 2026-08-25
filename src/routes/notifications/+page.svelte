@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
   import { goto } from '$app/navigation';
-  import { ChevronLeft, Bell, CheckCircle2, XCircle, Clock, Zap, CalendarClock } from 'lucide-svelte';
+  import { ChevronLeft, Bell, CheckCircle2, XCircle, Clock, Zap, CalendarClock, UserPlus } from 'lucide-svelte';
   import { reportError } from '$lib/stores/toasts';
   import { refreshUnread } from '$lib/stores/notifications';
   import dayjs from 'dayjs';
@@ -28,7 +28,9 @@
   function describe(n: any): { icon: any; cls: string; text: string; reason: string | null; href: string | null } {
     const p = (n.payload ?? {}) as any;
     const title = p.party_title || 'un toque';
-    const href = p.party_id ? `/parties/${p.party_id}` : null;
+    const song = p.song_title || 'una canción';
+    // Signup notifications point at the song; party ones at the toque.
+    const href = p.performance_id ? `/performance/${p.performance_id}` : (p.party_id ? `/parties/${p.party_id}` : null);
     switch (n.type) {
       case 'party_approved':
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Tu toque «${title}» fue aprobado por el local.`, reason: null, href };
@@ -42,6 +44,12 @@
         return { icon: Zap, cls: 'text-warm-base', text: `¡El show «${title}» está por empezar!`, reason: null, href };
       case 'party_reminder':
         return { icon: CalendarClock, cls: 'text-cold-light', text: `Recordatorio: el toque «${title}» es mañana.`, reason: null, href };
+      case 'signup_requested':
+        return { icon: UserPlus, cls: 'text-cold-light', text: `Alguien quiere tocar «${song}» en «${title}».`, reason: null, href };
+      case 'signup_approved':
+        return { icon: CheckCircle2, cls: 'text-green-500', text: `Te aprobaron para tocar «${song}» en «${title}».`, reason: null, href };
+      case 'signup_declined':
+        return { icon: XCircle, cls: 'text-warm-base', text: `No fuiste elegido para «${song}» en «${title}».`, reason: null, href };
       default:
         return { icon: Bell, cls: 'text-cold-light', text: 'Nueva notificación.', reason: null, href };
     }
