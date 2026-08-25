@@ -24,8 +24,38 @@ sessions / gigs among musicians. Spanish-language UI. Core entities:
   Security relies entirely on Supabase Row Level Security (RLS) policies.
 - **Auth:** Google OAuth via Supabase Auth
 - **Drag-and-drop:** SortableJS
-- **Deployment:** Netlify (`netlify.toml` — `pnpm run build`, publish `build/`)
+- **Deployment:** Netlify (`netlify.toml` — `pnpm run build`, publish `build/`),
+  live at **https://rockthehouse.app** — see **Production & infrastructure** below
 - **Package manager:** pnpm
+
+## Production & infrastructure
+
+The "where it runs" reference. The Supabase and deploy-workflow sections below
+carry the deeper detail; this is the at-a-glance map.
+
+- **Live site:** **https://rockthehouse.app** — custom domain served by Netlify.
+  Production is the `main` branch; every push to `main` triggers a Netlify build
+  (`pnpm run build` → publish `build/`). `dev` never builds (test locally).
+- **Host:** Netlify. Runtime env vars (`PUBLIC_SUPABASE_URL`,
+  `PUBLIC_SUPABASE_ANON_KEY`) are set in the Netlify UI, separate from local
+  `.env`.
+- **DNS / registrar:** `rockthehouse.app` — TODO: record where the domain is
+  registered and whether DNS is Netlify-managed or external.
+- **Database / Auth / Realtime:** Supabase project **RockParty**
+  (ref `ohuhilcqluniqnkxiqhr`, API `https://ohuhilcqluniqnkxiqhr.supabase.co`).
+- **Auth:** Google OAuth via Supabase. The Supabase Auth **Site URL** and the
+  Google OAuth **authorized redirect URIs** must include
+  `https://rockthehouse.app` (plus `http://localhost:5173` for local dev).
+  Re-check these after any Supabase project restore.
+- **Scheduled jobs:** `pg_cron` (installed) runs the daily notification jobs —
+  e.g. the day-before toque reminder (#35 / #57). Definitions live in
+  `supabase/migrations/`.
+- **Realtime:** the `supabase_realtime` publication includes `notification`,
+  `performance`, and `performance_user` — drives the live bell + setlist (#63).
+  RLS still applies, so subscribers only receive rows they can `SELECT`.
+- **Search:** `pg_trgm` (installed) backs song/toque search (#26).
+- **Unlinked pages:** `static/roadmap.html` → https://rockthehouse.app/roadmap.html
+  (product roadmap for the design collaborator; `noindex`, not in any nav).
 
 ## Constraints & principles
 
@@ -68,7 +98,8 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
 
 ## Supabase setup
 
-- Project name: **RockParty**
+- Project name: **RockParty** (ref `ohuhilcqluniqnkxiqhr`; API URL
+  `https://ohuhilcqluniqnkxiqhr.supabase.co`)
 - Was **paused** (Supabase free-tier auto-pause after 7 days inactivity) as
   of Aug 2026. Restorable from dashboard until **16 Apr 2027**. If you're
   reading this and the app can't connect to the DB, check
@@ -94,9 +125,9 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
 - **Admin actions ARE enforced by RLS** (not just UI-hidden): `venue`/`party`
   UPDATE policies check `created_by` or membership in `venue_admin`/`party_admin`.
   Caveat: `performance` UPDATE is open to any authenticated user (`using true`).
-- After any Supabase project restore/recreation, also re-check: Google OAuth
-  redirect URLs in Supabase Auth settings, and Netlify's environment
-  variables (they're separate from local `.env`).
+- After any Supabase project restore/recreation, also re-check: the Auth **Site
+  URL** and Google OAuth redirect URIs (must include `https://rockthehouse.app`),
+  and Netlify's environment variables (they're separate from local `.env`).
 
 ## Commands
 

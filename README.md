@@ -1,38 +1,66 @@
-# sv
+# Rock the House
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+An app for organizing jam sessions — _toques_ — among musicians: line up a
+venue, build the setlist together, and see who's playing, running the show, or
+coming to watch. Spanish-language UI, mobile-first, dark theme.
 
-## Creating a project
+**Live:** https://rockthehouse.app
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Stack
 
-```bash
-# create a new project in the current directory
-npx sv create
+- **SvelteKit 2 / Svelte 5** + **Tailwind CSS** (custom dark theme)
+- **Supabase** (Postgres + Auth + Storage + Realtime), accessed **client-side
+  only** — no server routes. Security relies entirely on Row Level Security
+  (RLS) policies.
+- **Auth:** Google OAuth via Supabase Auth
+- **Hosting:** Netlify (production = the `main` branch)
 
-# create a new project in my-app
-npx sv create my-app
-```
+## Local development
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+Requires [pnpm](https://pnpm.io/).
 
 ```bash
-npm run build
+pnpm install
+pnpm run dev          # local dev server at http://localhost:5173
 ```
 
-You can preview the production build with `npm run preview`.
+Copy `.env.example` to `.env` and fill in the Supabase credentials — both
+**must** be prefixed `PUBLIC_` or SvelteKit won't expose them client-side:
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```
+PUBLIC_SUPABASE_URL=...
+PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+### Other commands
+
+```bash
+pnpm run build        # production build
+pnpm run preview      # preview the production build
+pnpm run check        # svelte-check + type checking
+pnpm run lint         # prettier --check + eslint
+pnpm run format       # prettier --write
+```
+
+## Deploy
+
+Two-branch model: **`main` = production, `dev` = work-in-progress.** Do all work
+on `dev`; deploying is a deliberate fast-forward merge into `main`, which is the
+only thing Netlify builds:
+
+```bash
+git checkout main && git merge --ff-only dev && git push && git checkout dev
+```
+
+Keep `main` always-deployable — only merge when `pnpm run check` is clean and the
+app runs.
+
+## More
+
+- **Project context & conventions:** [`CLAUDE.md`](CLAUDE.md) — stack, design
+  system, Supabase/RLS setup, infrastructure, and the branching workflow.
+- **Roadmap & backlog:** [GitHub Issues](https://github.com/camilo-otro/rockparty/issues),
+  organized into per-phase milestones. A visual snapshot lives at
+  https://rockthehouse.app/roadmap.html.
+- **Database schema:** [`supabase/schema.sql`](supabase/schema.sql) is
+  authoritative (types, keys, FKs, indexes, RLS policies).
