@@ -30,6 +30,7 @@
   let currentUserId: string | null = null;
   let unsubscribeUser: () => void;
   let reorderMode = false;
+  let setlistView: 'orden' | 'faltan' | 'para-ti' = 'orden'; // ephemeral view (#60)
   let justMovedId: number | null = null;
   let instrumentsById: Record<number, string> = {};
   let expandedApprovals = new Set<number>();
@@ -56,6 +57,17 @@
   }
   $: songsWithGaps = allInstrumentIds.length ? performances.filter((p) => openInstrumentIds(p).length > 0).length : 0;
   $: songsForMe = myInstrumentIds.length ? performances.filter((p) => openInstrumentIds(p).some((id) => myInstrumentIds.includes(id))).length : 0;
+
+  // Context-sort views (#60) — a non-destructive re-presentation of the setlist;
+  // the stored `order` (running order) is never touched. Reorder always uses the
+  // canonical order.
+  $: displayed = reorderMode
+    ? performances
+    : setlistView === 'faltan'
+      ? [...performances].sort((a, b) => openInstrumentIds(b).length - openInstrumentIds(a).length)
+      : setlistView === 'para-ti'
+        ? performances.filter((p) => openInstrumentIds(p).some((id) => myInstrumentIds.includes(id)))
+        : performances;
 
   async function setStatus(next: PartyStatus, reason: string | null = null): Promise<boolean> {
     if (!party) return false;
@@ -575,11 +587,20 @@
     <div class="flex items-center justify-between mt-4 mb-2">
       <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
       {#if canAdmin && performances.length > 1}
-        <button on:click={() => reorderMode = !reorderMode} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
+        <button on:click={() => { reorderMode = !reorderMode; if (reorderMode) setlistView = 'orden'; }} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
           {reorderMode ? 'Listo' : 'Reordenar'}
         </button>
       {/if}
     </div>
+    {#if !reorderMode && !loadingPerformances && performances.length > 1}
+      <div class="flex flex-wrap gap-2 mb-2">
+        <button on:click={() => setlistView = 'orden'} class="text-xs rounded-full px-3 py-1 transition {setlistView === 'orden' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">Orden</button>
+        <button on:click={() => setlistView = 'faltan'} class="text-xs rounded-full px-3 py-1 transition {setlistView === 'faltan' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">Faltan primero</button>
+        {#if myInstrumentIds.length}
+          <button on:click={() => setlistView = 'para-ti'} class="text-xs rounded-full px-3 py-1 transition {setlistView === 'para-ti' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">Para ti</button>
+        {/if}
+      </div>
+    {/if}
     {#if !reorderMode && !loadingPerformances && songsWithGaps > 0}
       <div class="flex items-center gap-3 bg-base-900 rounded-lg px-4 py-3 mb-2">
         <AlertTriangle class="text-yellow shrink-0" size={20} />
@@ -601,7 +622,10 @@
         <div class="text-white">No hay canciones en el Setlist.</div>
       {:else}
         <ul class="grid grid-cols-1 space-y-[1px]">
-          {#each performances as perf, index (perf.id)}
+          {#if displayed.length === 0}
+            <li class="bg-base-900 px-4 py-3 text-cold-light text-sm">Ninguna canción tiene un cupo en lo que tocas.</li>
+          {/if}
+          {#each displayed as perf, index (perf.id)}
             <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
               {#if reorderMode}
                 <div class="flex items-center gap-2">
@@ -619,7 +643,7 @@
               {:else}
                 <a href={`/performance/${perf.id}`} class="block">
                   <div class="flex items-center gap-2">
-                    <span class="text-gray-400 text-3xl font-medium mr-2">{index + 1}</span>
+                    <span class="text-gray-400 text-3xl font-medium mr-2">{(perf.order ?? index) + 1}</span>
                     <div class="flex-1">
                       <PerformanceListItem
                         title={getSongTitle(perf.song)}
