@@ -17,6 +17,8 @@
   let managedVenueIds: number[] = [];
   let pendingApprovals: any[] = [];
   let venueUpcoming: any[] = [];
+  // #36: upcoming toques that need an instrument you play (and you're not in).
+  let needsYou: { party: any; needed: string[] }[] = [];
   let hasParticipated = false;
   let authChecked = false;
 
@@ -67,6 +69,45 @@
           .from('party').select('id, title, date, venue, status')
           .in('status', ['confirmed', 'live']).in('venue', managedVenueIds).gte('date', todayStr).order('date', { ascending: true });
         venueUpcoming = vu ?? [];
+      }
+
+      // #36: match the user's instruments against open slots in upcoming toques.
+      const { data: myInstr } = await supabase.from('profile_instrument').select('instrument_id').eq('profile_id', currentUserId);
+      const myInstrumentIds = (myInstr ?? []).map((r) => r.instrument_id);
+      if (myInstrumentIds.length && upcomingParties.length) {
+        const upIds = upcomingParties.map((p) => p.id);
+        const { data: perfRows } = await supabase.from('performance').select('id, party').in('party', upIds);
+        const perfIds = (perfRows ?? []).map((p) => p.id);
+        const { data: appr } = perfIds.length
+          ? await supabase.from('performance_user').select('performance_id, instrument_id, user_id').eq('status', 'approved').in('performance_id', perfIds)
+          : { data: [] as any[] };
+        const { data: instrData } = await supabase.from('instrument').select('id, name');
+        const instrName = new Map((instrData ?? []).map((i: any) => [i.id, i.name]));
+        const allInstrIds = (instrData ?? []).map((i: any) => i.id);
+
+        const filledByPerf: Record<number, Set<number>> = {};
+        const myApprovedParties = new Set<number>();
+        const perfsByParty: Record<number, number[]> = {};
+        for (const pf of perfRows ?? []) if (pf.party != null) (perfsByParty[pf.party] ??= []).push(pf.id);
+        for (const a of appr ?? []) {
+          (filledByPerf[a.performance_id] ??= new Set()).add(a.instrument_id);
+          if (a.user_id === currentUserId) {
+            const pf = (perfRows ?? []).find((p) => p.id === a.performance_id);
+            if (pf?.party != null) myApprovedParties.add(pf.party);
+          }
+        }
+        needsYou = upcomingParties
+          .filter((p) => !myApprovedParties.has(p.id))
+          .map((p) => {
+            const open = new Set<number>();
+            for (const pid of perfsByParty[p.id] ?? []) {
+              const filled = filledByPerf[pid] ?? new Set<number>();
+              for (const iid of allInstrIds) if (!filled.has(iid)) open.add(iid);
+            }
+            const needed = myInstrumentIds.filter((iid) => open.has(iid)).map((iid) => instrName.get(iid)).filter(Boolean) as string[];
+            return { party: p, needed };
+          })
+          .filter((x) => x.needed.length > 0);
       }
 
       // Has the user participated in any way? (drives the generic hero.)
@@ -120,6 +161,20 @@
         <ul class="p-0 space-y-[1px]">
           {#each venueUpcoming as party}
             <PartyListItem {party} venueName={getVenueName(party.venue)} showStatus />
+          {/each}
+        </ul>
+      </div>
+    </section>
+  {/if}
+
+  {#if needsYou.length}
+    <section>
+      <h2 class="text-3xl text-white m-4 mb-1">TE NECESITAN</h2>
+      <p class="text-cold-light text-sm mx-4 mb-4">Toques con un cupo abierto en lo que tocas.</p>
+      <div class="m-4 mt-0 rounded-lg overflow-clip">
+        <ul class="p-0 space-y-[1px]">
+          {#each needsYou as m}
+            <PartyListItem party={m.party} venueName={getVenueName(m.party.venue)} noteBadge={{ text: m.needed.join(' · '), cls: 'bg-cold-base text-white' }} />
           {/each}
         </ul>
       </div>
