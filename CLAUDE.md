@@ -50,6 +50,11 @@ carry the deeper detail; this is the at-a-glance map.
 - **Scheduled jobs:** `pg_cron` (installed) runs the daily notification jobs —
   e.g. the day-before toque reminder (#35 / #57). Definitions live in
   `supabase/migrations/`.
+- **Keep-alive:** `.github/workflows/supabase-keepalive.yml` — a daily GitHub
+  Action pings the REST API (an *external* request; internal pg_cron doesn't
+  count) to stop the 7-day free-tier auto-pause (#7). Needs the repo secret
+  `SUPABASE_ANON_KEY`. GitHub disables it after ~60 days of no repo activity —
+  use an external monitor (UptimeRobot / cron-job.org) for long idle stretches.
 - **Realtime:** the `supabase_realtime` publication includes `notification`,
   `performance`, and `performance_user` — drives the live bell + setlist (#63).
   RLS still applies, so subscribers only receive rows they can `SELECT`.

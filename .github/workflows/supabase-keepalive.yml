@@ -1,0 +1,47 @@
+name: Supabase keep-alive
+
+# Prevents the Supabase free-tier project from auto-pausing after 7 days of
+# inactivity. Supabase measures activity by EXTERNAL requests to the project, so
+# an internal pg_cron job does not reliably count — this fires a real REST read
+# from outside (GitHub's runners) against a public lookup table (`instrument`,
+# which has an anon SELECT policy), waking/touching Postgres.
+#
+# Requires ONE repo secret: SUPABASE_ANON_KEY — the project's anon/public key
+# (the same value the app ships to browsers; kept as a secret only to avoid
+# committing it to a public repo, not because it's sensitive). The API URL below
+# is public, so it's hardcoded — update it if the Supabase project is ever
+# recreated with a new ref.
+#
+# CAVEAT: GitHub disables scheduled workflows on a repo after ~60 days with no
+# repository activity. If the project is mothballed (no pushes) for 60+ days this
+# stops firing, and Supabase pauses ~7 days later. For long idle stretches, point
+# an external monitor (e.g. UptimeRobot or cron-job.org, both free) at the same
+# URL instead — those keep running regardless of repo activity.
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily ~06:17 UTC — 7 chances inside the 7-day window
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    # Only the canonical repo has the secret and the project — never run on forks.
+    if: github.repository == 'camilo-otro/rockparty'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read a public lookup row (keeps Postgres active)
+        env:
+          SUPABASE_URL: https://ohuhilcqluniqnkxiqhr.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_ANON_KEY secret is not set. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          echo "Pinging Supabase at $(date -u) ..."
+          curl --fail --silent --show-error \
+            "$SUPABASE_URL/rest/v1/instrument?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -o /dev/null -w "HTTP %{http_code}\n"
+          echo "Keep-alive ping succeeded."
