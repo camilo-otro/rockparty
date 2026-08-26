@@ -10,7 +10,7 @@
     import { supabase } from '$lib/supabaseClient';
     import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
-    import { sanitizeString } from '$lib/sanitize';
+    import { normalizeText } from '$lib/sanitize';
     let submitting = false;
     let title = '';
     let artist = '';
@@ -45,8 +45,8 @@
             return;
         }
         // Sanitize inputs
-        const safeTitle = sanitizeString(title);
-        const safeArtist = sanitizeString(artist);
+        const safeTitle = normalizeText(title, 200);
+        const safeArtist = normalizeText(artist, 200);
         submitting = true;
 
         try {

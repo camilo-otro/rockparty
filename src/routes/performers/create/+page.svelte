@@ -4,7 +4,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
-    import { sanitizeString } from '$lib/sanitize';
+    import { normalizeText } from '$lib/sanitize';
     import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import PerformerForm from '$lib/components/PerformerForm.svelte';
 
@@ -37,39 +37,6 @@
       if (unsubscribeUser) unsubscribeUser();
     });
 
-    async function handleSubmit() {
-        if (!nickname || !authId || !email) {
-            toastError('Todos los campos son obligatorios.');
-            return;
-        }
-        // Sanitize inputs
-        const safeNickname = sanitizeString(nickname);
-        const safeAuthId = sanitizeString(authId);
-        const safeEmail = sanitizeString(email);
-        submitting = true;
-
-        try {
-            const { supabase } = await import('$lib/supabaseClient');
-            const { data, error: dbError } = await supabase
-                .from('profile')
-                .insert([{ id: authId, nickname: safeNickname, email: safeEmail }])
-                .select('id');
-
-            if (dbError) {
-                reportError(dbError);
-            } else {
-                toastSuccess('¡Nuevo intérprete creado!');
-                setTimeout(() => {
-                    goto('/');
-                }, 1000);
-            }
-        } catch (e) {
-            toastError('No se pudo conectar con el servidor.');
-        }
-
-        submitting = false;
-    }
-
     function loginWithGoogle() {
       import('$lib/supabaseClient').then(({ supabase }) => {
         supabase.auth.signInWithOAuth({
@@ -101,7 +68,7 @@
           const { supabase } = await import('$lib/supabaseClient');
           const { data, error: dbError } = await supabase
             .from('profile')
-            .insert([{ id: authId, nickname, email, avatar_url: avatarUrl }])
+            .insert([{ id: authId, nickname: normalizeText(nickname, 80), email: normalizeText(email, 254), avatar_url: avatarUrl }])
             .select('id');
           if (dbError) {
             reportError(dbError);

@@ -11,6 +11,7 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
   import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
+  import { normalizeText } from '$lib/sanitize';
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
 
@@ -125,12 +126,13 @@
       withReason: true,
       confirmLabel: 'Rechazar',
       run: async (note) => {
+        const cleanNote = normalizeText(note, 500) || null;
         const { data, error: e } = await supabase.from('party')
-          .update({ status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: note })
+          .update({ status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: cleanNote })
           .eq('id', party.id).select('id');
         if (e) { reportError(e); return; }
         if (!data || data.length === 0) { toastError('No tienes permiso para rechazar este toque.'); return; }
-        party = { ...party, status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: note };
+        party = { ...party, status: 'cancelled', cancel_reason: 'venue_declined', cancel_note: cleanNote };
         toastSuccess('Toque rechazado.');
       }
     });
@@ -144,12 +146,13 @@
       withReason: true,
       confirmLabel: 'Cancelar toque',
       run: async (note) => {
+        const cleanNote = normalizeText(note, 500) || null;
         const { data, error: e } = await supabase.from('party')
-          .update({ status: 'cancelled', cancel_reason: 'venue_cancelled', cancel_note: note })
+          .update({ status: 'cancelled', cancel_reason: 'venue_cancelled', cancel_note: cleanNote })
           .eq('id', party.id).select('id');
         if (e) { reportError(e); return; }
         if (!data || data.length === 0) { toastError('No tienes permiso para cancelar este toque.'); return; }
-        party = { ...party, status: 'cancelled', cancel_reason: 'venue_cancelled', cancel_note: note };
+        party = { ...party, status: 'cancelled', cancel_reason: 'venue_cancelled', cancel_note: cleanNote };
         toastSuccess('Toque cancelado.');
       }
     });

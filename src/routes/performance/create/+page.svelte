@@ -8,7 +8,7 @@
     import { user } from '$lib/stores/user';
     import { get } from 'svelte/store';
     import SongSelect from '$lib/components/SongSelect.svelte';
-    import { sanitizeString } from '$lib/sanitize';
+    import { normalizeText } from '$lib/sanitize';
     import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     let submitting = false;
     let songs: any[] = [];
@@ -81,8 +81,8 @@
         }
 
         // Sanitize inputs
-        const safeRefLink = sanitizeString(refLink);
-        const safeKey = sanitizeString(key);
+        const safeRefLink = normalizeText(refLink, 500);
+        const safeKey = normalizeText(key, 20);
         partyId = page.url.searchParams.get('partyId') ?? null;
         submitting = true;
 

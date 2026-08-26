@@ -5,6 +5,7 @@ import { supabase } from '$lib/supabaseClient';
 import PerformerForm from '$lib/components/PerformerForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
 import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
+import { normalizeText } from '$lib/sanitize';
 
 // 'loading' until auth is definitively known, so we never flash the
 // logged-out gate during the session-restore race.
@@ -89,9 +90,11 @@ onMount(async () => {
           reportError(fetchError);
         } else {
           // Update if the profile exists, otherwise insert a new one.
+          const safeNickname = normalizeText(nickname, 80);
+          const safeEmail = normalizeText(email, 254);
           const { error: dbError } = existingProfile
-            ? await supabase.from('profile').update({ nickname, avatar_url: finalAvatarUrl, email }).eq('id', uid)
-            : await supabase.from('profile').insert({ id: uid, nickname, avatar_url: finalAvatarUrl, email });
+            ? await supabase.from('profile').update({ nickname: safeNickname, avatar_url: finalAvatarUrl, email: safeEmail }).eq('id', uid)
+            : await supabase.from('profile').insert({ id: uid, nickname: safeNickname, avatar_url: finalAvatarUrl, email: safeEmail });
           if (dbError) {
             reportError(dbError);
           } else {

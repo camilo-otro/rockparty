@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { sanitizeString } from '$lib/sanitize';
+  import { normalizeText } from '$lib/sanitize';
   import { supabase } from '$lib/supabaseClient';
   export let venues: any[] = [];
   export let loadingVenues: boolean = false;
@@ -97,14 +97,10 @@
       dispatch('error', 'La fecha no puede ser en el pasado.');
       return;
     }
-    // Sanitize inputs
-    const safeTitle = sanitizeString(title);
-    const safeDescription = sanitizeString(description);
-    const safeDate = sanitizeString(date);
     dispatch('submit', {
-      title: safeTitle,
-      description: safeDescription,
-      date: safeDate,
+      title: normalizeText(title, 120),
+      description: normalizeText(description, 2000),
+      date,
       venue: selectedVenue,
       admins: admins.map(a => a.id),
       performerApproval

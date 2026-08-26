@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
   import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
+  import { normalizeText } from '$lib/sanitize';
   export let submitting = false;
   export let initialName = '';
   export let initialAddress = '';
@@ -152,12 +153,12 @@
       return;
     }
     dispatch('submit', {
-      name,
-      address,
-      contactName,
-      contact,
-      whatsapp,
-      instagram,
+      name: normalizeText(name, 120),
+      address: normalizeText(address, 200),
+      contactName: normalizeText(contactName, 120),
+      contact: normalizeText(contact, 200),
+      whatsapp: normalizeText(whatsapp, 40),
+      instagram: normalizeText(instagram, 60),
       venueType: selectedVenueType,
       allowsParties,
       allowsRehearsals,
@@ -169,11 +170,11 @@
       })),
       requiresApproval,
       engagementModel: engagementModel || null,
-      engagementNotes: engagementNotes || null,
+      engagementNotes: normalizeText(engagementNotes, 1000) || null,
       minAge: minAge === null || minAge === undefined || (minAge as any) === '' ? null : Number(minAge),
       curfew: curfew || null,
       capacity: capacity === null || capacity === undefined || (capacity as any) === '' ? null : Number(capacity),
-      houseRules: houseRules || null
+      houseRules: normalizeText(houseRules, 2000) || null
     });
   }
 
