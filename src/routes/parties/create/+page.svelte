@@ -76,9 +76,21 @@
           reportError(dbError);
         } else {
           const newId = data && data.length > 0 ? data[0].id : null;
-          // Add party_admins
+          // The auto_add_admin trigger already inserts the creator into
+          // party_admin, so re-inserting self collides on the PK and aborts the
+          // whole batch (silently dropping the other admins). Exclude self and
+          // ignore any other duplicate, and surface a real failure.
           if (newId && admins && admins.length > 0) {
-            await supabase.from('party_admin').insert(admins.map((a: string) => ({ party_id: newId, user_id: a })));
+            const others = admins.filter((a: string) => a !== userId);
+            if (others.length > 0) {
+              const { error: adminErr } = await supabase
+                .from('party_admin')
+                .upsert(others.map((a: string) => ({ party_id: newId, user_id: a })), {
+                  onConflict: 'party_id,user_id',
+                  ignoreDuplicates: true
+                });
+              if (adminErr) reportError(adminErr);
+            }
           }
           toastSuccess('Borrador creado — revísalo y publícalo.');
           setTimeout(() => {
