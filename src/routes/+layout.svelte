@@ -7,6 +7,7 @@
   import logo from '$lib/assets/images/Logo.png';
   import Toasts from '$lib/components/Toasts.svelte';
   import { unreadCount, refreshUnread, subscribeUnread, unsubscribeUnread } from '$lib/stores/notifications';
+  import { refreshDev } from '$lib/stores/dev';
   export let data
 
   $: ({ supabase, session } = data)
@@ -51,6 +52,7 @@
     const { data } = supabase.auth.onAuthStateChange((event, _session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         invalidate('supabase:auth')
+        refreshDev();
         if (event === 'SIGNED_IN') { refreshUnread(); subscribeUnread(); }
         else unsubscribeUnread();
       }
@@ -60,6 +62,7 @@
     document.addEventListener('visibilitychange', onVisible);
     refreshUnread();
     subscribeUnread();
+    refreshDev();
     return () => {
       data.subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);

@@ -504,7 +504,10 @@
     <div class="text-red-500 p-4">Error: {error}</div>
   {:else if party}
     <div class="flex flex-row justify-between items-start gap-3">
-      <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
+      <div class="flex flex-col gap-1">
+        <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
+        {#if party.is_test}<span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Datos de prueba</span>{/if}
+      </div>
       <StatusBadge status={party.status} />
     </div>
     {#if canAdmin && party.status === 'draft'}

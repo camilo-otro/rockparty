@@ -82,13 +82,13 @@
       on:submit={async (e) => {
         submitting = true;
         const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
-                equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules } = e.detail;
+                equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules, isTest } = e.detail;
         try {
           const { supabase } = await import('$lib/supabaseClient');
           const { data, error: dbError } = await supabase
             .from('venue')
             .insert([{ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals, created_by: userId,
-                       requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules }])
+                       requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules, is_test: isTest }])
             .select();
           if (dbError) {
             reportError(dbError);

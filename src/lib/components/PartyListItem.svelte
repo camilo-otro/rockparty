@@ -15,6 +15,7 @@
       <div class="flex flex-row items-center gap-2 flex-wrap">
         <div class="text-2xl text-yellow">{party.title}</div>
         {#if showStatus && party.status}<StatusBadge status={party.status} />{/if}
+        {#if party.is_test}<span class="text-[0.6rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Prueba</span>{/if}
         {#if noteBadge}<span class="text-xs px-2 py-0.5 rounded-full {noteBadge.cls}">{noteBadge.text}</span>{/if}
       </div>
       {#if party.description}

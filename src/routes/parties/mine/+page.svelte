@@ -32,7 +32,7 @@
 
     const { data } = await supabase
       .from('party')
-      .select('id, title, description, date, venue, status')
+      .select('id, title, description, date, venue, status, is_test')
       .eq('created_by', uid);
     parties = data ?? [];
     const organizedIds = new Set(parties.map((p) => p.id));
@@ -53,7 +53,7 @@
       if (playIds.length) {
         const { data: pData } = await supabase
           .from('party')
-          .select('id, title, description, date, venue, status')
+          .select('id, title, description, date, venue, status, is_test')
           .in('id', playIds);
         playParties = pData ?? [];
         signupBadgeByParty = Object.fromEntries(playIds.map((id) => [id, signupBadge(statusByParty[id])]));
@@ -66,7 +66,7 @@
     if (rsvpIds.length) {
       const { data: aData } = await supabase
         .from('party')
-        .select('id, title, description, date, venue, status')
+        .select('id, title, description, date, venue, status, is_test')
         .in('id', rsvpIds);
       asistoParties = aData ?? [];
     }

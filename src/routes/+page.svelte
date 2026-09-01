@@ -34,9 +34,9 @@
 
     // Public discovery data (everyone).
     const { data: partyData, error: partyErr } = await supabase
-      .from('party').select('id, title, date, venue, status')
+      .from('party').select('id, title, date, venue, status, is_test')
       .in('status', ['confirmed', 'live']).order('date', { ascending: true });
-    const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address');
+    const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address, is_test');
     if (partyErr || venueErr) {
       error = partyErr?.message ?? venueErr?.message ?? null;
       loading = false;
@@ -62,11 +62,11 @@
 
       if (managedVenueIds.length) {
         const { data: pend } = await supabase
-          .from('party').select('id, title, date, venue, status')
+          .from('party').select('id, title, date, venue, status, is_test')
           .eq('status', 'pending_venue').in('venue', managedVenueIds).order('date', { ascending: true });
         pendingApprovals = pend ?? [];
         const { data: vu } = await supabase
-          .from('party').select('id, title, date, venue, status')
+          .from('party').select('id, title, date, venue, status, is_test')
           .in('status', ['confirmed', 'live']).in('venue', managedVenueIds).gte('date', todayStr).order('date', { ascending: true });
         venueUpcoming = vu ?? [];
       }

@@ -60,6 +60,7 @@ onMount(async () => {
     initialVenue={party.venue}
     initialAdmins={partyAdmins}
     initialPerformerApproval={party.performer_approval}
+    initialIsTest={party.is_test}
     excludePartyId={party.id}
     submitLabel="Guardar"
     submittingLabel="Guardando..."
@@ -68,11 +69,11 @@ onMount(async () => {
     isAuthenticated={true}
     on:submit={async (e) => {
       submitting = true;
-      const { title, description, date, venue, admins, performerApproval } = e.detail;
+      const { title, description, date, venue, admins, performerApproval, isTest } = e.detail;
       try {
         const { error: dbError } = await supabase
           .from('party')
-          .update({ title, description, date, venue, performer_approval: performerApproval })
+          .update({ title, description, date, venue, performer_approval: performerApproval, is_test: isTest })
           .eq('id', party.id);
         if (dbError) {
           reportError(dbError);

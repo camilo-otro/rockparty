@@ -17,10 +17,25 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      dev_user: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       equipment: {
         Row: {
           category: string | null
@@ -128,6 +143,7 @@ export type Database = {
           date: string | null
           description: string | null
           id: number
+          is_test: boolean
           performer_approval: Database["public"]["Enums"]["performer_approval"]
           status: Database["public"]["Enums"]["party_status"]
           status_changed_at: string
@@ -143,6 +159,7 @@ export type Database = {
           date?: string | null
           description?: string | null
           id?: number
+          is_test?: boolean
           performer_approval?: Database["public"]["Enums"]["performer_approval"]
           status?: Database["public"]["Enums"]["party_status"]
           status_changed_at?: string
@@ -158,6 +175,7 @@ export type Database = {
           date?: string | null
           description?: string | null
           id?: number
+          is_test?: boolean
           performer_approval?: Database["public"]["Enums"]["performer_approval"]
           status?: Database["public"]["Enums"]["party_status"]
           status_changed_at?: string
@@ -490,6 +508,7 @@ export type Database = {
           house_rules: string | null
           id: number
           instagram: string | null
+          is_test: boolean
           min_age: number | null
           name: string | null
           requires_approval: boolean
@@ -513,6 +532,7 @@ export type Database = {
           house_rules?: string | null
           id?: number
           instagram?: string | null
+          is_test?: boolean
           min_age?: number | null
           name?: string | null
           requires_approval?: boolean
@@ -536,6 +556,7 @@ export type Database = {
           house_rules?: string | null
           id?: number
           instagram?: string | null
+          is_test?: boolean
           min_age?: number | null
           name?: string | null
           requires_approval?: boolean
@@ -658,6 +679,7 @@ export type Database = {
     }
     Functions: {
       can_see_party: { Args: { pid: number }; Returns: boolean }
+      is_dev: { Args: never; Returns: boolean }
       notify_upcoming_toques: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

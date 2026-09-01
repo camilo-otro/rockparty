@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { normalizeText } from '$lib/sanitize';
   import { supabase } from '$lib/supabaseClient';
+  import { isDev } from '$lib/stores/dev';
   export let venues: any[] = [];
   export let loadingVenues: boolean = false;
   export let errorVenues: string | null = null;
@@ -20,6 +21,9 @@
   export let submittingLabel: string = 'Creando...';
   // When editing, the toque being edited shouldn't flag itself as a conflict.
   export let excludePartyId: number | null = null;
+  // Dev-only test flag (#67). Undefined on create → defaults to test for devs;
+  // on edit the parent passes the row's current value.
+  export let initialIsTest: boolean | undefined = undefined;
 
   const dispatch = createEventDispatcher();
 
@@ -49,6 +53,7 @@
   let date = initialDate;
   let selectedVenue = initialVenue;
   let performerApproval = initialPerformerApproval;
+  let isTest = initialIsTest ?? true;
   let admins: any[] = [];
   let userOptions: any[] = [];
   let adminInput = '';
@@ -103,7 +108,9 @@
       date,
       venue: selectedVenue,
       admins: admins.map(a => a.id),
-      performerApproval
+      performerApproval,
+      // Non-devs can never create test data, regardless of local state.
+      isTest: $isDev ? isTest : false
     });
   }
 </script>
@@ -161,6 +168,13 @@
         {/each}
       </div>
     </div>
+
+    {#if $isDev}
+      <label class="flex items-center gap-2 mt-2 text-yellow">
+        <input type="checkbox" bind:checked={isTest} class="w-4 h-4 accent-warm-base" />
+        Datos de prueba (solo visibles para el equipo)
+      </label>
+    {/if}
   </div>
   <div class="flex justify-center mb-8">
     <button class="bg-cold-base text-white text-sm rounded-full mx-4 p-2 px-6" type="submit" disabled={submitting}>

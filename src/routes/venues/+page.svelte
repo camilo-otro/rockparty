@@ -13,7 +13,7 @@
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         // Only count each venue's upcoming, publicly-visible toques.
         const { data: partyData, error: partyErr } = await supabase.from('party').select('id, venue').in('status', ['confirmed', 'live']).gte('date', todayStr);
-        const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address');
+        const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address, is_test');
         if (partyErr || venueErr) {
             error = partyErr?.message ?? venueErr?.message ?? null;
         } else {

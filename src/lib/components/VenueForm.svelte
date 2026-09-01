@@ -3,6 +3,7 @@
   import { supabase } from '$lib/supabaseClient';
   import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
   import { normalizeText } from '$lib/sanitize';
+  import { isDev } from '$lib/stores/dev';
   export let submitting = false;
   export let initialName = '';
   export let initialAddress = '';
@@ -10,6 +11,8 @@
   export let initialContact = '';
   export let initialWhatsapp = '';
   export let initialInstagram = '';
+  // Dev-only test flag (#67). Undefined on create → defaults to test for devs.
+  export let initialIsTest: boolean | undefined = undefined;
   export let initialVenueType = '';
   export let venueTypes: any[] = [];
   export let initialAllowsParties = true;
@@ -49,6 +52,7 @@
   let selectedVenueType = initialVenueType;
   let allowsParties = initialAllowsParties;
   let allowsRehearsals = initialAllowsRehearsals;
+  let isTest = initialIsTest ?? true;
   let admins: any[] = [];
   let userOptions: any[] = [];
   let adminInput = '';
@@ -174,7 +178,9 @@
       minAge: minAge === null || minAge === undefined || (minAge as any) === '' ? null : Number(minAge),
       curfew: curfew || null,
       capacity: capacity === null || capacity === undefined || (capacity as any) === '' ? null : Number(capacity),
-      houseRules: normalizeText(houseRules, 2000) || null
+      houseRules: normalizeText(houseRules, 2000) || null,
+      // Non-devs can never create test data, regardless of local state.
+      isTest: $isDev ? isTest : false
     });
   }
 
@@ -327,6 +333,12 @@
       </label>
     </div>
   </div>
+  {#if $isDev}
+    <label class="flex items-center gap-2 mx-4 mb-4 text-yellow">
+      <input type="checkbox" bind:checked={isTest} class="w-4 h-4 accent-warm-base" />
+      Datos de prueba (solo visibles para el equipo)
+    </label>
+  {/if}
   <button class="bg-cold-base text-white rounded-lg mx-4 mb-8 p-4 px-6" type="submit" disabled={submitting}>
     {submitting ? 'Guardando...' : 'Guardar Local'}
   </button>

@@ -116,7 +116,8 @@ create table if not exists public.venue (
   min_age           smallint,         -- 0 = all ages; null = unspecified
   curfew            time,             -- music-off time
   capacity          integer,
-  house_rules       text
+  house_rules       text,
+  is_test           boolean not null default false  -- test data, dev-only (#67)
 );
 
 -- venue_admin — who may administer a venue (besides its creator).
@@ -146,7 +147,8 @@ create table if not exists public.party (
   status_changed_at timestamptz not null default now(),
   cancel_reason     text,           -- coded: 'venue_declined' / 'organizer'
   cancel_note       text,           -- optional free-text reason (shown to organizer)
-  performer_approval public.performer_approval not null default 'auto'  -- who approves players (#29)
+  performer_approval public.performer_approval not null default 'auto',  -- who approves players (#29)
+  is_test           boolean not null default false  -- test data, dev-only (#67)
 );
 
 -- party_admin — who may administer a party (besides its creator).
@@ -239,6 +241,15 @@ create table if not exists public.party_rsvp (
 );
 create index if not exists idx_party_rsvp_user on public.party_rsvp (user_id);
 
+-- dev_user — developer accounts (#67). Members see test data (party/venue with
+-- is_test = true). NO insert/update/delete policy, so a user cannot self-escalate;
+-- dev is granted only out-of-band (SQL editor / service_role). See
+-- migrations/20260827_test_data_visibility.sql.
+create table if not exists public.dev_user (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
 -- ---- foreign-key covering indexes (advisor fix 2026-08-11) ------------------
 -- venue_admin.venue_id is covered by its composite PK, so it's omitted here.
 create index if not exists idx_party_created_by            on public.party (created_by);
@@ -267,6 +278,14 @@ create index if not exists idx_venue_admin_user_id         on public.venue_admin
 create or replace function public.can_see_party(pid bigint)
 returns boolean language sql stable security invoker set search_path = '' as $$
   select exists (select 1 from public.party p where p.id = pid);
+$$;
+
+-- is_dev: true when the caller is a developer (#67). SECURITY DEFINER so it can
+-- read dev_user regardless of that table's RLS. Used by the party/venue SELECT
+-- policies to reveal test data to devs.
+create or replace function public.is_dev()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.dev_user d where d.user_id = (select auth.uid()));
 $$;
 
 -- keep party.status_changed_at fresh on status transitions
@@ -504,6 +523,7 @@ alter table public.equipment_suggestion enable row level security;
 alter table public.venue_equipment    enable row level security;
 alter table public.notification       enable row level security;
 alter table public.party_rsvp         enable row level security;
+alter table public.dev_user           enable row level security;
 
 -- ---- song -------------------------------------------------------------------
 create policy "allow select to all users" on public.song
@@ -512,8 +532,9 @@ create policy "allow insert to authenticated users" on public.song
   for insert to authenticated with check (true);
 
 -- ---- venue ------------------------------------------------------------------
+-- Test venues (#67) are hidden from everyone except devs.
 create policy "allow select to all users" on public.venue
-  for select to anon, authenticated using (true);
+  for select to anon, authenticated using (is_test = false or public.is_dev());
 create policy "allow insert to authenticated users" on public.venue
   for insert to authenticated with check (true);
 create policy "allow update to venue admins" on public.venue
@@ -549,17 +570,21 @@ create policy "allow delete for venue admins" on public.venue_admin
 -- Public statuses are world-readable; drafts/pending/cancelled only to the
 -- owner, party admins, or the venue's owner/admins (see docs/specs/party-status.md).
 -- The venue OWNER is checked explicitly because venue creators aren't in venue_admin.
+-- Test toques (#67) are additionally hidden from everyone except devs.
 create policy "select party: public statuses or owner/admins" on public.party
   for select to anon, authenticated
   using (
-    status in ('confirmed', 'live', 'completed')
-    or created_by = (select auth.uid())
-    or exists (select 1 from public.party_admin pa
-               where pa.party_id = party.id and pa.user_id = (select auth.uid()))
-    or exists (select 1 from public.venue v
-               where v.id = party.venue and v.created_by = (select auth.uid()))
-    or exists (select 1 from public.venue_admin va
-               where va.venue_id = party.venue and va.user_id = (select auth.uid()))
+    (
+      status in ('confirmed', 'live', 'completed')
+      or created_by = (select auth.uid())
+      or exists (select 1 from public.party_admin pa
+                 where pa.party_id = party.id and pa.user_id = (select auth.uid()))
+      or exists (select 1 from public.venue v
+                 where v.id = party.venue and v.created_by = (select auth.uid()))
+      or exists (select 1 from public.venue_admin va
+                 where va.venue_id = party.venue and va.user_id = (select auth.uid()))
+    )
+    and (is_test = false or public.is_dev())
   );
 create policy "allow insert to authenticated users" on public.party
   for insert to authenticated with check (true);
@@ -779,3 +804,10 @@ create policy "rsvp insert self" on public.party_rsvp
   for insert to authenticated with check (user_id = (select auth.uid()));
 create policy "rsvp delete self" on public.party_rsvp
   for delete to authenticated using (user_id = (select auth.uid()));
+
+-- ---- dev_user ---------------------------------------------------------------
+-- A user may read ONLY their own membership row (lets the client show the dev
+-- toggle). No insert/update/delete policy: dev status is granted only via the
+-- SQL editor / service_role, so users cannot self-escalate. #67.
+create policy "dev_user self read" on public.dev_user
+  for select to authenticated using (user_id = (select auth.uid()));

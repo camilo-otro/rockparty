@@ -130,6 +130,14 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
 - **Admin actions ARE enforced by RLS** (not just UI-hidden): `venue`/`party`
   UPDATE policies check `created_by` or membership in `venue_admin`/`party_admin`.
   Caveat: `performance` UPDATE is open to any authenticated user (`using true`).
+- **Test-data visibility (#67):** `party.is_test` / `venue.is_test` hide dev/test
+  rows from real users — the `party`/`venue` SELECT policies add
+  `(is_test = false or public.is_dev())`, and performances inherit via
+  `can_see_party()`. Developers are rows in `dev_user` (no self-insert policy —
+  grant only via the SQL editor / service_role, so no self-escalation);
+  `is_dev()` gates both visibility and the dev-only "Datos de prueba" toggle on
+  the create/edit forms (default on for devs; non-devs always create real data).
+  Songs/profiles stay global. Client dev-state lives in `src/lib/stores/dev.ts`.
 - After any Supabase project restore/recreation, also re-check: the Auth **Site
   URL** and Google OAuth redirect URIs (must include `https://rockthehouse.app`),
   and Netlify's environment variables (they're separate from local `.env`).

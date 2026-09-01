@@ -74,15 +74,16 @@ onMount(async () => {
     initialCurfew={venue.curfew ?? ''}
     initialCapacity={venue.capacity ?? null}
     initialHouseRules={venue.house_rules ?? ''}
+    initialIsTest={venue.is_test}
     on:submit={async (e) => {
       submitting = true;
       const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
-              equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules } = e.detail;
+              equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules, isTest } = e.detail;
       try {
         const { error: dbError } = await supabase
           .from('venue')
           .update({ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals,
-                    requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules })
+                    requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules, is_test: isTest })
           .eq('id', venue.id);
         if (dbError) {
           reportError(dbError);

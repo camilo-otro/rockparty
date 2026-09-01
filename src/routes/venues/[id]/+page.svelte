@@ -59,7 +59,7 @@
       // Fetch this venue's upcoming toques (public statuses, future-dated)
       const { data: partyData } = await supabase
         .from('party')
-        .select('id, title, date, venue')
+        .select('id, title, date, venue, is_test')
         .eq('venue', Number(id))
         .in('status', ['confirmed', 'live'])
         .gte('date', todayStr)
@@ -70,7 +70,7 @@
       // for this venue, per the party SELECT policy).
       const { data: pendingData } = await supabase
         .from('party')
-        .select('id, title, date, venue')
+        .select('id, title, date, venue, is_test')
         .eq('venue', Number(id))
         .eq('status', 'pending_venue')
         .order('date', { ascending: true });
@@ -106,7 +106,10 @@
     <div class="text-red-500 p-4">Error: {error}</div>
   {:else if venue}
     <div class="px-6 p-2 bg-base-900 rounded-lg shadow mx-4">
-      <h2 class="text-3xl text-yellow font-bold mb-2">{venue.name}</h2>
+      <div class="flex items-center gap-2 flex-wrap mb-2">
+        <h2 class="text-3xl text-yellow font-bold">{venue.name}</h2>
+        {#if venue.is_test}<span class="text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Datos de prueba</span>{/if}
+      </div>
       <div class="mb-2 text-white">Dirección: {venue.address}</div>
       <div class="mb-2 text-cold-light">Persona de contacto: {venue.contact_name}</div>
       <div class="mb-2 text-cold-light">Contacto: {venue.contact}</div>
