@@ -94,9 +94,19 @@
             reportError(dbError);
           } else {
             const newVenueId = data && data.length > 0 ? data[0].id : null;
-            // Add venue_admins
+            // The creator already has admin rights via created_by, so skip a
+            // redundant self row; upsert-ignore tolerates any other duplicate.
             if (newVenueId && admins && admins.length > 0) {
-              await supabase.from('venue_admin').insert(admins.map((a: string) => ({ venue_id: newVenueId, user_id: a })));
+              const others = admins.filter((a: string) => a !== userId);
+              if (others.length > 0) {
+                const { error: adminErr } = await supabase
+                  .from('venue_admin')
+                  .upsert(others.map((a: string) => ({ venue_id: newVenueId, user_id: a })), {
+                    onConflict: 'venue_id,user_id',
+                    ignoreDuplicates: true
+                  });
+                if (adminErr) reportError(adminErr);
+              }
             }
             // Add equipment (with quantity + description)
             if (newVenueId && equipment && equipment.length > 0) {
