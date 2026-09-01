@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronsDown, Plus, AlertTriangle } from 'lucide-svelte';
+  import { ChevronsDown, Plus, AlertTriangle, Guitar, Mic, CalendarPlus, Sparkles, ArrowRight } from 'lucide-svelte';
   import PartyListItem from '$lib/components/PartyListItem.svelte';
   import VenueListItem from '$lib/components/VenueListItem.svelte';
   import { user } from '$lib/stores/user';
@@ -19,18 +19,28 @@
   let venueUpcoming: any[] = [];
   // #36: upcoming toques that need an instrument you play (and you're not in).
   let needsYou: { party: any; needed: string[] }[] = [];
-  let hasParticipated = false;
   let authChecked = false;
 
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  // Generic hero: only for logged-out visitors and logged-in users who haven't
-  // participated yet (#64 will make this contextual).
-  $: showHero = currentUserId === null || (authChecked && !hasParticipated);
+  // Contextual home hero (#64): one priority-picked card nudging the next step in
+  // the participation funnel (set instruments → play → organize), or the generic
+  // value-prop for logged-out / brand-new users.
+  let heroVariant: 'generic' | 'instruments' | 'play' | 'organize' | 'none' = 'none';
+  const HERO = {
+    generic:     { icon: Sparkles,     title: 'Rock the House',           body: 'Conéctate con músicos, encuentra locales y lleva tu música al siguiente nivel.', cta: 'Aprende cómo funciona',   href: () => '/como-funciona' },
+    instruments: { icon: Guitar,       title: '¿Qué instrumentos tocas?', body: 'Cuéntanos lo tuyo y te avisamos cuando un toque necesite lo que tú tocas.',      cta: 'Agrega tus instrumentos', href: () => `/performers/${currentUserId}/edit` },
+    play:        { icon: Mic,          title: 'Súmate a un setlist',      body: 'Hay toques armándose. Encuentra uno y pide tu cupo en lo que tocas.',            cta: 'Explora los toques',      href: () => '/parties' },
+    organize:    { icon: CalendarPlus, title: 'Arma tu propio toque',     body: 'Ya te subiste a una tarima — ahora organiza tu propia noche.',                   cta: 'Planea un toque',         href: () => '/parties/create' }
+  } as const;
+  $: hero = heroVariant === 'none' ? null : HERO[heroVariant];
 
   onMount(async () => {
     user.subscribe((u) => { currentUserId = u?.id ?? null; })();
+    // Logged-out visitors get the generic hero immediately; logged-in users get a
+    // contextual one once their participation signals resolve (below).
+    if (!currentUserId) heroVariant = 'generic';
 
     // Public discovery data (everyone).
     const { data: partyData, error: partyErr } = await supabase
@@ -110,12 +120,26 @@
           .filter((x) => x.needed.length > 0);
       }
 
-      // Has the user participated in any way? (drives the generic hero.)
-      const [{ count: myToques }, { count: mySignups }] = await Promise.all([
+      // Participation signals that drive the contextual hero (#64).
+      const [{ count: myToques }, { count: mySignups }, { count: myRsvps }] = await Promise.all([
         supabase.from('party').select('id', { count: 'exact', head: true }).eq('created_by', currentUserId),
-        supabase.from('performance_user').select('user_id', { count: 'exact', head: true }).eq('user_id', currentUserId)
+        supabase.from('performance_user').select('user_id', { count: 'exact', head: true }).eq('user_id', currentUserId),
+        supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('user_id', currentUserId)
       ]);
-      hasParticipated = managedVenueIds.length > 0 || (myToques ?? 0) > 0 || (mySignups ?? 0) > 0;
+      const hasInstruments = myInstrumentIds.length > 0;
+      const hasPlayed = (mySignups ?? 0) > 0;
+      const hasOrganized = (myToques ?? 0) > 0;
+      const managesVenue = managedVenueIds.length > 0;
+      const hasAttended = (myRsvps ?? 0) > 0;
+      // Priority: brand-new → generic; plays but no profile instruments → set them;
+      // attendee/ready musician with no live matches → invite to play; player who
+      // hasn't organized → invite to organize; otherwise no hero (fully engaged /
+      // pure venue manager, who has their own sections above).
+      if (!hasInstruments && !hasPlayed && !hasOrganized && !managesVenue && !hasAttended) heroVariant = 'generic';
+      else if (hasPlayed && !hasInstruments) heroVariant = 'instruments';
+      else if (!hasPlayed && (hasAttended || hasInstruments) && needsYou.length === 0) heroVariant = 'play';
+      else if (hasPlayed && !hasOrganized && !managesVenue) heroVariant = 'organize';
+      else heroVariant = 'none';
     }
     authChecked = true;
     loading = false;
@@ -128,13 +152,23 @@
 </script>
 
 <div class="mt-8 flex flex-col gap-8">
-  {#if showHero}
+  {#if hero}
     <section class="mx-4">
-      <div class="bg-base-900 rounded-lg p-6 text-center">
-        <p class="text-white text-lg leading-snug">
-          Conéctate con <span class="font-bold">músicos</span>, encuentra <span class="font-bold">locales</span> y lleva tu música al <span class="font-bold">siguiente nivel</span>.
-        </p>
-        <a href="/como-funciona" class="text-cold-light inline-block mt-3 hover:underline">Aprende cómo funciona</a>
+      <div class="bg-base-900 rounded-lg overflow-hidden">
+        <!-- Brand-gradient accent marks the hero slot (used sparingly). -->
+        <div class="h-1" style="background:linear-gradient(90deg,#6C04FF,#71118E,#FF4000)"></div>
+        <div class="p-6 flex flex-col items-center text-center gap-3">
+          <div class="bg-base-950 rounded-full p-3">
+            <svelte:component this={hero.icon} class="text-cold-light" size={26} />
+          </div>
+          <div>
+            <h2 class="text-white text-xl">{hero.title}</h2>
+            <p class="text-cold-light text-sm mt-1 leading-snug">{hero.body}</p>
+          </div>
+          <a href={hero.href()} class="bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-full px-6 py-2 text-sm inline-flex items-center gap-2 transition">
+            {hero.cta} <ArrowRight size={16} />
+          </a>
+        </div>
       </div>
     </section>
   {/if}
