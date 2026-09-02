@@ -7,76 +7,46 @@
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
 
-  let loading = true;
-  let party: any = null;
-  let venue: any = null;
-  let songs: string[] = [];
-  let songCount = 0;
-  let musicianCount = 0;
-  let rsvpCount = 0;
+  export let data;
+  // Toque + counts come from the server load (+page.ts) so crawlers get real
+  // per-event Open Graph tags; the interactive bits (RSVP, share) stay
+  // client-side below.
+  $: party = data.party;
+  $: venue = data.venue;
+  $: songs = (data.songs ?? []) as string[];
+  $: songCount = data.songCount as number;
+  $: musicianCount = data.musicianCount as number;
+
+  let rsvpCount = data.rsvpCount ?? 0; // seeded from load; mutated on RSVP toggle
   let copied = false;
   let currentUserId: string | null = null;
   let iAmGoing = false;
   let rsvpBusy = false;
 
-  // Absolute URL of this flyer (this page is the shareable "poster").
-  $: flyerUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // Canonical flyer URL — resolves server-side too (for og:url) via page.url.
+  $: shareUrl = `${page.url.origin}${page.url.pathname}`;
   $: dateLong = party?.date ? dayjs(party.date).locale('es').format('dddd D [de] MMMM, YYYY') : '';
+  // Only a real, non-test toque gets its own preview; anything RLS-hidden (null
+  // server-side for a crawler) or test data falls back to the generic brand card.
+  $: publicPreview = !!party && !party.is_test;
+  $: ogTitle = publicPreview && party ? (party.title ?? 'Rock the House') : 'Rock the House';
+  $: ogDesc = publicPreview && party
+    ? [dayjs(party.date).locale('es').format('ddd D [de] MMMM'), venue?.name].filter(Boolean).join(' · ')
+    : 'Organiza toques y jam sessions con otros músicos.';
 
   onMount(async () => {
     user.subscribe((u) => { currentUserId = u?.id ?? null; })();
-    const id = Number(page.params.id);
-    // RLS decides visibility: real confirmed toques are public; drafts show to
-    // their owner; test toques (#67) only to devs. No row → "not available".
-    const { data: p } = await supabase
-      .from('party')
-      .select('id, title, date, description, venue, status, is_test')
-      .eq('id', id)
-      .maybeSingle();
-    party = p;
-
-    if (party) {
-      if (party.venue != null) {
-        const { data: v } = await supabase
-          .from('venue').select('name, address').eq('id', party.venue).maybeSingle();
-        venue = v;
-      }
-      const { data: perfs } = await supabase
-        .from('performance')
-        .select('id, order, song ( title )')
-        .eq('party', id)
-        .order('order', { ascending: true });
-      const rows = perfs ?? [];
-      songCount = rows.length;
-      songs = rows.map((r: any) => r.song?.title).filter(Boolean).slice(0, 5);
-
-      const perfIds = rows.map((r: any) => r.id);
-      if (perfIds.length) {
-        const { data: appr } = await supabase
-          .from('performance_user')
-          .select('user_id')
-          .eq('status', 'approved')
-          .in('performance_id', perfIds);
-        musicianCount = new Set((appr ?? []).map((a: any) => a.user_id)).size;
-      }
-      const { count } = await supabase
-        .from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', id);
-      rsvpCount = count ?? 0;
-
-      if (currentUserId) {
-        const { data: mine } = await supabase
-          .from('party_rsvp').select('user_id').eq('party_id', id).eq('user_id', currentUserId).maybeSingle();
-        iAmGoing = !!mine;
-        // Complete a pending RSVP after the login round-trip (?rsvp=1), then
-        // clean the param so a refresh doesn't re-trigger it.
-        const params = new URLSearchParams(location.search);
-        if (params.get('rsvp') === '1') {
-          if (!iAmGoing) await doRsvp(true);
-          history.replaceState({}, '', location.pathname);
-        }
-      }
+    if (!party?.id || !currentUserId) return;
+    const { data: mine } = await supabase
+      .from('party_rsvp').select('user_id').eq('party_id', party.id).eq('user_id', currentUserId).maybeSingle();
+    iAmGoing = !!mine;
+    // Complete a pending RSVP after the login round-trip (?rsvp=1), then clean
+    // the param so a refresh doesn't re-trigger it.
+    const params = new URLSearchParams(location.search);
+    if (params.get('rsvp') === '1') {
+      if (!iAmGoing) await doRsvp(true);
+      history.replaceState({}, '', location.pathname);
     }
-    loading = false;
   });
 
   function rsvpClick() {
@@ -111,22 +81,37 @@
     const lines = [
       `🎸 ${party?.title ?? 'Toque'}`,
       [dayjs(party?.date).locale('es').format('ddd D [de] MMM'), venue?.name].filter(Boolean).join(' · '),
-      flyerUrl
+      shareUrl
     ].filter(Boolean);
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
   }
   function copyLink() {
-    navigator.clipboard.writeText(flyerUrl).then(() => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
       copied = true;
       setTimeout(() => (copied = false), 2000);
     });
   }
 </script>
 
+<!-- Per-event Open Graph, rendered server-side (ssr=true in +page.ts) so social
+     crawlers get the real title/preview. RLS-hidden/test toques → generic card. -->
+<svelte:head>
+  <title>{publicPreview && party ? `${ogTitle} · Rock the House` : 'Rock the House'}</title>
+  <meta name="description" content={ogDesc} />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Rock the House" />
+  <meta property="og:title" content={ogTitle} />
+  <meta property="og:description" content={ogDesc} />
+  <meta property="og:url" content={shareUrl} />
+  <meta property="og:image" content="{page.url.origin}/og-default.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={ogTitle} />
+  <meta name="twitter:description" content={ogDesc} />
+  <meta name="twitter:image" content="{page.url.origin}/og-default.png" />
+</svelte:head>
+
 <div class="max-w-xl mx-auto px-4 py-6 flex flex-col gap-4">
-  {#if loading}
-    <div class="text-cold-light p-6 text-center">Cargando…</div>
-  {:else if !party}
+  {#if !party}
     <div class="bg-base-900 rounded-lg p-8 text-center flex flex-col gap-2">
       <p class="text-white text-lg">Este toque no está disponible.</p>
       <p class="text-cold-light text-sm">Puede ser privado, un borrador, o el enlace es incorrecto.</p>

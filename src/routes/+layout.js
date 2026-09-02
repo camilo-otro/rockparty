@@ -1,6 +1,7 @@
 import { supabase } from '$lib/supabaseClient';
 import { user as userStore } from '$lib/stores/user';
 import { redirect } from '@sveltejs/kit';
+import { browser } from '$app/environment';
 
 // Client-only rendering (#48). The app has no server routes and fetches all data
 // client-side (RLS is the security boundary), so SSR added no value — and it was
@@ -13,6 +14,11 @@ export const ssr = false;
 
 export const load = async ({ depends, url }) => {
   depends('supabase:auth');
+  // The flyer route (#68) turns SSR on, which pulls this root layout load onto
+  // the server. Auth lives entirely in the browser (localStorage session), so
+  // getSession() would be null server-side anyway — skip it there. This keeps
+  // the SSR render clean and never writes the shared `user` store on the server.
+  if (!browser) return { supabase, session: null, user: null };
   const { data: { session } } = await supabase.auth.getSession();
   let userRecord = null;
   if (session?.user?.id) {
