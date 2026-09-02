@@ -188,16 +188,16 @@
       </div>
     </div>
 
-    <!-- Primary conversions: attend + play. -->
+    <!-- Primary conversions — musicians first (play), then attend. -->
     <div class="flex flex-col gap-2">
-      <button on:click={rsvpClick} disabled={rsvpBusy}
-        class="{iAmGoing ? 'bg-base-900 border border-cold-base text-cold-light' : 'bg-cold-base text-white hover:bg-cold-light hover:text-black'} rounded-lg px-5 py-3 text-lg inline-flex items-center justify-center gap-2 transition disabled:opacity-60">
-        {#if iAmGoing}<Check size={20} /> Vas a asistir{:else}<PartyPopper size={20} /> Voy a este toque{/if}
-      </button>
       <a href={`/parties/${party.id}`}
-        class="border-2 border-warm-base text-warm-base hover:bg-warm-base hover:text-white rounded-lg px-5 py-3 text-lg inline-flex items-center justify-center gap-2 transition">
+        class="bg-cold-base text-white hover:bg-cold-light hover:text-black rounded-lg px-5 py-3 text-lg inline-flex items-center justify-center gap-2 transition">
         <Music size={20} /> Quiero tocar
       </a>
+      <button on:click={rsvpClick} disabled={rsvpBusy}
+        class="{iAmGoing ? 'border-2 border-cold-base text-cold-light' : 'border-2 border-cold-light/50 text-cold-light hover:border-cold-light hover:text-white'} rounded-lg px-5 py-[10px] text-lg inline-flex items-center justify-center gap-2 transition disabled:opacity-60">
+        {#if iAmGoing}<Check size={20} /> Vas a asistir{:else}<PartyPopper size={20} /> Voy a este toque{/if}
+      </button>
     </div>
 
     <!-- Share is secondary — for spreading the flyer. -->
