@@ -39,8 +39,11 @@ carry the deeper detail; this is the at-a-glance map.
 - **Host:** Netlify. Runtime env vars (`PUBLIC_SUPABASE_URL`,
   `PUBLIC_SUPABASE_ANON_KEY`) are set in the Netlify UI, separate from local
   `.env`.
-- **DNS / registrar:** `rockthehouse.app` — TODO: record where the domain is
-  registered and whether DNS is Netlify-managed or external.
+- **DNS / registrar:** `rockthehouse.app` is registered at **Cloudflare** and its
+  DNS runs on Cloudflare nameservers (`sri`/`carla.ns.cloudflare.com`), pointing
+  to Netlify for hosting. Registered **2025-09-20** (the domain was only ~5 weeks
+  old during the late-Oct/Nov-2025 WhatsApp-share ban — newly-registered-domain
+  reputation was a likely factor; see #68).
 - **Database / Auth / Realtime:** Supabase project **RockParty**
   (ref `ohuhilcqluniqnkxiqhr`, API `https://ohuhilcqluniqnkxiqhr.supabase.co`).
 - **Auth:** Google OAuth via Supabase. The Supabase Auth **Site URL** and the
