@@ -316,8 +316,10 @@
     toastSuccess(decision === 'approved' ? 'Músico aprobado.' : 'Solicitud rechazada.');
   }
 
+  // Share the clean public flyer (#39), not the app detail page.
+  $: flyerUrl = party?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/toque/${party.id}` : '';
   function handleShare() {
-    const url = window.location.href;
+    const url = flyerUrl;
     const title = party?.title || 'te invito a esta Rock Party';
     const text = party?.description || '';
     if (navigator.share) {
@@ -722,7 +724,7 @@
       </div>
     </div>
     {#if showShareModal}
-      <ShareModal url={window.location.href} title={party?.title} on:close={closeShareModal} />
+      <ShareModal url={flyerUrl} title={party?.title} on:close={closeShareModal} />
     {/if}
     {#if confirmDialog}
       <div class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" on:click={closeDialog}>

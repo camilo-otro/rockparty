@@ -12,6 +12,10 @@
     });
   }
 
+  function shareWhatsApp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${title}\n${url}`)}`, '_blank');
+  }
+
   function close() {
     dispatch('close');
   }
@@ -24,6 +28,9 @@
     <div class="mb-4">
       <input type="text" value={url} readonly class="w-full p-2 border rounded-lg bg-cold-base text-white" />
     </div>
+    <button class="bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-4 py-2 w-full mb-2 transition" on:click={shareWhatsApp}>
+      Compartir por WhatsApp
+    </button>
     <button class="bg-yellow text-black rounded-lg px-4 py-2 w-full" on:click={copyUrl}>
       {#if copied}
         ¡Copiado!

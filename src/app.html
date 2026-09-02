@@ -4,6 +4,14 @@
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- Generic link-preview tags for shared flyers (#39). The app is client-only
+		     (ssr=false, #48), so crawlers can't see per-event details — this gives a
+		     brand-level preview. Per-event OG (title/image) would need SSR/prerender. -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Rock the House" />
+		<meta property="og:title" content="Rock the House" />
+		<meta property="og:description" content="Organiza toques y jam sessions con otros músicos." />
+		<meta name="twitter:card" content="summary" />
 		%sveltekit.head%
 	</head>
 	<!-- Dark ground on the bare shell so the pre-hydration frame (CSR-only, #48)
