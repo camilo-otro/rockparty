@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { MapPin, Music, Users, PartyPopper, Share2, Copy, Check, ArrowRight } from 'lucide-svelte';
-  import StatusBadge from '$lib/components/StatusBadge.svelte';
+  import { user } from '$lib/stores/user';
   import dayjs from 'dayjs';
   import 'dayjs/locale/es';
 
@@ -15,12 +15,16 @@
   let musicianCount = 0;
   let rsvpCount = 0;
   let copied = false;
+  let currentUserId: string | null = null;
+  let iAmGoing = false;
+  let rsvpBusy = false;
 
   // Absolute URL of this flyer (this page is the shareable "poster").
   $: flyerUrl = typeof window !== 'undefined' ? window.location.href : '';
   $: dateLong = party?.date ? dayjs(party.date).locale('es').format('dddd D [de] MMMM, YYYY') : '';
 
   onMount(async () => {
+    user.subscribe((u) => { currentUserId = u?.id ?? null; })();
     const id = Number(page.params.id);
     // RLS decides visibility: real confirmed toques are public; drafts show to
     // their owner; test toques (#67) only to devs. No row → "not available".
@@ -58,9 +62,50 @@
       const { count } = await supabase
         .from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', id);
       rsvpCount = count ?? 0;
+
+      if (currentUserId) {
+        const { data: mine } = await supabase
+          .from('party_rsvp').select('user_id').eq('party_id', id).eq('user_id', currentUserId).maybeSingle();
+        iAmGoing = !!mine;
+        // Complete a pending RSVP after the login round-trip (?rsvp=1), then
+        // clean the param so a refresh doesn't re-trigger it.
+        const params = new URLSearchParams(location.search);
+        if (params.get('rsvp') === '1') {
+          if (!iAmGoing) await doRsvp(true);
+          history.replaceState({}, '', location.pathname);
+        }
+      }
     }
     loading = false;
   });
+
+  function rsvpClick() {
+    if (rsvpBusy) return;
+    if (!currentUserId) {
+      // Log in, return to this flyer, and auto-RSVP on the way back.
+      supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${location.origin}${location.pathname}?rsvp=1` }
+      });
+      return;
+    }
+    doRsvp(!iAmGoing);
+  }
+  async function doRsvp(going: boolean) {
+    if (!currentUserId || !party?.id || rsvpBusy) return;
+    rsvpBusy = true;
+    try {
+      if (going) {
+        const { error } = await supabase.from('party_rsvp').insert({ party_id: party.id, user_id: currentUserId });
+        if (!error) { iAmGoing = true; rsvpCount += 1; }
+      } else {
+        const { error } = await supabase.from('party_rsvp').delete().eq('party_id', party.id).eq('user_id', currentUserId);
+        if (!error) { iAmGoing = false; rsvpCount = Math.max(0, rsvpCount - 1); }
+      }
+    } finally {
+      rsvpBusy = false;
+    }
+  }
 
   function shareWhatsApp() {
     const lines = [
@@ -69,13 +114,6 @@
       flyerUrl
     ].filter(Boolean);
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
-  }
-  async function nativeShare() {
-    if (navigator.share) {
-      try { await navigator.share({ title: party?.title, text: party?.description ?? '', url: flyerUrl }); } catch (_) { /* cancelled */ }
-    } else {
-      copyLink();
-    }
   }
   function copyLink() {
     navigator.clipboard.writeText(flyerUrl).then(() => {
@@ -147,30 +185,36 @@
             </p>
           </div>
         {/if}
-
-        <div class="flex items-center gap-2">
-          <StatusBadge status={party.status} />
-        </div>
       </div>
     </div>
 
-    <!-- Share actions — WhatsApp-first. -->
+    <!-- Primary conversions: attend + play. -->
     <div class="flex flex-col gap-2">
-      <button on:click={shareWhatsApp} class="bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-5 py-3 inline-flex items-center justify-center gap-2 transition">
-        <Share2 size={18} /> Compartir por WhatsApp
+      <button on:click={rsvpClick} disabled={rsvpBusy}
+        class="{iAmGoing ? 'bg-base-900 border border-cold-base text-cold-light' : 'bg-cold-base text-white hover:bg-cold-light hover:text-black'} rounded-lg px-5 py-3 text-lg inline-flex items-center justify-center gap-2 transition disabled:opacity-60">
+        {#if iAmGoing}<Check size={20} /> Vas a asistir{:else}<PartyPopper size={20} /> Voy a este toque{/if}
       </button>
+      <a href={`/parties/${party.id}`}
+        class="border-2 border-warm-base text-warm-base hover:bg-warm-base hover:text-white rounded-lg px-5 py-3 text-lg inline-flex items-center justify-center gap-2 transition">
+        <Music size={20} /> Quiero tocar
+      </a>
+    </div>
+
+    <!-- Share is secondary — for spreading the flyer. -->
+    <div class="flex flex-col gap-2 pt-1">
+      <div class="text-center text-xs uppercase tracking-wide text-cold-light">Compártelo</div>
       <div class="flex gap-2">
-        <button on:click={copyLink} class="flex-1 border border-cold-light/40 text-cold-light hover:text-white hover:border-cold-light rounded-lg px-4 py-2 inline-flex items-center justify-center gap-2 transition">
-          {#if copied}<Check size={16} /> ¡Copiado!{:else}<Copy size={16} /> Copiar enlace{/if}
+        <button on:click={shareWhatsApp} class="flex-1 border border-cold-light/40 text-cold-light hover:text-white hover:border-cold-light rounded-lg px-4 py-2 text-sm inline-flex items-center justify-center gap-2 transition">
+          <Share2 size={16} /> WhatsApp
         </button>
-        <button on:click={nativeShare} class="flex-1 border border-cold-light/40 text-cold-light hover:text-white hover:border-cold-light rounded-lg px-4 py-2 inline-flex items-center justify-center gap-2 transition">
-          <Share2 size={16} /> Compartir…
+        <button on:click={copyLink} class="flex-1 border border-cold-light/40 text-cold-light hover:text-white hover:border-cold-light rounded-lg px-4 py-2 text-sm inline-flex items-center justify-center gap-2 transition">
+          {#if copied}<Check size={16} /> ¡Copiado!{:else}<Copy size={16} /> Copiar{/if}
         </button>
       </div>
     </div>
 
-    <a href={`/parties/${party.id}`} class="text-cold-light hover:text-white text-sm inline-flex items-center justify-center gap-1 py-1">
-      Ver el toque completo <ArrowRight size={15} />
+    <a href={`/parties/${party.id}`} class="text-cold-light/70 hover:text-white text-sm inline-flex items-center justify-center gap-1 py-1">
+      Ver setlist y detalles <ArrowRight size={15} />
     </a>
   {/if}
 </div>
