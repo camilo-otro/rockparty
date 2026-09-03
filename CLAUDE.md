@@ -85,8 +85,8 @@ Guidelines that shape what we build and how — weigh new features against these
 - **English code, Spanish UI.** All code, routes, entities, DB objects, and logic
   are **English** (`party`, `/parties`, `band`, `/bands`); only user-facing copy is
   **Spanish** (labels like "Toques", "Bandas"). Keep code consistently English so
-  future i18n can add languages without renaming anything. (Existing offender to
-  clean up: the `/toque/[id]` public flyer route — English would be `party`-based.)
+  future i18n can add languages without renaming anything. The public flyer lives
+  at **`/flyer/[id]`**; the old Spanish `/toque/[id]` 308-redirects to it.
 - **Future interest:** comments and media (as external links) attached to past
   performances — see the Encore phase of the roadmap.
 

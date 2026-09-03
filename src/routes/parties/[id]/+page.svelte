@@ -317,7 +317,7 @@
   }
 
   // Share the clean public flyer (#39), not the app detail page.
-  $: flyerUrl = party?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/toque/${party.id}` : '';
+  $: flyerUrl = party?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/flyer/${party.id}` : '';
   function handleShare() {
     const url = flyerUrl;
     const title = party?.title || 'te invito a esta Rock Party';
