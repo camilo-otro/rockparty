@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Users } from 'lucide-svelte';
+
   export let title;
   export let artist;
   export let key: string | undefined = undefined;
@@ -6,6 +8,9 @@
   // Instrument ids the viewer plays (#32) — open slots matching these are
   // highlighted as "you could fill this" instead of dimmed.
   export let highlightInstrumentIds: number[] = [];
+  // Band-owned song (#74): render the band + its lineup, no instrument gaps.
+  export let band: { name: string; pending?: boolean } | null = null;
+  export let lineup: any[] = []; // for a band: unique members [{ user_id, user_avatar }]
   
   // Default instruments with their IDs and icon paths
   const defaultInstruments = [
@@ -35,27 +40,46 @@
     {#if key}
       <div class="text-white text-sm">Tonalidad: {key}</div>
     {/if}
+    {#if band}
+      <span class="text-xs text-cold-light inline-flex items-center gap-1 mt-0.5">
+        <Users size={12} /> {band.name}{#if band.pending} · <span class="text-yellow">pendiente</span>{/if}
+      </span>
+    {/if}
   </div>
-  <div class="flex flex-row -space-x-2 ml-2 self-end">
-    {#each availableInstruments as instrument, index}
-      {@const mine = highlightInstrumentIds.includes(instrument.id)}
-      <img
-        src={instrument.icon}
-        alt={instrument.name}
-        class="w-6 h-6 bg-base-900 rounded-full p-0.5 {mine ? 'opacity-100 ring-2 ring-yellow' : 'opacity-50'}"
-        style="z-index: {index + 1}"
-        title={mine ? `${instrument.name} — ¡puedes tocar!` : `${instrument.name} - Available`}
-      />
-    {/each}
-    {#each filledInstruments as instrument, index}
-      {@const performer = getPerformerForInstrument(instrument.id)}
-      <img 
-        src={performer.user_avatar || '/images/avatar-default.svg'} 
-        alt="Performer" 
-        class="w-6 h-6 rounded-full border border-cold-base bg-base-900"
-        style="z-index: {availableInstruments.length + index + 1}"
-        title={instrument.name}
-      />
-    {/each}
-  </div>
+  {#if band}
+    <!-- Band lineup: the members, no open-slot gaps. -->
+    <div class="flex flex-row -space-x-2 ml-2 self-end {band.pending ? 'opacity-60' : ''}">
+      {#each lineup as member, index}
+        <img
+          src={member.user_avatar || '/images/avatar-default.svg'}
+          alt="Integrante"
+          class="w-6 h-6 rounded-full border border-cold-base bg-base-900"
+          style="z-index: {index + 1}"
+        />
+      {/each}
+    </div>
+  {:else}
+    <div class="flex flex-row -space-x-2 ml-2 self-end">
+      {#each availableInstruments as instrument, index}
+        {@const mine = highlightInstrumentIds.includes(instrument.id)}
+        <img
+          src={instrument.icon}
+          alt={instrument.name}
+          class="w-6 h-6 bg-base-900 rounded-full p-0.5 {mine ? 'opacity-100 ring-2 ring-yellow' : 'opacity-50'}"
+          style="z-index: {index + 1}"
+          title={mine ? `${instrument.name} — ¡puedes tocar!` : `${instrument.name} - Available`}
+        />
+      {/each}
+      {#each filledInstruments as instrument, index}
+        {@const performer = getPerformerForInstrument(instrument.id)}
+        <img
+          src={performer.user_avatar || '/images/avatar-default.svg'}
+          alt="Performer"
+          class="w-6 h-6 rounded-full border border-cold-base bg-base-900"
+          style="z-index: {availableInstruments.length + index + 1}"
+          title={instrument.name}
+        />
+      {/each}
+    </div>
+  {/if}
 </div>

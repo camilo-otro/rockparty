@@ -54,6 +54,8 @@
   // have a gap in an instrument THEY play (the actionable number).
   $: allInstrumentIds = Object.keys(instrumentsById).map(Number);
   function openInstrumentIds(perf: any): number[] {
+    // Band-owned songs (#74) aren't open jams — they have no instrument gaps.
+    if (perf.band) return [];
     return allInstrumentIds.filter((id) => !(perf.performers ?? []).some((p: any) => p.instrument_id === id));
   }
   $: songsWithGaps = allInstrumentIds.length ? performances.filter((p) => openInstrumentIds(p).length > 0).length : 0;
@@ -316,6 +318,14 @@
     toastSuccess(decision === 'approved' ? 'Músico aprobado.' : 'Solicitud rechazada.');
   }
 
+  // Approve/decline a band as a UNIT (#74) — one action for the whole act.
+  async function decideBandSignup(perf: any, decision: 'approved' | 'declined') {
+    const { error: e } = await supabase.rpc('set_band_signup_status', { p_performance: perf.id, p_band: perf.band.id, p_status: decision });
+    if (e) { reportError(e); return; }
+    toastSuccess(decision === 'approved' ? 'Banda aprobada.' : 'Banda rechazada.');
+    await loadSetlist(Number(page.params.id));
+  }
+
   // Share the clean public flyer (#39), not the app detail page.
   $: flyerUrl = party?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/flyer/${party.id}` : '';
   function handleShare() {
@@ -375,7 +385,7 @@
   // reorderMode / expandedApprovals, so an in-progress interaction isn't clobbered.
   let perfIdSet = new Set<number>(); // this party's performance ids, for filtering
   async function loadSetlist(pid: number) {
-    const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order').eq('party', pid);
+    const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order, band_id').eq('party', pid);
     if (perfErr) { errorPerformances = perfErr.message; return; }
     const perfs = (perfData ?? []).sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
     perfs.forEach((perf, index) => { perf.order = index; });
@@ -383,7 +393,11 @@
     const userIds = [...new Set(perfs.map((p) => p.suggested_by).filter((x): x is string => x != null))];
     if (party?.created_by) userIds.push(party.created_by);
     const { data: songData } = songIds.length ? await supabase.from('song').select('id, title, artist').in('id', songIds) : { data: [] as any[] };
-    const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
+    const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status, band_id').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
+    // Band-owned songs (#74): resolve band names for the setlist rows.
+    const bandIds = [...new Set(perfs.map((p) => p.band_id).filter((x): x is number => x != null))];
+    const { data: bandData } = bandIds.length ? await supabase.from('band').select('id, name').in('id', bandIds) : { data: [] as any[] };
+    const bandNames: Record<number, string> = Object.fromEntries((bandData ?? []).map((b: any) => [b.id, b.name]));
     const performerUserIds = [...new Set((perfUsers ?? []).map((p) => p.user_id))];
     const allUserIds = [...new Set([...userIds, ...performerUserIds])];
     const { data: userData } = allUserIds.length ? await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds) : { data: [] as any[] };
@@ -408,8 +422,29 @@
       const rows = (perfUsers ?? []).filter((u) => u.performance_id === perf.id);
       const performers = rows.filter((r) => r.status === 'approved').map((pm) => ({ instrument_id: pm.instrument_id, user_id: pm.user_id, user_avatar: getUserAvatar(pm.user_id) }));
       const pending = rows.filter((r) => r.status === 'pending').map((pm) => ({ instrument_id: pm.instrument_id, user_id: pm.user_id }));
-      return { ...perf, performers, pending };
-    });
+      // Band-owned song (#74): render the band + its lineup (unique members),
+      // never open-slot gaps. Approved lineup once approved, else the pending
+      // proposal. All rows declined => the act was rejected (hidden below).
+      let band: any = null;
+      let bandLineup: any[] = [];
+      if (perf.band_id) {
+        const approvedRows = rows.filter((r) => r.status === 'approved');
+        const pendingRows = rows.filter((r) => r.status === 'pending');
+        const src = approvedRows.length ? approvedRows : pendingRows;
+        const seen = new Set<string>();
+        bandLineup = src.filter((r) => (seen.has(r.user_id) ? false : (seen.add(r.user_id), true)))
+                        .map((r) => ({ user_id: r.user_id, user_avatar: getUserAvatar(r.user_id) }));
+        band = {
+          id: perf.band_id,
+          name: bandNames[perf.band_id] ?? 'Banda',
+          pending: pendingRows.length > 0 && approvedRows.length === 0,
+          declined: approvedRows.length === 0 && pendingRows.length === 0
+        };
+      }
+      return { ...perf, performers, pending, band, bandLineup };
+    })
+    // Hide a fully-declined band-owned song (band-or-nothing, #74).
+    .filter((p) => !(p.band && p.band.declined));
     perfIdSet = new Set(performances.map((p) => p.id));
   }
 
@@ -658,12 +693,21 @@
                         artist={getSongArtist(perf.song)}
                         key={perf.key}
                         performers={perf.performers || []}
+                        band={perf.band}
+                        lineup={perf.bandLineup || []}
                         highlightInstrumentIds={myInstrumentIds}
                       />
                     </div>
                   </div>
                 </a>
-                {#if canApproveSong(perf) && perf.pending && perf.pending.length}
+                {#if perf.band && perf.band.pending && canApproveSong(perf)}
+                  <div class="mt-2 flex items-center gap-3">
+                    <span class="flex-1 text-sm text-yellow truncate">Aprobar a {perf.band.name}</span>
+                    <button on:click={() => decideBandSignup(perf, 'approved')} aria-label="Aprobar banda" class="p-1 text-green-500 hover:text-green-400"><Check size={20} /></button>
+                    <button on:click={() => decideBandSignup(perf, 'declined')} aria-label="Rechazar banda" class="p-1 text-red-500 hover:text-red-400"><X size={20} /></button>
+                  </div>
+                {/if}
+                {#if !perf.band && canApproveSong(perf) && perf.pending && perf.pending.length}
                   <button on:click={() => toggleApprovals(perf.id)} class="mt-1 text-sm text-yellow flex items-center gap-1">
                     {perf.pending.length} por aprobar
                     {#if expandedApprovals.has(perf.id)}<ChevronUp size={16} />{:else}<ChevronDown size={16} />{/if}

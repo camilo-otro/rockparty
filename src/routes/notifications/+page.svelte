@@ -48,6 +48,10 @@
         return { icon: UserPlus, cls: 'text-cold-light', text: `Alguien quiere tocar «${song}» en «${title}».`, reason: null, href };
       case 'band_signup_requested':
         return { icon: UserPlus, cls: 'text-cold-light', text: `La banda «${p.band_name ?? 'una banda'}» quiere tocar «${song}» en «${title}».`, reason: null, href };
+      case 'band_signup_approved':
+        return { icon: CheckCircle2, cls: 'text-green-500', text: `Tu banda «${p.band_name ?? 'una banda'}» tocará «${song}» en «${title}».`, reason: null, href };
+      case 'band_signup_declined':
+        return { icon: XCircle, cls: 'text-warm-base', text: `Tu banda «${p.band_name ?? 'una banda'}» no fue elegida para «${song}» en «${title}».`, reason: null, href };
       case 'signup_approved':
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Te aprobaron para tocar «${song}» en «${title}».`, reason: null, href };
       case 'signup_declined':

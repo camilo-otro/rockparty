@@ -817,6 +817,14 @@ export type Database = {
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
       notify_upcoming_toques: { Args: never; Returns: undefined }
+      set_band_signup_status: {
+        Args: {
+          p_band: number
+          p_performance: number
+          p_status: Database["public"]["Enums"]["signup_status"]
+        }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sign_band_up: {
