@@ -95,7 +95,7 @@ Rough policy intent:
 ## Flows
 
 ### 1. Create a band
-`/bandas/create`: name, (optional bio/avatar), add members and pick **what each
+`/bands/create`: name, (optional bio/avatar), add members and pick **what each
 plays in this band** (multi-instrument per member). Creator becomes a manager.
 
 ### 2. Sign a band up to a song (primary entry point)
@@ -126,7 +126,7 @@ for a non-member to claim. Mechanic **TBD — v2**; the model already allows it 
 `performance_user` row on a band-owned performance whose `user_id` isn't in
 `band_member`).
 
-### 5. Band profile page ✅ (`/bandas/[id]`)
+### 5. Band profile page ✅ (`/bands/[id]`)
 - Header: band name, avatar, bio.
 - **Roster**: members with their band-instruments; managers marked.
 - **Toques**: upcoming toques the band is in + past toques it played (from
@@ -154,7 +154,7 @@ for a non-member to claim. Mechanic **TBD — v2**; the model already allows it 
 ## Confirmed decisions (v1)
 1. **Roster = managers add members directly** — no invite→accept step in v1. ✅
 2. **Approval is band-or-nothing** per song — no per-member drop/swap in v1. ✅
-3. Route **`/bandas/[id]`**, Spanish UI label **"Bandas"**. ✅
+3. Route **`/bands/[id]`**, Spanish UI label **"Bandas"**. ✅
 4. Avatar is a **Supabase Storage upload** (free tier), optimized client-side —
    see Avatar handling. ✅
 
@@ -173,8 +173,8 @@ Free-tier-first, so keep uploaded images small and cheap:
 Epic: **#40**. v1 tickets (dependency order):
 1. **#70** — data model + RLS foundation (tables, `band_id` columns, helpers,
    `sign_band_up` RPC). *Blocks the rest.*
-2. **#71** — create & manage a band (`/bandas/create`, roster, per-band instruments).
-3. **#72** — profile page (`/bandas/[id]`) + performer-profile links.
+2. **#71** — create & manage a band (`/bands/create`, roster, per-band instruments).
+3. **#72** — profile page (`/bands/[id]`) + performer-profile links.
 4. **#73** — sign up as a band (suggest-song "as [band]" + RPC).
 5. **#74** — approval-as-a-unit + band-owned setlist rendering.
 6. **#75** — avatar upload (Storage + client optimize/crop/limit).
