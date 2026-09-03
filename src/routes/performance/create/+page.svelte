@@ -27,18 +27,23 @@
     let myBands: { id: number; name: string }[] = [];
     let signupChoice = '';
     let bandsLoaded = false;
+    let partyIsTest = false;
+    let partyLoaded = false;
 
     async function loadMyBands(uid: string) {
       const { data } = await supabase
         .from('band_member')
-        .select('role, band ( id, name, who_can_sign_up )')
+        .select('role, band ( id, name, who_can_sign_up, is_test )')
         .eq('user_id', uid);
-      // Only bands the user is actually allowed to sign up.
       myBands = (data ?? [])
+        // Only bands the user is actually allowed to sign up.
         .filter((r: any) => r.band && (r.band.who_can_sign_up === 'members' || r.role === 'manager'))
+        // A test band can't play a real event (RLS/RPC enforce it too) — hide the option (#76).
+        .filter((r: any) => partyIsTest || !r.band.is_test)
         .map((r: any) => ({ id: r.band.id, name: r.band.name }));
     }
-    $: if (userId && !bandsLoaded) { bandsLoaded = true; loadMyBands(userId); }
+    // Wait for the party's test flag before listing bands, so the filter is correct.
+    $: if (userId && partyLoaded && !bandsLoaded) { bandsLoaded = true; loadMyBands(userId); }
 
     onMount(async () => {
       unsubscribeUser = user.subscribe(u => {
@@ -46,6 +51,11 @@
         userId = u?.id ?? null;
       });
       partyId = page.url.searchParams.get('partyId') ?? null;
+      if (partyId) {
+        const { data } = await supabase.from('party').select('is_test').eq('id', Number(partyId)).maybeSingle();
+        partyIsTest = data?.is_test ?? false;
+      }
+      partyLoaded = true;
     });
 
     onDestroy(() => {
