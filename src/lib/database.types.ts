@@ -28,6 +28,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: number
+          is_test: boolean
           name: string
           who_can_sign_up: string
         }
@@ -37,6 +38,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: number
+          is_test?: boolean
           name: string
           who_can_sign_up?: string
         }
@@ -46,6 +48,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: number
+          is_test?: boolean
           name?: string
           who_can_sign_up?: string
         }
@@ -808,6 +811,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
       is_band_manager: { Args: { bid: number }; Returns: boolean }

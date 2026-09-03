@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { normalizeText } from '$lib/sanitize';
+  import { isDev } from '$lib/stores/dev';
   import { X, Crown, Trash2 } from 'lucide-svelte';
 
   export let instruments: any[] = [];        // { id, name }
@@ -11,6 +12,7 @@
   export let initialWhoCanSignUp = 'members'; // 'members' | 'managers'
   // { user_id, nickname, role: 'manager'|'member', instruments: number[] }
   export let initialMembers: any[] = [];
+  export let initialIsTest: boolean | null = null; // null = default (on for devs)
   export let submitting = false;
   export let submitLabel = 'Crear banda';
 
@@ -19,6 +21,7 @@
   let name = initialName;
   let bio = initialBio;
   let whoCanSignUp = initialWhoCanSignUp;
+  let isTest = initialIsTest ?? true; // default on for devs; non-devs never send it
   let members = initialMembers.map((m) => ({ ...m, instruments: [...(m.instruments ?? [])] }));
 
   // Ensure the creator is always in the roster as a manager. On create they may
@@ -69,6 +72,7 @@
       name: cleanName,
       bio: normalizeText(bio, 500),
       whoCanSignUp,
+      isTest: $isDev ? isTest : false,
       members: members.map((m) => ({ user_id: m.user_id, role: m.role, instruments: m.instruments }))
     });
   }
@@ -140,6 +144,13 @@
       {/each}
     </div>
   </div>
+
+  {#if $isDev}
+    <label class="flex items-center gap-2 text-yellow">
+      <input type="checkbox" bind:checked={isTest} class="w-4 h-4 accent-warm-base" />
+      Datos de prueba (solo visibles para el equipo)
+    </label>
+  {/if}
 
   <button class="bg-cold-base text-white rounded-full px-6 py-2 self-start disabled:opacity-60" type="submit" disabled={submitting}>
     {submitting ? 'Guardando…' : submitLabel}

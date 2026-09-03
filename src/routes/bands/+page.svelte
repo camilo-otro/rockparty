@@ -7,7 +7,7 @@
   let currentUserId: string | null = null;
   let isAuthenticated = false;
   let loading = true;
-  let bands: { id: number; name: string; role: string }[] = [];
+  let bands: { id: number; name: string; role: string; is_test: boolean }[] = [];
   let unsub: () => void;
 
   onMount(async () => {
@@ -15,11 +15,11 @@
     if (currentUserId) {
       const { data } = await supabase
         .from('band_member')
-        .select('role, band ( id, name )')
+        .select('role, band ( id, name, is_test )')
         .eq('user_id', currentUserId);
       bands = (data ?? [])
         .filter((r: any) => r.band)
-        .map((r: any) => ({ id: r.band.id, name: r.band.name, role: r.role }))
+        .map((r: any) => ({ id: r.band.id, name: r.band.name, role: r.role, is_test: r.band.is_test }))
         .sort((a, b) => a.name.localeCompare(b.name));
     }
     loading = false;
@@ -48,6 +48,7 @@
                   <div class="text-xl text-yellow flex items-center gap-2">
                     {b.name}
                     {#if b.role === 'manager'}<span class="text-[0.6rem] uppercase tracking-wide px-2 py-0.5 rounded-full bg-cold-base text-white inline-flex items-center gap-1"><Crown size={11} /> Manager</span>{/if}
+                    {#if b.is_test}<span class="text-[0.6rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Prueba</span>{/if}
                   </div>
                 </div>
                 <ChevronRight class="text-yellow" size={28} stroke-width={6} />

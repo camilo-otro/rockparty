@@ -264,7 +264,8 @@ create table if not exists public.band (
   avatar_url      text,                                   -- Storage upload (#75)
   who_can_sign_up text not null default 'members'
                   check (who_can_sign_up in ('members', 'managers')),
-  created_by      uuid references public.profile (id)
+  created_by      uuid references public.profile (id),
+  is_test         boolean not null default false            -- test data, dev-only (#76)
 );
 create table if not exists public.band_member (
   band_id    bigint not null references public.band (id) on delete cascade,
@@ -319,6 +320,14 @@ create index if not exists idx_performance_user_band       on public.performance
 create or replace function public.can_see_party(pid bigint)
 returns boolean language sql stable security invoker set search_path = '' as $$
   select exists (select 1 from public.party p where p.id = pid);
+$$;
+
+-- can_see_band: band visibility (#76), used by the band_member / _instrument
+-- SELECT policies. SECURITY INVOKER — leans on band's own SELECT policy. No
+-- recursion: band's policy references only is_test and is_dev(), not band_member.
+create or replace function public.can_see_band(bid bigint)
+returns boolean language sql stable security invoker set search_path = '' as $$
+  select exists (select 1 from public.band b where b.id = bid);
 $$;
 
 -- is_dev: true when the caller is a developer (#67). SECURITY DEFINER so it can
@@ -916,17 +925,19 @@ create policy "dev_user self read" on public.dev_user
 -- Public read (discoverable); writes restricted to that band's managers. The
 -- creator's manager row is added by the band_add_creator_manager trigger
 -- (SECURITY DEFINER), so the insert policy only covers managers adding others.
-create policy "band select all"      on public.band for select to anon, authenticated using (true);
+-- Test bands (#76) are hidden from everyone except devs (mirrors party/venue).
+create policy "band select visible"  on public.band for select to anon, authenticated using (is_test = false or public.is_dev());
 create policy "band insert self"     on public.band for insert to authenticated with check (created_by = (select auth.uid()));
 create policy "band update managers" on public.band for update to authenticated using (public.is_band_manager(id));
 create policy "band delete managers" on public.band for delete to authenticated using (public.is_band_manager(id));
 
-create policy "band_member select all"           on public.band_member for select to anon, authenticated using (true);
+-- A hidden test band's roster stays hidden too (#76).
+create policy "band_member select visible"        on public.band_member for select to anon, authenticated using (public.can_see_band(band_id));
 create policy "band_member insert managers"      on public.band_member for insert to authenticated with check (public.is_band_manager(band_id));
 create policy "band_member update managers"      on public.band_member for update to authenticated using (public.is_band_manager(band_id));
 create policy "band_member delete managers/self" on public.band_member for delete to authenticated using (public.is_band_manager(band_id) or user_id = (select auth.uid()));
 
-create policy "bmi select all"      on public.band_member_instrument for select to anon, authenticated using (true);
+create policy "bmi select visible"  on public.band_member_instrument for select to anon, authenticated using (public.can_see_band(band_id));
 create policy "bmi insert managers" on public.band_member_instrument for insert to authenticated with check (public.is_band_manager(band_id));
 create policy "bmi update managers" on public.band_member_instrument for update to authenticated using (public.is_band_manager(band_id));
 create policy "bmi delete managers" on public.band_member_instrument for delete to authenticated using (public.is_band_manager(band_id));

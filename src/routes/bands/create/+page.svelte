@@ -30,13 +30,13 @@
   }
 
   async function createBand(e: CustomEvent) {
-    const { name, bio, whoCanSignUp, members } = e.detail;
+    const { name, bio, whoCanSignUp, isTest, members } = e.detail;
     if (!currentUserId) return;
     submitting = true;
     try {
       const { data: band, error: bandErr } = await supabase
         .from('band')
-        .insert({ name, bio: bio || null, who_can_sign_up: whoCanSignUp, created_by: currentUserId })
+        .insert({ name, bio: bio || null, who_can_sign_up: whoCanSignUp, is_test: isTest, created_by: currentUserId })
         .select('id')
         .single();
       if (bandErr || !band) { reportError(bandErr ?? new Error('No se pudo crear la banda.')); return; }

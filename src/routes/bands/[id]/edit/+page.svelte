@@ -23,7 +23,7 @@
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
     const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: profiles }] = await Promise.all([
-      supabase.from('band').select('id, name, bio, who_can_sign_up, created_by').eq('id', bandId).maybeSingle(),
+      supabase.from('band').select('id, name, bio, who_can_sign_up, created_by, is_test').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name').order('id'),
@@ -49,11 +49,11 @@
   onDestroy(() => unsub?.());
 
   async function saveBand(e: CustomEvent) {
-    const { name, bio, whoCanSignUp, members } = e.detail;
+    const { name, bio, whoCanSignUp, isTest, members } = e.detail;
     submitting = true;
     try {
       const { error: bErr } = await supabase.from('band')
-        .update({ name, bio: bio || null, who_can_sign_up: whoCanSignUp }).eq('id', bandId);
+        .update({ name, bio: bio || null, who_can_sign_up: whoCanSignUp, is_test: isTest }).eq('id', bandId);
       if (bErr) { reportError(bErr); return; }
 
       const origIds = new Set(originalMembers.map((m) => m.user_id));
@@ -111,6 +111,7 @@
     initialName={band.name}
     initialBio={band.bio ?? ''}
     initialWhoCanSignUp={band.who_can_sign_up}
+    initialIsTest={band.is_test}
     {initialMembers}
     {submitting}
     submitLabel="Guardar cambios"

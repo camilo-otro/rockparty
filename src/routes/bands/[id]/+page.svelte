@@ -16,7 +16,7 @@
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
     const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }] = await Promise.all([
-      supabase.from('band').select('id, name, bio').eq('id', bandId).maybeSingle(),
+      supabase.from('band').select('id, name, bio, is_test').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name')
@@ -51,8 +51,9 @@
   {:else}
     <div class="flex items-center gap-3">
       <div class="bg-base-900 rounded-full p-3"><Users class="text-cold-light" size={28} /></div>
-      <div>
+      <div class="flex flex-col gap-1">
         <h1 class="text-4xl text-yellow font-medium leading-none">{band.name}</h1>
+        {#if band.is_test}<span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Datos de prueba</span>{/if}
       </div>
     </div>
     {#if band.bio}<p class="text-white/90 leading-snug">{band.bio}</p>{/if}
