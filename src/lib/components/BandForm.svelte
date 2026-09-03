@@ -21,6 +21,13 @@
   let whoCanSignUp = initialWhoCanSignUp;
   let members = initialMembers.map((m) => ({ ...m, instruments: [...(m.instruments ?? [])] }));
 
+  // Ensure the creator is always in the roster as a manager. On create they may
+  // not be seeded yet (the user store resolves async), so do it reactively off
+  // the currentUserId prop; on edit they're already in initialMembers.
+  $: if (currentUserId && !members.some((m) => m.user_id === currentUserId)) {
+    members = [{ user_id: currentUserId, nickname: 'Tú', role: 'manager', instruments: [] }, ...members];
+  }
+
   let memberInput = '';
   let filtered: any[] = [];
 

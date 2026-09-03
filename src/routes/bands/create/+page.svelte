@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { get } from 'svelte/store';
   import { supabase } from '$lib/supabaseClient';
   import { user } from '$lib/stores/user';
   import { ChevronLeft } from 'lucide-svelte';
@@ -12,24 +11,18 @@
   let isAuthenticated = false;
   let instruments: any[] = [];
   let userOptions: any[] = [];
-  let initialMembers: any[] = [];
   let submitting = false;
   let unsub: () => void;
 
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; isAuthenticated = !!u?.id; });
-    const me = get(user);
     const [{ data: instr }, { data: profiles }] = await Promise.all([
       supabase.from('instrument').select('id, name').order('id'),
       supabase.from('profile').select('id, nickname')
     ]);
     instruments = instr ?? [];
     userOptions = profiles ?? [];
-    if (me?.id) {
-      // Seed the creator (they become a manager via the DB trigger; here they
-      // just pick what they play).
-      initialMembers = [{ user_id: me.id, nickname: me.nickname ?? 'Tú', role: 'manager', instruments: [] }];
-    }
+    // The creator is seeded into the roster inside BandForm (off currentUserId).
   });
 
   function loginWithGoogle() {
@@ -90,7 +83,6 @@
     {instruments}
     {userOptions}
     {currentUserId}
-    {initialMembers}
     {submitting}
     submitLabel="Crear banda"
     on:submit={createBand}
