@@ -896,39 +896,51 @@ create policy "signup select: approved public, else owner/approvers" on public.p
       )
     )
   );
+-- Band-owned songs are not open jams (#74 follow-up): no direct client signup to
+-- a band-owned performance, and band-tagged rows are managed only by the definer
+-- RPCs (sign_band_up / set_band_signup_status) + FK cascades — never row-by-row.
 create policy "signup insert: self, admin, or proponent" on public.performance_user
   for insert to authenticated with check (
-    user_id = (select auth.uid())
-    or exists (
-      select 1 from public.performance perf join public.party pt on pt.id = perf.party
-      where perf.id = performance_user.performance_id and (
-        pt.created_by = (select auth.uid())
-        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
-        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+    (select perf.band_id from public.performance perf where perf.id = performance_user.performance_id) is null
+    and (
+      user_id = (select auth.uid())
+      or exists (
+        select 1 from public.performance perf join public.party pt on pt.id = perf.party
+        where perf.id = performance_user.performance_id and (
+          pt.created_by = (select auth.uid())
+          or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+          or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+        )
       )
     )
   );
 create policy "signup update: self, admin, or proponent" on public.performance_user
   for update to authenticated using (
-    user_id = (select auth.uid())
-    or exists (
-      select 1 from public.performance perf join public.party pt on pt.id = perf.party
-      where perf.id = performance_user.performance_id and (
-        pt.created_by = (select auth.uid())
-        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
-        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+    band_id is null
+    and (
+      user_id = (select auth.uid())
+      or exists (
+        select 1 from public.performance perf join public.party pt on pt.id = perf.party
+        where perf.id = performance_user.performance_id and (
+          pt.created_by = (select auth.uid())
+          or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+          or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+        )
       )
     )
   );
 create policy "signup delete: self, admin, or proponent" on public.performance_user
   for delete to authenticated using (
-    user_id = (select auth.uid())
-    or exists (
-      select 1 from public.performance perf join public.party pt on pt.id = perf.party
-      where perf.id = performance_user.performance_id and (
-        pt.created_by = (select auth.uid())
-        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
-        or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+    band_id is null
+    and (
+      user_id = (select auth.uid())
+      or exists (
+        select 1 from public.performance perf join public.party pt on pt.id = perf.party
+        where perf.id = performance_user.performance_id and (
+          pt.created_by = (select auth.uid())
+          or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+          or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
+        )
       )
     )
   );

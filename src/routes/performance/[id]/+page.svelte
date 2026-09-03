@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ArrowLeft, Share2, Trash2, Check, X, ExternalLink } from 'lucide-svelte';
+  import { ArrowLeft, Share2, Trash2, Check, X, ExternalLink, Users } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
   import { reportError, toastSuccess, toastInfo, toastError } from '$lib/stores/toasts';
@@ -42,6 +42,9 @@
   let currentUserId: string | null = null;
   let party: any = null;
   let partyAdmins: string[] = [];
+  // Band-owned song (#74 follow-up): not an open jam — no self-signup / open slots.
+  let bandName: string | null = null;
+  $: isBand = !!performance?.band_id;
 
   // How musicians get onto this song (#29). Mirrors the DB trigger so the UI
   // frames the action right; the trigger is the actual enforcement.
@@ -116,6 +119,11 @@
         party = partyData;
         const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', performance.party);
         partyAdmins = (adminData ?? []).map((a) => a.user_id);
+      }
+      // Band-owned song: resolve the band name for the label.
+      if (performance?.band_id) {
+        const { data: bandData } = await supabase.from('band').select('name').eq('id', performance.band_id).maybeSingle();
+        bandName = bandData?.name ?? 'una banda';
       }
       // Fetch suggested by user nickname from user table
       if (performance?.suggested_by) {
@@ -248,6 +256,11 @@
         <img src={suggestedBy?.avatarUrl && suggestedBy.avatarUrl.trim() !== '' ? suggestedBy.avatarUrl : '/images/avatar-default.svg'} alt="Foto de perfil" class="w-6 h-6 rounded-full inline-block mx-2" />
         <span class="text-cold-light">{suggestedBy?.nickname ?? performance.suggested_by}</span>
       </div>
+      {#if isBand}
+        <a href={`/bands/${performance.band_id}`} class="mb-2 inline-flex items-center gap-2 text-cold-light hover:text-white">
+          <Users size={16} /> La toca <span class="text-yellow">{bandName}</span>
+        </a>
+      {/if}
       {#if performance.key}
         <div class="mb-2 text-cold-light">Tonalidad: {performance.key}</div>
       {/if}
@@ -282,7 +295,7 @@
               <span class="text-cold-light">— {u.instrument}</span>
               {#if u.status === 'pending'}<span class="text-yellow text-sm ml-1">· pendiente</span>{/if}
             </div>
-            {#if currentUserId && u.user_id === currentUserId}
+            {#if !isBand && currentUserId && u.user_id === currentUserId}
               <button class="bg-cold-base text-white rounded-lg px-3 py-1 ml-2" on:click={() => removeInstrument(u.user_id, u.instrument_id)}>{u.status === 'pending' ? 'cancelar' : 'eliminar'} <Trash2 class="inline" size={16} /></button>
             {/if}
           </li>
@@ -291,7 +304,7 @@
           <li class="text-cold-light">Nadie se ha anotado aún.</li>
         {/if}
       </ul>
-      {#if canApprove && pendingApplicants.length}
+      {#if !isBand && canApprove && pendingApplicants.length}
         <h3 class="text-2xl text-white font-medium mt-6 mb-2">Por aprobar</h3>
         <div class="mb-4 flex flex-col gap-3">
           {#each groupedPending as group}
@@ -308,28 +321,32 @@
           {/each}
         </div>
       {/if}
-      {#each myDeclined as u}
-        <div class="mb-3 p-3 bg-base-950 rounded-lg flex items-center justify-between gap-2">
-          <span class="text-cold-light text-sm">Tu solicitud para <span class="text-white">{u.instrument}</span> fue rechazada.</span>
-          <button class="bg-cold-base text-white rounded-lg px-3 py-1 shrink-0" on:click={() => reRequest(u.instrument_id)}>Solicitar de nuevo</button>
-        </div>
-      {/each}
-      {#if currentUserId}
-        {#if canSelfSignup}
-          {#if availableInstruments.length}
-            <div class="w-full flex justify-center">
-              <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>{autoApprove ? 'Inscríbete para tocar' : 'Solicitar para tocar'}</button>
-            </div>
+      {#if !isBand}
+        {#each myDeclined as u}
+          <div class="mb-3 p-3 bg-base-950 rounded-lg flex items-center justify-between gap-2">
+            <span class="text-cold-light text-sm">Tu solicitud para <span class="text-white">{u.instrument}</span> fue rechazada.</span>
+            <button class="bg-cold-base text-white rounded-lg px-3 py-1 shrink-0" on:click={() => reRequest(u.instrument_id)}>Solicitar de nuevo</button>
+          </div>
+        {/each}
+        {#if currentUserId}
+          {#if canSelfSignup}
+            {#if availableInstruments.length}
+              <div class="w-full flex justify-center">
+                <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>{autoApprove ? 'Inscríbete para tocar' : 'Solicitar para tocar'}</button>
+              </div>
+            {:else}
+              <div class="w-full text-center text-cold-light mb-4">Todos los cupos están tomados.</div>
+            {/if}
           {:else}
-            <div class="w-full text-center text-cold-light mb-4">Todos los cupos están tomados.</div>
+            <div class="w-full text-center text-cold-light mb-4">Este toque es solo por invitación.</div>
           {/if}
         {:else}
-          <div class="w-full text-center text-cold-light mb-4">Este toque es solo por invitación.</div>
+          <div class="w-full flex justify-center">
+            <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
+          </div>
         {/if}
       {:else}
-        <div class="w-full flex justify-center">
-          <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={loginWithGoogle}>Inicia sesión para tocar</button>
-        </div>
+        <div class="w-full text-center text-cold-light mb-4">Esta canción la toca la banda completa.</div>
       {/if}
     </div>
   {/if}
