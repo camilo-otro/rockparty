@@ -16,7 +16,7 @@
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
     const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }] = await Promise.all([
-      supabase.from('band').select('id, name, bio, is_test').eq('id', bandId).maybeSingle(),
+      supabase.from('band').select('id, name, bio, is_test, avatar_url').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name')
@@ -50,7 +50,11 @@
     <div class="bg-base-900 rounded-lg p-8 text-center text-white">Esta banda no existe.</div>
   {:else}
     <div class="flex items-center gap-3">
-      <div class="bg-base-900 rounded-full p-3"><Users class="text-cold-light" size={28} /></div>
+      {#if band.avatar_url}
+        <img src={band.avatar_url} alt={band.name} class="w-16 h-16 rounded-full object-cover border border-cold-base bg-base-900" />
+      {:else}
+        <div class="bg-base-900 rounded-full p-3"><Users class="text-cold-light" size={28} /></div>
+      {/if}
       <div class="flex flex-col gap-1">
         <h1 class="text-4xl text-yellow font-medium leading-none">{band.name}</h1>
         {#if band.is_test}<span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Datos de prueba</span>{/if}

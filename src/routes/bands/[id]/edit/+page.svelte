@@ -6,6 +6,7 @@
   import { user } from '$lib/stores/user';
   import { ChevronLeft } from 'lucide-svelte';
   import BandForm from '$lib/components/BandForm.svelte';
+  import { uploadBandAvatar, deleteBandAvatarByUrl } from '$lib/bandAvatar';
   import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
   const bandId = Number(page.params.id);
@@ -23,7 +24,7 @@
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
     const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: profiles }] = await Promise.all([
-      supabase.from('band').select('id, name, bio, who_can_sign_up, created_by, is_test').eq('id', bandId).maybeSingle(),
+      supabase.from('band').select('id, name, bio, who_can_sign_up, created_by, is_test, avatar_url').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name').order('id'),
@@ -49,11 +50,20 @@
   onDestroy(() => unsub?.());
 
   async function saveBand(e: CustomEvent) {
-    const { name, bio, whoCanSignUp, isTest, members } = e.detail;
+    const { name, bio, whoCanSignUp, isTest, avatarBlob, removeAvatar, members } = e.detail;
     submitting = true;
     try {
+      // Avatar: upload new (deleting the old), or clear + delete on remove.
+      let avatarUpdate: Record<string, any> = {};
+      if (avatarBlob) {
+        try { avatarUpdate.avatar_url = await uploadBandAvatar(bandId, avatarBlob, band.avatar_url); }
+        catch (err) { reportError(err as any); }
+      } else if (removeAvatar && band.avatar_url) {
+        await deleteBandAvatarByUrl(band.avatar_url);
+        avatarUpdate.avatar_url = null;
+      }
       const { error: bErr } = await supabase.from('band')
-        .update({ name, bio: bio || null, who_can_sign_up: whoCanSignUp, is_test: isTest }).eq('id', bandId);
+        .update({ name, bio: bio || null, who_can_sign_up: whoCanSignUp, is_test: isTest, ...avatarUpdate }).eq('id', bandId);
       if (bErr) { reportError(bErr); return; }
 
       const origIds = new Set(originalMembers.map((m) => m.user_id));
@@ -112,6 +122,7 @@
     initialBio={band.bio ?? ''}
     initialWhoCanSignUp={band.who_can_sign_up}
     initialIsTest={band.is_test}
+    initialAvatarUrl={band.avatar_url}
     {initialMembers}
     {submitting}
     submitLabel="Guardar cambios"

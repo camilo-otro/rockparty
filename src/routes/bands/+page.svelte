@@ -7,7 +7,7 @@
   let currentUserId: string | null = null;
   let isAuthenticated = false;
   let loading = true;
-  let bands: { id: number; name: string; role: string; is_test: boolean }[] = [];
+  let bands: { id: number; name: string; role: string; is_test: boolean; avatar_url: string | null }[] = [];
   let unsub: () => void;
 
   onMount(async () => {
@@ -15,11 +15,11 @@
     if (currentUserId) {
       const { data } = await supabase
         .from('band_member')
-        .select('role, band ( id, name, is_test )')
+        .select('role, band ( id, name, is_test, avatar_url )')
         .eq('user_id', currentUserId);
       bands = (data ?? [])
         .filter((r: any) => r.band)
-        .map((r: any) => ({ id: r.band.id, name: r.band.name, role: r.role, is_test: r.band.is_test }))
+        .map((r: any) => ({ id: r.band.id, name: r.band.name, role: r.role, is_test: r.band.is_test, avatar_url: r.band.avatar_url }))
         .sort((a, b) => a.name.localeCompare(b.name));
     }
     loading = false;
@@ -43,7 +43,11 @@
           {#each bands as b}
             <a href={`/bands/${b.id}`} class="block">
               <li class="flex flex-row items-center bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-3">
-                <Users class="text-cold-light mr-3" size={20} />
+                {#if b.avatar_url}
+                  <img src={b.avatar_url} alt={b.name} class="w-8 h-8 rounded-full object-cover mr-3 border border-cold-base" />
+                {:else}
+                  <Users class="text-cold-light mr-3" size={20} />
+                {/if}
                 <div class="grow">
                   <div class="text-xl text-yellow flex items-center gap-2">
                     {b.name}

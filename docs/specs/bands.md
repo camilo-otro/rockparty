@@ -158,16 +158,40 @@ for a non-member to claim. Mechanic **TBD — v2**; the model already allows it 
 4. Avatar is a **Supabase Storage upload** (free tier), optimized client-side —
    see Avatar handling. ✅
 
-## Avatar handling (band.avatar_url)
-Free-tier-first, so keep uploaded images small and cheap:
-- A dedicated Storage bucket (e.g. `band-avatars`); RLS so only a band's
-  **managers** can write its avatar, public read.
-- **Optimize before upload, client-side:** square-crop, downscale to a small max
-  (e.g. 512×512), re-encode to WebP/JPEG at moderate quality, and enforce a hard
-  size cap (e.g. ≤ ~150 KB) — reject/we-shrink oversized files rather than storing
-  originals. A simple square crop-and-resize on a `<canvas>` covers it; no server
-  processing needed. Same approach is reusable for venue/performer avatars later.
-- Store only the resulting object URL in `band.avatar_url`.
+## Avatar handling (band.avatar_url) — see #75
+
+Free-tier-first, so keep uploaded images small and cheap.
+
+**Why it's all client-side.** Supabase's on-the-fly image resize/transform is
+**Pro-plan only**. On the free tier, *what we upload is exactly what's stored and
+served* — so all crop/downscale/re-encode runs in the browser before upload. That
+is also the cheapest path: we store one small file, never the multi-MB original.
+
+- A dedicated Storage bucket `band-avatars`, **public read** (plain `<img>` loads
+  without auth). Path convention **`{band_id}/{timestamp}.webp`**. Writes gated by
+  a `storage.objects` policy reusing the existing helper — only a band's
+  **managers** may write its folder:
+  `bucket_id = 'band-avatars' and public.is_band_manager((storage.foldername(name))[1]::bigint)`.
+- **Optimize before upload, client-side (`<canvas>`, no deps):** EXIF-oriented
+  decode (`createImageBitmap(file, { imageOrientation: 'from-image' })`) →
+  draggable + zoom square crop → 512×512 → re-encode `image/webp` at ~0.8 (a 512²
+  avatar is typically 30–60 KB) → **hard size cap ~150 KB** (step quality down if
+  over). A small reusable cropper component (venue/performer avatars can reuse it).
+- **Delete-on-replace, versioned names.** Each change uploads a fresh
+  `{band_id}/{timestamp}.webp`, stores the full public URL in `band.avatar_url`,
+  then **deletes the previous object** — so each band holds exactly one avatar
+  (storage is O(bands), not O(edits)) and the new URL keeps CDN caching clean.
+  Upload with a long `cacheControl` (~30 days), safe because names are versioned.
+
+### Do we rate-limit avatar changes? No (v1). ✅
+Frequent changes don't meaningfully consume the free tier: storage stays at one
+file per band (delete-on-replace), uploads are *ingress* (not counted against the
+10 GB/mo egress quota), and egress tracks *views*, not edits. The only effect is
+trivial CDN cache-churn (~50 KB per edge per change). So the **cost guardrails are
+the 150 KB size cap + reliable delete-on-replace**, not a rate limit. Add a **soft
+client-side cooldown** (disable re-upload for a few seconds) as polish only; a
+**hard DB cooldown** (`band.avatar_updated_at` + trigger) is **deferred** — only if
+real abuse appears.
 
 ## Build breakdown (tickets)
 Epic: **#40**. v1 tickets (dependency order):

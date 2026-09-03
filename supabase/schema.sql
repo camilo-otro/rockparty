@@ -1044,3 +1044,16 @@ create policy "bmi select visible"  on public.band_member_instrument for select 
 create policy "bmi insert managers" on public.band_member_instrument for insert to authenticated with check (public.is_band_manager(band_id));
 create policy "bmi update managers" on public.band_member_instrument for update to authenticated using (public.is_band_manager(band_id));
 create policy "bmi delete managers" on public.band_member_instrument for delete to authenticated using (public.is_band_manager(band_id));
+
+-- ---- band avatars (storage, #75) --------------------------------------------
+-- Bucket 'band-avatars' (public read; file_size_limit 256 KB, image/webp only —
+-- a server-side backstop to the client 150 KB/WebP crop). Objects live at
+-- {band_id}/{timestamp}.webp; only a band's managers may write its folder.
+-- Defined in migrations/20260903_band_avatars_bucket.sql (storage schema — kept
+-- here for reference; storage.buckets/objects are managed by Supabase).
+--   insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+--     values ('band-avatars','band-avatars', true, 262144, array['image/webp']);
+--   policy "band-avatars public read"    select using (bucket_id = 'band-avatars')
+--   policy "band-avatars manager insert" insert with check
+--     (bucket_id = 'band-avatars' and public.is_band_manager((storage.foldername(name))[1]::bigint))
+--   policy "band-avatars manager update" / "...delete" — same predicate.

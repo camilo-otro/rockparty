@@ -5,6 +5,7 @@
   import { user } from '$lib/stores/user';
   import { ChevronLeft } from 'lucide-svelte';
   import BandForm from '$lib/components/BandForm.svelte';
+  import { uploadBandAvatar } from '$lib/bandAvatar';
   import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
   let currentUserId: string | null = null;
@@ -30,7 +31,7 @@
   }
 
   async function createBand(e: CustomEvent) {
-    const { name, bio, whoCanSignUp, isTest, members } = e.detail;
+    const { name, bio, whoCanSignUp, isTest, avatarBlob, members } = e.detail;
     if (!currentUserId) return;
     submitting = true;
     try {
@@ -55,6 +56,13 @@
         const { error: insErr } = await supabase.from('band_member_instrument')
           .upsert(rows, { onConflict: 'band_id,user_id,instrument_id', ignoreDuplicates: true });
         if (insErr) { reportError(insErr); return; }
+      }
+      // Avatar upload needs the band id (path + RLS), so it happens post-insert.
+      if (avatarBlob) {
+        try {
+          const url = await uploadBandAvatar(band.id, avatarBlob);
+          await supabase.from('band').update({ avatar_url: url }).eq('id', band.id);
+        } catch (err) { reportError(err as any); }
       }
       toastSuccess('¡Banda creada!');
       goto(`/bands/${band.id}`);

@@ -3,6 +3,7 @@
   import { normalizeText } from '$lib/sanitize';
   import { isDev } from '$lib/stores/dev';
   import { X, Crown, Trash2 } from 'lucide-svelte';
+  import AvatarCropper from '$lib/components/AvatarCropper.svelte';
 
   export let instruments: any[] = [];        // { id, name }
   export let userOptions: any[] = [];         // { id, nickname } — for the member search
@@ -13,6 +14,7 @@
   // { user_id, nickname, role: 'manager'|'member', instruments: number[] }
   export let initialMembers: any[] = [];
   export let initialIsTest: boolean | null = null; // null = default (on for devs)
+  export let initialAvatarUrl: string | null = null;
   export let submitting = false;
   export let submitLabel = 'Crear banda';
 
@@ -22,6 +24,10 @@
   let bio = initialBio;
   let whoCanSignUp = initialWhoCanSignUp;
   let isTest = initialIsTest ?? true; // default on for devs; non-devs never send it
+  // Avatar (#75): the cropper emits a ready-to-upload WebP blob; the page uploads
+  // it (needs the band id). removeAvatar flags clearing an existing one.
+  let avatarBlob: Blob | null = null;
+  let removeAvatar = false;
   let members = initialMembers.map((m) => ({ ...m, instruments: [...(m.instruments ?? [])] }));
 
   // Ensure the creator is always in the roster as a manager. On create they may
@@ -73,6 +79,8 @@
       bio: normalizeText(bio, 500),
       whoCanSignUp,
       isTest: $isDev ? isTest : false,
+      avatarBlob,
+      removeAvatar,
       members: members.map((m) => ({ user_id: m.user_id, role: m.role, instruments: m.instruments }))
     });
   }
@@ -88,6 +96,13 @@
     <label for="band-bio" class="text-cold-light text-sm">Descripción <span class="text-cold-light/60">(opcional)</span></label>
     <textarea id="band-bio" bind:value={bio} rows="2" maxlength="500" class="p-2 border rounded-lg resize-none"></textarea>
   </div>
+
+  <AvatarCropper
+    initialUrl={initialAvatarUrl}
+    on:crop={(e) => { avatarBlob = e.detail.blob; removeAvatar = false; }}
+    on:remove={() => { avatarBlob = null; removeAvatar = true; }}
+    on:error={(e) => dispatch('error', e.detail)}
+  />
 
   <div class="flex flex-col gap-1">
     <label for="band-signup" class="text-cold-light text-sm">¿Quién puede agendar la banda?</label>
