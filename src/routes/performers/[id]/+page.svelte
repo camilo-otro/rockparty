@@ -3,12 +3,13 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ChevronLeft, Edit } from 'lucide-svelte';
+  import { ChevronLeft, Edit, Users } from 'lucide-svelte';
   import { goto } from '$app/navigation';
   import { user } from '$lib/stores/user';
 
   let performer: any = null;
   let instruments: string[] = [];
+  let bands: { id: number; name: string; avatar_url: string | null }[] = []; // #72
   let loading = true;
   let error: string | null = null;
   let currentUserId: string | null = null;
@@ -22,11 +23,13 @@
       error = err.message;
     } else {
       performer = data;
-      const { data: instrData } = await supabase
-        .from('profile_instrument')
-        .select('instrument(name)')
-        .eq('profile_id', id);
+      const [{ data: instrData }, { data: bandRows }] = await Promise.all([
+        supabase.from('profile_instrument').select('instrument(name)').eq('profile_id', id),
+        // RLS hides test bands from non-devs, so this shows only the viewer-visible ones.
+        supabase.from('band_member').select('band ( id, name, avatar_url )').eq('user_id', id)
+      ]);
       instruments = (instrData ?? []).map((r: any) => r.instrument?.name).filter(Boolean);
+      bands = (bandRows ?? []).map((r: any) => r.band).filter(Boolean);
     }
     loading = false;
   });
@@ -63,6 +66,24 @@
           </div>
         {/if}
       </section>
+
+      {#if bands.length}
+        <section class="mt-6">
+          <h3 class="text-lg text-white mb-2">Toca en</h3>
+          <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+            {#each bands as b}
+              <li><a href={`/bands/${b.id}`} class="bg-base-900 px-4 py-3 flex items-center gap-3 hover:bg-base-950 transition">
+                {#if b.avatar_url}
+                  <img src={b.avatar_url} alt={b.name} class="w-8 h-8 rounded-full object-cover border border-cold-base" />
+                {:else}
+                  <span class="w-8 h-8 rounded-full bg-base-950 flex items-center justify-center"><Users size={16} class="text-cold-light" /></span>
+                {/if}
+                <span class="text-yellow">{b.name}</span>
+              </a></li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
 
       {#if currentUserId === performer.id}
         <div class="flex justify-center">

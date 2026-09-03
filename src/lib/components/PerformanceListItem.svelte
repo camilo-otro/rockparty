@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Users } from 'lucide-svelte';
+  import { goto } from '$app/navigation';
 
   export let title;
   export let artist;
@@ -9,8 +10,16 @@
   // highlighted as "you could fill this" instead of dimmed.
   export let highlightInstrumentIds: number[] = [];
   // Band-owned song (#74): render the band + its lineup, no instrument gaps.
-  export let band: { name: string; pending?: boolean } | null = null;
+  export let band: { id?: number; name: string; pending?: boolean } | null = null;
   export let lineup: any[] = []; // for a band: unique members [{ user_id, user_avatar }]
+
+  // The row is wrapped in an <a> to the performance; cancel that and go to the
+  // band profile instead when the band name is clicked (#72).
+  function toBand(e: Event) {
+    if (!band?.id) return;
+    e.preventDefault(); e.stopPropagation();
+    goto(`/bands/${band.id}`);
+  }
   
   // Default instruments with their IDs and icon paths
   const defaultInstruments = [
@@ -42,7 +51,11 @@
     {/if}
     {#if band}
       <span class="text-xs text-cold-light inline-flex items-center gap-1 mt-0.5">
-        <Users size={12} /> {band.name}{#if band.pending} · <span class="text-yellow">pendiente</span>{/if}
+        <Users size={12} />
+        {#if band.id}
+          <span role="link" tabindex="0" class="underline decoration-cold-light/40 hover:decoration-cold-light cursor-pointer" on:click={toBand} on:keydown={(e) => (e.key === 'Enter' ? toBand(e) : null)}>{band.name}</span>
+        {:else}{band.name}{/if}
+        {#if band.pending} · <span class="text-yellow">pendiente</span>{/if}
       </span>
     {/if}
   </div>

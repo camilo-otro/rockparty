@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { supabase } from '$lib/supabaseClient';
   import { user } from '$lib/stores/user';
-  import { ChevronLeft, Crown, Edit, Users } from 'lucide-svelte';
+  import { ChevronLeft, Crown, Edit, Users, CalendarClock } from 'lucide-svelte';
 
   const bandId = Number(page.params.id);
   let currentUserId: string | null = null;
@@ -11,18 +11,40 @@
   let band: any = null;
   let members: { user_id: string; nickname: string; role: string; instruments: string[] }[] = [];
   let isManager = false;
+  // Toques the band plays / has played (#72) — from performance.band_id -> party.
+  let upcomingToques: any[] = [];
+  let pastToques: any[] = [];
   let unsub: () => void;
+
+  // Local YYYY-MM-DD (not toISOString — avoids the UTC day-shift).
+  function todayStr(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
 
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
-    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }] = await Promise.all([
+    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: perfRows }] = await Promise.all([
       supabase.from('band').select('id, name, bio, is_test, avatar_url').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
-      supabase.from('instrument').select('id, name')
+      supabase.from('instrument').select('id, name'),
+      // RLS scopes these to parties the viewer can see; one row per song, dedup below.
+      supabase.from('performance').select('party ( id, title, date, status )').eq('band_id', bandId)
     ]);
     band = b;
     if (band) {
+      // Dedup toques by party (a band can own several songs in one toque), drop
+      // cancelled, split upcoming vs past by date.
+      const byParty = new Map<number, any>();
+      for (const r of perfRows ?? []) {
+        const pt = (r as any).party;
+        if (pt && pt.status !== 'cancelled' && !byParty.has(pt.id)) byParty.set(pt.id, pt);
+      }
+      const today = todayStr();
+      const all = [...byParty.values()];
+      upcomingToques = all.filter((p) => (p.date ?? '') >= today).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+      pastToques = all.filter((p) => (p.date ?? '') < today).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
       const iName = new Map((instr ?? []).map((i: any) => [i.id, i.name]));
       const instByUser: Record<string, string[]> = {};
       for (const r of bmi ?? []) (instByUser[r.user_id] ??= []).push(iName.get(r.instrument_id));
@@ -65,7 +87,7 @@
     <h2 class="text-xl text-white mt-2">INTEGRANTES · {members.length}</h2>
     <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
       {#each members as m}
-        <li class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3">
+        <li><a href={`/performers/${m.user_id}`} class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3 hover:bg-base-950 transition">
           <div>
             <div class="text-white flex items-center gap-2">
               {m.nickname}
@@ -73,8 +95,34 @@
             </div>
             {#if m.instruments.length}<div class="text-sm text-cold-light">{m.instruments.join(' · ')}</div>{/if}
           </div>
-        </li>
+        </a></li>
       {/each}
     </ul>
+
+    {#if upcomingToques.length || pastToques.length}
+      <h2 class="text-xl text-white mt-4 flex items-center gap-2"><CalendarClock size={18} class="text-cold-light" /> TOQUES</h2>
+      {#if upcomingToques.length}
+        <div class="text-cold-light text-sm -mb-1">Próximos</div>
+        <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+          {#each upcomingToques as t}
+            <li><a href={`/parties/${t.id}`} class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3 hover:bg-base-950 transition">
+              <span class="text-yellow truncate">{t.title ?? 'Toque'}</span>
+              {#if t.date}<span class="text-sm text-cold-light shrink-0">{t.date}</span>{/if}
+            </a></li>
+          {/each}
+        </ul>
+      {/if}
+      {#if pastToques.length}
+        <div class="text-cold-light text-sm -mb-1 {upcomingToques.length ? 'mt-2' : ''}">Anteriores</div>
+        <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+          {#each pastToques as t}
+            <li><a href={`/parties/${t.id}`} class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3 hover:bg-base-950 transition">
+              <span class="text-white/80 truncate">{t.title ?? 'Toque'}</span>
+              {#if t.date}<span class="text-sm text-cold-light shrink-0">{t.date}</span>{/if}
+            </a></li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
   {/if}
 </div>
