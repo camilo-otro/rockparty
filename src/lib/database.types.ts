@@ -21,6 +21,116 @@ export type Database = {
   }
   public: {
     Tables: {
+      band: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          created_by: string | null
+          id: number
+          name: string
+          who_can_sign_up: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          name: string
+          who_can_sign_up?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          name?: string
+          who_can_sign_up?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "band_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      band_member: {
+        Row: {
+          band_id: number
+          created_at: string
+          role: Database["public"]["Enums"]["band_role"]
+          user_id: string
+        }
+        Insert: {
+          band_id: number
+          created_at?: string
+          role?: Database["public"]["Enums"]["band_role"]
+          user_id: string
+        }
+        Update: {
+          band_id?: number
+          created_at?: string
+          role?: Database["public"]["Enums"]["band_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "band_member_band_id_fkey"
+            columns: ["band_id"]
+            isOneToOne: false
+            referencedRelation: "band"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "band_member_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      band_member_instrument: {
+        Row: {
+          band_id: number
+          created_at: string
+          instrument_id: number
+          user_id: string
+        }
+        Insert: {
+          band_id: number
+          created_at?: string
+          instrument_id: number
+          user_id: string
+        }
+        Update: {
+          band_id?: number
+          created_at?: string
+          instrument_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "band_member_instrument_band_id_user_id_fkey"
+            columns: ["band_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "band_member"
+            referencedColumns: ["band_id", "user_id"]
+          },
+          {
+            foreignKeyName: "band_member_instrument_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "instrument"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dev_user: {
         Row: {
           created_at: string
@@ -267,6 +377,7 @@ export type Database = {
       }
       performance: {
         Row: {
+          band_id: number | null
           created_at: string
           id: number
           key: string | null
@@ -277,6 +388,7 @@ export type Database = {
           suggested_by: string | null
         }
         Insert: {
+          band_id?: number | null
           created_at?: string
           id?: number
           key?: string | null
@@ -287,6 +399,7 @@ export type Database = {
           suggested_by?: string | null
         }
         Update: {
+          band_id?: number | null
           created_at?: string
           id?: number
           key?: string | null
@@ -297,6 +410,13 @@ export type Database = {
           suggested_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "performance_band_id_fkey"
+            columns: ["band_id"]
+            isOneToOne: false
+            referencedRelation: "band"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "performance_party_fkey"
             columns: ["party"]
@@ -322,6 +442,7 @@ export type Database = {
       }
       performance_user: {
         Row: {
+          band_id: number | null
           created_at: string
           instrument_id: number
           performance_id: number
@@ -329,6 +450,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          band_id?: number | null
           created_at?: string
           instrument_id: number
           performance_id: number
@@ -336,6 +458,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          band_id?: number | null
           created_at?: string
           instrument_id?: number
           performance_id?: number
@@ -343,6 +466,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "performance_user_band_id_fkey"
+            columns: ["band_id"]
+            isOneToOne: false
+            referencedRelation: "band"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "performance_user_instrument_id_fkey"
             columns: ["instrument_id"]
@@ -679,12 +809,19 @@ export type Database = {
     }
     Functions: {
       can_see_party: { Args: { pid: number }; Returns: boolean }
+      can_sign_up_band: { Args: { bid: number }; Returns: boolean }
+      is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
       notify_upcoming_toques: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sign_band_up: {
+        Args: { p_band: number; p_performance: number }
+        Returns: undefined
+      }
     }
     Enums: {
+      band_role: "manager" | "member"
       engagement_model:
         | "free"
         | "door_split"
@@ -717,12 +854,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -746,11 +883,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -771,11 +908,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -796,11 +933,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -813,11 +950,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -829,6 +966,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      band_role: ["manager", "member"],
       engagement_model: [
         "free",
         "door_split",
