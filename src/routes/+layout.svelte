@@ -92,6 +92,7 @@
           <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-base-900 rounded-lg shadow-lg z-10 overflow-hidden" in:scale={{ duration: 200 }}>
             <a href="/parties/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis toques</a>
             <a href="/rehearsal" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Lista de ensayo</a>
+            <a href="/bands" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis bandas</a>
             <a href={`/performers/${session.user.id}`} on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Ver mi perfil</a>
             <button class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950" on:click={signOut}>Cerrar sesión</button>
           </div>
