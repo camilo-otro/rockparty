@@ -46,6 +46,8 @@
         return { icon: CalendarClock, cls: 'text-cold-light', text: `Recordatorio: el toque «${title}» es mañana.`, reason: null, href };
       case 'signup_requested':
         return { icon: UserPlus, cls: 'text-cold-light', text: `Alguien quiere tocar «${song}» en «${title}».`, reason: null, href };
+      case 'band_signup_requested':
+        return { icon: UserPlus, cls: 'text-cold-light', text: `La banda «${p.band_name ?? 'una banda'}» quiere tocar «${song}» en «${title}».`, reason: null, href };
       case 'signup_approved':
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Te aprobaron para tocar «${song}» en «${title}».`, reason: null, href };
       case 'signup_declined':

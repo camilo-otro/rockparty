@@ -23,6 +23,22 @@
     let key = '';
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
+    // Sign up as a band (#73): '' = open jam song; otherwise a band id.
+    let myBands: { id: number; name: string }[] = [];
+    let signupChoice = '';
+    let bandsLoaded = false;
+
+    async function loadMyBands(uid: string) {
+      const { data } = await supabase
+        .from('band_member')
+        .select('role, band ( id, name, who_can_sign_up )')
+        .eq('user_id', uid);
+      // Only bands the user is actually allowed to sign up.
+      myBands = (data ?? [])
+        .filter((r: any) => r.band && (r.band.who_can_sign_up === 'members' || r.role === 'manager'))
+        .map((r: any) => ({ id: r.band.id, name: r.band.name }));
+    }
+    $: if (userId && !bandsLoaded) { bandsLoaded = true; loadMyBands(userId); }
 
     onMount(async () => {
       unsubscribeUser = user.subscribe(u => {
@@ -101,7 +117,13 @@
             if (dbError) {
                 reportError(dbError);
             } else {
-                toastSuccess('¡Agregada al setlist!');
+                const perfId = data?.[0]?.id;
+                // If a band was chosen, claim the song for it + sign up its lineup.
+                if (signupChoice && perfId) {
+                    const { error: rpcErr } = await supabase.rpc('sign_band_up', { p_performance: perfId, p_band: Number(signupChoice) });
+                    if (rpcErr) { reportError(rpcErr); submitting = false; return; }
+                }
+                toastSuccess(signupChoice ? '¡Banda agregada al setlist!' : '¡Agregada al setlist!');
                 setTimeout(() => {
                     goto(`/parties/${partyId}`);
                 }, 1000);
@@ -145,6 +167,15 @@
             <input id="ref_link" type="text" bind:value={refLink} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 100 }} />
             <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Tonalidad</label>
             <input id="key" type="text" bind:value={key} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 150 }} />
+            {#if myBands.length}
+              <label for="signup" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 175 }}>¿Quién la toca?</label>
+              <select id="signup" bind:value={signupChoice} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 175 }}>
+                <option value="">Ábrela — cualquiera se suma</option>
+                {#each myBands as b}
+                  <option value={b.id}>La toca {b.name}</option>
+                {/each}
+              </select>
+            {/if}
         </div>
         <div class="flex justify-center mb-8" in:fly={{ y: -30, duration: 400, delay: 200 }}>
           <button class="bg-cold-base text-white text-sm rounded-full mx-auto p-2 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
