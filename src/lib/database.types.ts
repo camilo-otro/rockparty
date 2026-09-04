@@ -850,8 +850,22 @@ export type Database = {
       is_dev: { Args: never; Returns: boolean }
       notify_upcoming_toques: { Args: never; Returns: undefined }
       search_songs: {
-        Args: { q: string; lim?: number }
-        Returns: Database["public"]["Tables"]["song"]["Row"][]
+        Args: { lim?: number; q: string }
+        Returns: {
+          added_by: string | null
+          artist: string | null
+          created_at: string
+          duration: number | null
+          id: number
+          ref_link: string | null
+          title: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "song"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       set_band_signup_status: {
         Args: {
