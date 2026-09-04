@@ -10,6 +10,7 @@
   let loading = true;
   let band: any = null;
   let members: { user_id: string; nickname: string; role: string; instruments: string[] }[] = [];
+  let pendingMembers: { display_name: string; instruments: string[] }[] = []; // #78
   let isManager = false;
   // Toques the band plays / has played (#72) — from performance.band_id -> party.
   let upcomingToques: any[] = [];
@@ -24,13 +25,14 @@
 
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
-    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: perfRows }] = await Promise.all([
+    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: perfRows }, { data: pend }] = await Promise.all([
       supabase.from('band').select('id, name, bio, is_test, avatar_url').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name'),
       // RLS scopes these to parties the viewer can see; one row per song, dedup below.
-      supabase.from('performance').select('party ( id, title, date, status )').eq('band_id', bandId)
+      supabase.from('performance').select('party ( id, title, date, status )').eq('band_id', bandId),
+      supabase.from('band_pending_member').select('id, display_name, instrument_ids').eq('band_id', bandId) // #78
     ]);
     band = b;
     if (band) {
@@ -51,6 +53,10 @@
       members = (mem ?? [])
         .map((m: any) => ({ user_id: m.user_id, nickname: m.profile?.nickname ?? '—', role: m.role, instruments: (instByUser[m.user_id] ?? []).filter(Boolean) }))
         .sort((a, b) => (a.role === b.role ? 0 : a.role === 'manager' ? -1 : 1));
+      pendingMembers = (pend ?? []).map((p: any) => ({
+        display_name: p.display_name,
+        instruments: (p.instrument_ids ?? []).map((id: number) => iName.get(id)).filter(Boolean)
+      }));
       isManager = !!currentUserId && members.some((m) => m.user_id === currentUserId && m.role === 'manager');
     }
     loading = false;
@@ -84,7 +90,7 @@
     </div>
     {#if band.bio}<p class="text-white/90 leading-snug">{band.bio}</p>{/if}
 
-    <h2 class="text-xl text-white mt-2">INTEGRANTES · {members.length}</h2>
+    <h2 class="text-xl text-white mt-2">INTEGRANTES · {members.length + pendingMembers.length}</h2>
     <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
       {#each members as m}
         <li><a href={`/performers/${m.user_id}`} class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3 hover:bg-base-950 transition">
@@ -96,6 +102,17 @@
             {#if m.instruments.length}<div class="text-sm text-cold-light">{m.instruments.join(' · ')}</div>{/if}
           </div>
         </a></li>
+      {/each}
+      {#each pendingMembers as p}
+        <li class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="text-white/90 flex items-center gap-2">
+              {p.display_name}
+              <span class="text-[0.6rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-cold-light/40 text-cold-light">Invitado</span>
+            </div>
+            {#if p.instruments.length}<div class="text-sm text-cold-light">{p.instruments.join(' · ')}</div>{/if}
+          </div>
+        </li>
       {/each}
     </ul>
 

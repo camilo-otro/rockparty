@@ -13,6 +13,8 @@
   export let initialWhoCanSignUp = 'members'; // 'members' | 'managers'
   // { user_id, nickname, role: 'manager'|'member', instruments: number[] }
   export let initialMembers: any[] = [];
+  // Placeholder members (#78): { id?, display_name, instruments: number[] } — no account yet.
+  export let initialPendingMembers: any[] = [];
   export let initialIsTest: boolean | null = null; // null = default (on for devs)
   export let initialAvatarUrl: string | null = null;
   export let submitting = false;
@@ -28,19 +30,24 @@
   // it (needs the band id). removeAvatar flags clearing an existing one.
   let avatarBlob: Blob | null = null;
   let removeAvatar = false;
-  let members = initialMembers.map((m) => ({ ...m, instruments: [...(m.instruments ?? [])] }));
+  // Unified roster: real members (user_id) + placeholders (#78, isPending). Each
+  // carries a stable `key` for the {#each} since placeholders have no user_id.
+  let seedCount = 0;
+  let members: any[] = [
+    ...initialMembers.map((m) => ({ key: m.user_id, user_id: m.user_id, nickname: m.nickname, role: m.role, instruments: [...(m.instruments ?? [])], isPending: false })),
+    ...initialPendingMembers.map((m) => ({ key: `p${seedCount++}`, pending_id: m.id, display_name: m.display_name, instruments: [...(m.instruments ?? [])], isPending: true }))
+  ];
+  let pendingCounter = seedCount;
 
-  // Ensure the creator is always in the roster as a manager. On create they may
-  // not be seeded yet (the user store resolves async), so do it reactively off
-  // the currentUserId prop; on edit they're already in initialMembers.
+  // Ensure the creator is always in the roster as a manager (real user).
   $: if (currentUserId && !members.some((m) => m.user_id === currentUserId)) {
-    members = [{ user_id: currentUserId, nickname: 'Tú', role: 'manager', instruments: [] }, ...members];
+    members = [{ key: currentUserId, user_id: currentUserId, nickname: 'Tú', role: 'manager', instruments: [], isPending: false }, ...members];
   }
+
+  const memberLabel = (m: any) => (m.isPending ? m.display_name : m.nickname);
 
   let memberInput = '';
   let filtered: any[] = [];
-
-  const instrName = (id: number) => instruments.find((i) => i.id === id)?.name ?? '';
 
   function handleMemberInput(e: Event) {
     memberInput = (e.target as HTMLInputElement).value;
@@ -50,12 +57,19 @@
       : [];
   }
   function addMember(u: any) {
-    members = [...members, { user_id: u.id, nickname: u.nickname, role: 'member', instruments: [] }];
+    members = [...members, { key: u.id, user_id: u.id, nickname: u.nickname, role: 'member', instruments: [], isPending: false }];
     memberInput = '';
     filtered = [];
   }
-  function removeMember(user_id: string) {
-    members = members.filter((m) => m.user_id !== user_id);
+  function addPending() {
+    const clean = normalizeText(memberInput, 80);
+    if (!clean) return;
+    members = [...members, { key: `p${pendingCounter++}`, display_name: clean, instruments: [], isPending: true }];
+    memberInput = '';
+    filtered = [];
+  }
+  function removeMember(key: string) {
+    members = members.filter((m) => m.key !== key);
   }
   function toggleRole(m: any) {
     m.role = m.role === 'manager' ? 'member' : 'manager';
@@ -71,7 +85,7 @@
     if (!cleanName) { dispatch('error', 'La banda necesita un nombre.'); return; }
     const withoutInstruments = members.filter((m) => m.instruments.length === 0);
     if (withoutInstruments.length) {
-      dispatch('error', `Falta elegir qué toca ${withoutInstruments[0].nickname}.`);
+      dispatch('error', `Falta elegir qué toca ${memberLabel(withoutInstruments[0])}.`);
       return;
     }
     dispatch('submit', {
@@ -81,7 +95,8 @@
       isTest: $isDev ? isTest : false,
       avatarBlob,
       removeAvatar,
-      members: members.map((m) => ({ user_id: m.user_id, role: m.role, instruments: m.instruments }))
+      members: members.filter((m) => !m.isPending).map((m) => ({ user_id: m.user_id, role: m.role, instruments: m.instruments })),
+      pendingMembers: members.filter((m) => m.isPending).map((m) => ({ id: m.pending_id, display_name: m.display_name, instruments: m.instruments }))
     });
   }
 </script>
@@ -117,30 +132,37 @@
     <span class="text-cold-light text-sm">Integrantes</span>
 
     <div class="relative">
-      <input type="text" bind:value={memberInput} on:input={handleMemberInput} placeholder="Buscar músico…" class="p-2 border rounded-lg w-full" />
-      {#if filtered.length}
+      <input type="text" bind:value={memberInput} on:input={handleMemberInput} placeholder="Buscar músico o escribe un nombre…" class="p-2 border rounded-lg w-full" />
+      {#if filtered.length || memberInput.trim()}
         <ul class="absolute z-10 left-0 right-0 bg-base-950 border rounded-lg shadow mt-1 overflow-hidden">
           {#each filtered as u}
             <li><button type="button" class="w-full text-left p-2 text-white hover:bg-base-900" on:click={() => addMember(u)}>{u.nickname}</button></li>
           {/each}
+          {#if memberInput.trim()}
+            <li><button type="button" class="w-full text-left p-2 text-cold-light hover:bg-base-900 border-t border-base-900" on:click={addPending}>＋ Agregar «{memberInput.trim()}» como invitado <span class="text-cold-light/60">(sin cuenta)</span></button></li>
+          {/if}
         </ul>
       {/if}
     </div>
 
     <div class="flex flex-col gap-3 mt-1">
-      {#each members as m (m.user_id)}
+      {#each members as m (m.key)}
         <div class="bg-base-900 rounded-lg p-3 flex flex-col gap-2">
           <div class="flex items-center justify-between gap-2">
             <div class="text-white flex items-center gap-2">
-              {m.nickname}{#if m.user_id === currentUserId}<span class="text-cold-light/70 text-xs">(tú)</span>{/if}
+              {memberLabel(m)}
+              {#if m.user_id === currentUserId}<span class="text-cold-light/70 text-xs">(tú)</span>{/if}
+              {#if m.isPending}<span class="text-[0.6rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-cold-light/40 text-cold-light">Invitado</span>{/if}
             </div>
             <div class="flex items-center gap-1">
-              <button type="button" on:click={() => toggleRole(m)}
-                class="text-xs uppercase tracking-wide px-2 py-1 rounded-full inline-flex items-center gap-1 transition {m.role === 'manager' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">
-                <Crown size={12} /> {m.role === 'manager' ? 'Manager' : 'Miembro'}
-              </button>
+              {#if !m.isPending}
+                <button type="button" on:click={() => toggleRole(m)}
+                  class="text-xs uppercase tracking-wide px-2 py-1 rounded-full inline-flex items-center gap-1 transition {m.role === 'manager' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">
+                  <Crown size={12} /> {m.role === 'manager' ? 'Manager' : 'Miembro'}
+                </button>
+              {/if}
               {#if m.user_id !== currentUserId}
-                <button type="button" on:click={() => removeMember(m.user_id)} class="text-red-400 hover:text-red-300 p-1" aria-label="Quitar"><Trash2 size={15} /></button>
+                <button type="button" on:click={() => removeMember(m.key)} class="text-red-400 hover:text-red-300 p-1" aria-label="Quitar"><Trash2 size={15} /></button>
               {/if}
             </div>
           </div>

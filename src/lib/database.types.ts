@@ -134,6 +134,38 @@ export type Database = {
           },
         ]
       }
+      band_pending_member: {
+        Row: {
+          band_id: number
+          created_at: string
+          display_name: string
+          id: number
+          instrument_ids: number[]
+        }
+        Insert: {
+          band_id: number
+          created_at?: string
+          display_name: string
+          id?: number
+          instrument_ids?: number[]
+        }
+        Update: {
+          band_id?: number
+          created_at?: string
+          display_name?: string
+          id?: number
+          instrument_ids?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "band_pending_member_band_id_fkey"
+            columns: ["band_id"]
+            isOneToOne: false
+            referencedRelation: "band"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dev_user: {
         Row: {
           created_at: string

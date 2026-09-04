@@ -17,22 +17,25 @@
   let instruments: any[] = [];
   let userOptions: any[] = [];
   let initialMembers: any[] = [];
+  let initialPendingMembers: any[] = []; // #78
   let originalMembers: any[] = [];   // snapshot for the save-time diff
   let submitting = false;
   let unsub: () => void;
 
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
-    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: profiles }] = await Promise.all([
+    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: profiles }, { data: pend }] = await Promise.all([
       supabase.from('band').select('id, name, bio, who_can_sign_up, created_by, is_test, avatar_url').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name').order('id'),
-      supabase.from('profile').select('id, nickname')
+      supabase.from('profile').select('id, nickname'),
+      supabase.from('band_pending_member').select('id, display_name, instrument_ids').eq('band_id', bandId)
     ]);
     band = b;
     instruments = instr ?? [];
     userOptions = profiles ?? [];
+    initialPendingMembers = (pend ?? []).map((p: any) => ({ id: p.id, display_name: p.display_name, instruments: p.instrument_ids ?? [] }));
     if (band) {
       const instByUser: Record<string, number[]> = {};
       for (const r of bmi ?? []) (instByUser[r.user_id] ??= []).push(r.instrument_id);
@@ -50,7 +53,7 @@
   onDestroy(() => unsub?.());
 
   async function saveBand(e: CustomEvent) {
-    const { name, bio, whoCanSignUp, isTest, avatarBlob, removeAvatar, members } = e.detail;
+    const { name, bio, whoCanSignUp, isTest, avatarBlob, removeAvatar, members, pendingMembers } = e.detail;
     submitting = true;
     try {
       // Avatar: upload new (deleting the old), or clear + delete on remove.
@@ -92,6 +95,13 @@
           .upsert(rows, { onConflict: 'band_id,user_id,instrument_id', ignoreDuplicates: true });
         if (error) { reportError(error); return; }
       }
+      // Placeholder members (#78): wholesale replace (small set).
+      await supabase.from('band_pending_member').delete().eq('band_id', bandId);
+      if (pendingMembers?.length) {
+        const { error } = await supabase.from('band_pending_member')
+          .insert(pendingMembers.map((p: any) => ({ band_id: bandId, display_name: p.display_name, instrument_ids: p.instruments })));
+        if (error) { reportError(error); return; }
+      }
       toastSuccess('Banda actualizada.');
       goto(`/bands/${bandId}`);
     } catch (err) {
@@ -124,6 +134,7 @@
     initialIsTest={band.is_test}
     initialAvatarUrl={band.avatar_url}
     {initialMembers}
+    {initialPendingMembers}
     {submitting}
     submitLabel="Guardar cambios"
     on:submit={saveBand}

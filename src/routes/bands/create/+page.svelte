@@ -31,7 +31,7 @@
   }
 
   async function createBand(e: CustomEvent) {
-    const { name, bio, whoCanSignUp, isTest, avatarBlob, members } = e.detail;
+    const { name, bio, whoCanSignUp, isTest, avatarBlob, members, pendingMembers } = e.detail;
     if (!currentUserId) return;
     submitting = true;
     try {
@@ -56,6 +56,12 @@
         const { error: insErr } = await supabase.from('band_member_instrument')
           .upsert(rows, { onConflict: 'band_id,user_id,instrument_id', ignoreDuplicates: true });
         if (insErr) { reportError(insErr); return; }
+      }
+      // Placeholder members (#78): display-only, no account yet.
+      if (pendingMembers?.length) {
+        const { error: pErr } = await supabase.from('band_pending_member')
+          .insert(pendingMembers.map((p: any) => ({ band_id: band.id, display_name: p.display_name, instrument_ids: p.instruments })));
+        if (pErr) { reportError(pErr); return; }
       }
       // Avatar upload needs the band id (path + RLS), so it happens post-insert.
       if (avatarBlob) {
