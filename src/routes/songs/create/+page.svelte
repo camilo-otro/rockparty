@@ -8,6 +8,7 @@
     import { supabase } from '$lib/supabaseClient';
     import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import { normalizeText } from '$lib/sanitize';
+    import { tidySpotifyResults } from '$lib/spotify';
 
     let userId: string | null = null;
     let isAuthenticated = false;
@@ -60,7 +61,8 @@
         const { data, error } = await supabase.functions.invoke('spotify-track', { body: { q: term } });
         if (seq !== searchSeq) return; // superseded
         if (error || (data as any)?.error) { searchError = 'No se pudo buscar en Spotify. Intenta de nuevo.'; results = []; return; }
-        results = (data as any).results ?? [];
+        // Drop remix/live versions and strip remaster tags from the kept titles.
+        results = tidySpotifyResults((data as any).results ?? []);
       } catch {
         if (seq === searchSeq) { searchError = 'No se pudo conectar con el servidor.'; results = []; }
       } finally {
