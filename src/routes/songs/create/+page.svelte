@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft, Search, ExternalLink, Check } from 'lucide-svelte';
+    import { ArrowLeft, Search, ExternalLink } from 'lucide-svelte';
     import { goto } from '$app/navigation';
     import { onMount, onDestroy } from 'svelte';
     import { user } from '$lib/stores/user';
@@ -15,12 +15,14 @@
     let fromPerformance = false;
     let partyId: string | null = null;
 
-    // Spotify import (#80)
-    let link = '';
-    let looking = false;
-    let lookupError = '';
-    let preview: { title: string; artist: string; art_url: string | null; spotify_url: string } | null = null;
+    // In-app Spotify search (#83)
+    let query = '';
+    let searching = false;
+    let searchError = '';
+    let results: { title: string; artist: string; art_url: string | null; spotify_url: string }[] = [];
     let submitting = false;
+    let searchSeq = 0;
+    let searchTimer: any = null;
 
     // Manual fallback (songs not on Spotify)
     let manualOpen = false;
@@ -33,7 +35,7 @@
       fromPerformance = params.get('from') === 'performance';
       partyId = params.get('partyId');
     });
-    onDestroy(() => { if (unsubscribeUser) unsubscribeUser(); });
+    onDestroy(() => { if (unsubscribeUser) unsubscribeUser(); clearTimeout(searchTimer); });
 
     function continueFlow() {
       setTimeout(() => {
@@ -42,35 +44,34 @@
       }, 500);
     }
 
-    async function lookup() {
-      lookupError = '';
-      preview = null;
-      const url = link.trim();
-      if (!/open\.spotify\.com\/.*track\/|spotify:track:/.test(url)) {
-        lookupError = 'Pega un enlace de canción de Spotify.';
-        return;
-      }
-      looking = true;
+    // Debounced Spotify search with a latest-wins guard.
+    $: scheduleSearch(query);
+    function scheduleSearch(q: string) {
+      clearTimeout(searchTimer);
+      const term = (q ?? '').trim();
+      searchError = '';
+      if (term.length < 2) { results = []; return; }
+      searchTimer = setTimeout(() => runSearch(term), 300);
+    }
+    async function runSearch(term: string) {
+      const seq = ++searchSeq;
+      searching = true;
       try {
-        const { data, error } = await supabase.functions.invoke('spotify-track', { body: { url } });
-        if (error) { lookupError = 'No se pudo leer la canción. Revisa el enlace o intenta de nuevo.'; return; }
-        if ((data as any)?.error) { lookupError = (data as any).message ?? 'No se encontró la canción.'; return; }
-        preview = {
-          title: (data as any).title,
-          artist: (data as any).artist,
-          art_url: (data as any).art_url,
-          spotify_url: (data as any).spotify_url
-        };
+        const { data, error } = await supabase.functions.invoke('spotify-track', { body: { q: term } });
+        if (seq !== searchSeq) return; // superseded
+        if (error || (data as any)?.error) { searchError = 'No se pudo buscar en Spotify. Intenta de nuevo.'; results = []; return; }
+        results = (data as any).results ?? [];
       } catch {
-        lookupError = 'No se pudo conectar con el servidor.';
+        if (seq === searchSeq) { searchError = 'No se pudo conectar con el servidor.'; results = []; }
       } finally {
-        looking = false;
+        if (seq === searchSeq) searching = false;
       }
     }
 
-    // Reuse an existing song (by Spotify link, else title+artist) or insert a new one,
-    // then continue. Returns nothing; drives navigation.
+    // Reuse an existing song (by Spotify link, else title+artist) or insert a new
+    // one, then continue.
     async function insertOrReuse(row: { title: string; artist: string; ref_link: string | null }) {
+      if (submitting) return;
       submitting = true;
       try {
         if (row.ref_link) {
@@ -79,7 +80,6 @@
         }
         const { error } = await supabase.from('song').insert([{ title: row.title, artist: row.artist, ref_link: row.ref_link, added_by: userId }]);
         if (error) {
-          // Unique violation (ref_link or title+artist): it already exists — reuse.
           if ((error as any).code === '23505') { toastSuccess('Esa canción ya estaba en la app.'); continueFlow(); return; }
           reportError(error); return;
         }
@@ -92,9 +92,8 @@
       }
     }
 
-    function addFromSpotify() {
-      if (!preview) return;
-      insertOrReuse({ title: normalizeText(preview.title, 200), artist: normalizeText(preview.artist, 200), ref_link: preview.spotify_url });
+    function addResult(r: { title: string; artist: string; spotify_url: string }) {
+      insertOrReuse({ title: normalizeText(r.title, 200), artist: normalizeText(r.artist, 200), ref_link: r.spotify_url });
     }
 
     function addManual() {
@@ -120,41 +119,41 @@
   </div>
 {:else}
   <div class="flex flex-col gap-4 p-4">
-    <p class="text-cold-light text-sm">Busca la canción en Spotify y pega su enlace — así queda con el título y artista correctos.</p>
-
-    <a href="https://open.spotify.com/search" target="_blank" rel="noopener"
-       class="self-start inline-flex items-center gap-2 border border-cold-light/40 text-cold-light rounded-full px-4 py-2 text-sm hover:border-cold-light">
-      <Search size={16} /> Buscar en Spotify <ExternalLink size={14} />
-    </a>
-
-    <div class="flex flex-col gap-2">
-      <label for="spotify-link" class="text-cold-light text-sm">Enlace de Spotify</label>
-      <div class="flex gap-2">
-        <input id="spotify-link" type="text" bind:value={link} on:keydown={(e) => e.key === 'Enter' && lookup()}
-               placeholder="https://open.spotify.com/track/…" class="flex-1 p-2 border rounded-lg" />
-        <button type="button" on:click={lookup} disabled={looking} class="bg-cold-base text-white rounded-lg px-4 disabled:opacity-60">
-          {looking ? '…' : 'Buscar'}
-        </button>
+    <div class="flex flex-col gap-1">
+      <label for="song-search" class="text-cold-light text-sm">Busca la canción en Spotify</label>
+      <div class="relative">
+        <Search size={16} class="text-cold-light absolute left-3 top-1/2 -translate-y-1/2" />
+        <input id="song-search" type="text" bind:value={query} autocomplete="off"
+               placeholder="Título y/o artista…" class="w-full p-2 pl-9 border rounded-lg" />
       </div>
-      {#if lookupError}<div class="text-red-500 text-sm">{lookupError}</div>{/if}
+      {#if searchError}<div class="text-red-500 text-sm">{searchError}</div>{/if}
     </div>
 
-    {#if preview}
-      <div class="bg-base-900 rounded-lg p-3 flex items-center gap-3">
-        {#if preview.art_url}
-          <img src={preview.art_url} alt="" class="w-16 h-16 rounded object-cover" />
-        {/if}
-        <div class="min-w-0 flex-1">
-          <div class="text-yellow text-lg truncate">{preview.title}</div>
-          <div class="text-cold-light truncate">{preview.artist}</div>
-          <a href={preview.spotify_url} target="_blank" rel="noopener" class="text-xs text-cold-light/70 inline-flex items-center gap-1 mt-1">
-            <img src="/images/spotify-logo.svg" alt="Spotify" class="h-3" on:error={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} /> Metadatos de Spotify <ExternalLink size={11} />
-          </a>
-        </div>
-        <button type="button" on:click={addFromSpotify} disabled={submitting} class="bg-cold-base text-white rounded-full px-4 py-2 text-sm inline-flex items-center gap-1 shrink-0 disabled:opacity-60">
-          <Check size={16} /> {submitting ? '…' : 'Agregar'}
-        </button>
+    {#if results.length}
+      <div class="flex flex-col gap-2">
+        <span class="text-xs text-cold-light/70 inline-flex items-center gap-1">
+          <img src="/images/spotify-logo.svg" alt="Spotify" class="h-3" on:error={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} /> Resultados de Spotify
+        </span>
+        <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+          {#each results as r}
+            <li class="bg-base-900 flex items-center gap-1 pr-2">
+              <button type="button" on:click={() => addResult(r)} disabled={submitting}
+                      class="flex-1 min-w-0 hover:bg-base-950 transition px-3 py-2 flex items-center gap-3 text-left disabled:opacity-60">
+                {#if r.art_url}<img src={r.art_url} alt="" class="w-11 h-11 rounded object-cover shrink-0" />{/if}
+                <div class="min-w-0 flex-1">
+                  <div class="text-yellow truncate">{r.title}</div>
+                  <div class="text-sm text-cold-light truncate">{r.artist}</div>
+                </div>
+              </button>
+              <a href={r.spotify_url} target="_blank" rel="noopener" class="text-cold-light/60 hover:text-cold-light shrink-0 p-1" aria-label="Abrir en Spotify"><ExternalLink size={15} /></a>
+            </li>
+          {/each}
+        </ul>
       </div>
+    {:else if searching}
+      <div class="text-cold-light text-sm">Buscando…</div>
+    {:else if query.trim().length >= 2 && !searchError}
+      <div class="text-cold-light text-sm">Sin resultados en Spotify.</div>
     {/if}
 
     <!-- Manual fallback: songs not on Spotify. -->
