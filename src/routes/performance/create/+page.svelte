@@ -54,32 +54,25 @@
 
     onDestroy(() => { if (unsubscribeUser) unsubscribeUser(); });
 
-    // Song search (unchanged): title/artist ilike, best-prefix-first.
-    $: if (songSearch && songSearch.length >= 3) {
-      supabase
-        .from('song')
-        .select('id, title, artist')
-        .or(`title.ilike.%${songSearch}%,artist.ilike.%${songSearch}%`)
-        .order('title', { ascending: true })
-        .limit(20)
-        .then(({ data, error }) => {
-          if (error) { errorSongs = error.message; songs = []; return; }
-          const searchLower = songSearch.toLowerCase();
-          songs = (data ?? []).sort((a, b) => {
-            const aT = (a.title ?? '').toLowerCase().startsWith(searchLower);
-            const bT = (b.title ?? '').toLowerCase().startsWith(searchLower);
-            const aA = (a.artist ?? '').toLowerCase().startsWith(searchLower);
-            const bA = (b.artist ?? '').toLowerCase().startsWith(searchLower);
-            if (aT && !bT) return -1;
-            if (!aT && bT) return 1;
-            if (aA && !bA) return -1;
-            if (!aA && bA) return 1;
-            return (a.title ?? '').localeCompare(b.title ?? '');
-          });
-          errorSongs = null;
-        });
-    } else {
-      songs = [];
+    // Ranked song search (#82): a server-side RPC ranks BEFORE limiting and
+    // matches each term across title+artist (so "One", "one metallica" and "u2"
+    // all work). Debounced with a latest-wins guard against out-of-order results.
+    let searchSeq = 0;
+    let searchTimer: any = null;
+    $: scheduleSearch(songSearch);
+    function scheduleSearch(q: string) {
+      clearTimeout(searchTimer);
+      const query = (q ?? '').trim();
+      if (query.length < 2) { songs = []; return; }
+      searchTimer = setTimeout(() => runSearch(query), 250);
+    }
+    async function runSearch(query: string) {
+      const seq = ++searchSeq;
+      const { data, error } = await supabase.rpc('search_songs', { q: query, lim: 20 });
+      if (seq !== searchSeq) return; // a newer search superseded this one
+      if (error) { errorSongs = error.message; songs = []; return; }
+      songs = data ?? [];
+      errorSongs = null;
     }
 
     // Tap a search result → add it right away (incremental, #77).
@@ -149,7 +142,7 @@
 
     <div class="flex flex-col gap-1">
       <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
-      <SongSelect {songs} bind:value={songSearch} multiAdd on:select={(e) => addSong(e.detail)} />
+      <SongSelect {songs} bind:value={songSearch} multiAdd serverFiltered on:select={(e) => addSong(e.detail)} />
       {#if errorSongs}<div class="text-red-500 text-sm">{errorSongs}</div>{/if}
     </div>
 

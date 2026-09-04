@@ -9,6 +9,9 @@
   // Multi-add mode (#77): a pick emits `select` and clears the box for the next
   // search instead of filling the field. Single-add behavior is the default.
   export let multiAdd: boolean = false;
+  // Server-ranked mode (#82): `songs` is already the ranked/filtered result, so
+  // don't re-filter it client-side (that would undo cross-field matches).
+  export let serverFiltered: boolean = false;
 
   const dispatch = createEventDispatcher();
   export function focus() { inputRef?.focus(); }
@@ -16,10 +19,12 @@
   let isOpen = false;
   let inputRef: HTMLInputElement;
   let filteredSongs: any[] = [];
-  
+
   $: {
-    if (value) {
-      filteredSongs = songs.filter(song => 
+    if (serverFiltered) {
+      filteredSongs = songs;
+    } else if (value) {
+      filteredSongs = songs.filter(song =>
         song.title.toLowerCase().includes(value.toLowerCase()) ||
         song.artist.toLowerCase().includes(value.toLowerCase())
       );

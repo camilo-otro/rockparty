@@ -175,6 +175,30 @@ create table if not exists public.song (
 
 create index if not exists idx_song_title_trgm  on public.song using gin (title  gin_trgm_ops);
 create index if not exists idx_song_artist_trgm on public.song using gin (artist gin_trgm_ops);
+-- Ranked song search (#82): every term must appear in the combined title+artist
+-- text (cross-field); ranks exact title > prefix > exact artist > trigram sim >
+-- alphabetical BEFORE limiting (fixes exact matches getting cut by the limit).
+-- Called via supabase.rpc('search_songs', { q, lim }).
+create or replace function public.search_songs(q text, lim int default 20)
+returns setof public.song language sql stable set search_path = '' as $$
+  with c as (select lower(trim(q)) as ql),
+       terms as (select unnest(string_to_array((select ql from c), ' ')) as term)
+  select s.*
+  from public.song s, c
+  where c.ql <> ''
+    and not exists (
+      select 1 from terms t
+      where t.term <> ''
+        and lower(coalesce(s.title, '') || ' ' || coalesce(s.artist, '')) not like '%' || t.term || '%'
+    )
+  order by
+    (lower(s.title) = c.ql) desc,
+    (lower(s.title) like c.ql || '%') desc,
+    (lower(coalesce(s.artist, '')) = c.ql) desc,
+    public.similarity(lower(coalesce(s.title, '') || ' ' || coalesce(s.artist, '')), c.ql) desc,  -- pg_trgm (public, search_path is '')
+    s.title
+  limit least(greatest(lim, 1), 50);
+$$;
 
 -- performance — a song slotted into a party's set list (drag-orderable).
 create table if not exists public.performance (

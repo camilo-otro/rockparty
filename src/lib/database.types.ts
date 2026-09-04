@@ -849,6 +849,10 @@ export type Database = {
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
       notify_upcoming_toques: { Args: never; Returns: undefined }
+      search_songs: {
+        Args: { q: string; lim?: number }
+        Returns: Database["public"]["Tables"]["song"]["Row"][]
+      }
       set_band_signup_status: {
         Args: {
           p_band: number
