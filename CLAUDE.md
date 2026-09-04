@@ -62,6 +62,18 @@ carry the deeper detail; this is the at-a-glance map.
   `performance`, and `performance_user` — drives the live bell + setlist (#63).
   RLS still applies, so subscribers only receive rows they can `SELECT`.
 - **Search:** `pg_trgm` (installed) backs song/toque search (#26).
+- **Edge Functions:** `supabase/functions/*` — the app's only server-side code.
+  So far: **`spotify-track`** (#80) resolves a pasted Spotify link to song
+  metadata via the Web API Client-Credentials flow, keeping the Spotify secret
+  off the client. Deployed to the same Supabase project (so it's live for every
+  branch — not gated by the Netlify/`main` deploy). Secrets `SPOTIFY_CLIENT_ID`
+  / `SPOTIFY_CLIENT_SECRET` are set in Supabase (Edge Functions → secrets), not
+  in `.env`/Netlify. **The repo file is the source of truth**; the dashboard
+  editor has no version control, so redeploy by pasting the repo file back in.
+  Attribution note: Spotify's Developer Terms require attributing metadata with
+  the Spotify Marks + a link back — the add-song UI shows the Spotify logo
+  (`static/images/spotify-logo.svg`) + "Metadatos de Spotify" and stores the
+  Spotify URL as `song.ref_link`.
 - **Unlinked pages:** `static/roadmap.html` → https://rockthehouse.app/roadmap.html
   (product roadmap for the design collaborator; `noindex`, not in any nav).
 
@@ -175,7 +187,16 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
   git checkout main && git merge --ff-only dev && git push && git checkout dev
   ```
   Fast-forward keeps `main`'s history a clean, linear list of what's live. The
-  push to `main` is the ONLY thing that deploys.
+  push to `main` is the ONLY thing that deploys **the frontend**.
+- **Two deploy targets that are NOT the Netlify push** — apply them when the diff
+  touches them, independently of merging to `main` (they hit the shared Supabase
+  project, so they affect every branch immediately):
+  - **DB migrations** (`supabase/migrations/*`) — applied by hand in the Supabase
+    SQL editor. Reconcile `supabase/schema.sql` + regenerate `database.types.ts`.
+  - **Edge Functions** (`supabase/functions/*`) — deployed via the Supabase
+    dashboard (Edge Functions → Deploy → *Via Editor*, name must match, paste the
+    repo file) or the CLI. No dashboard version control → the repo file is the
+    source of truth; redeploy by pasting it back in.
 - **Keep `main` always-deployable** — don't merge unless `pnpm run check` is
   clean and the app runs.
 - **Review gate — per issue (primary):** run the **`code-review`** skill as each
