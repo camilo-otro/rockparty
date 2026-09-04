@@ -861,11 +861,13 @@ create policy "Enable Update for authenticated users only" on public.performance
         )
     )
   );
--- Remove a song from a setlist (#62): same scope as UPDATE — party creator or
--- admin. Cascades to performance_user (FK ON DELETE CASCADE).
-create policy "delete performance: party admins" on public.performance
+-- Remove a song from a setlist (#62): party creator/admin, OR the song's own
+-- suggester retracting their suggestion (#77 — powers multi-add "remove", incl.
+-- non-admin band managers). Cascades to performance_user (FK ON DELETE CASCADE).
+create policy "delete performance: admins or suggester" on public.performance
   for delete to authenticated using (
-    exists (
+    performance.suggested_by = (select auth.uid())
+    or exists (
       select 1 from public.party p
       where p.id = performance.party
         and (

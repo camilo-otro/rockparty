@@ -1,29 +1,25 @@
 <script lang="ts">
-    import { ChevronLeft } from 'lucide-svelte';
+    import { ChevronLeft, X, Users, Check } from 'lucide-svelte';
     import { goto } from '$app/navigation';
-    import { fly } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
     import { page } from '$app/state';
     import { user } from '$lib/stores/user';
-    import { get } from 'svelte/store';
     import SongSelect from '$lib/components/SongSelect.svelte';
-    import { normalizeText } from '$lib/sanitize';
-    import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
-    let submitting = false;
+    import { reportError, toastError, toastInfo } from '$lib/stores/toasts';
+
     let songs: any[] = [];
-    let loadingSongs = false;
     let errorSongs: string | null = null;
     let partyId: string | null = null;
     let userId: string | null = null;
-    let selectedSong = '';
     let songSearch = '';
-    let songError = '';
-    let refLink = '';
-    let key = '';
     let isAuthenticated = false;
     let unsubscribeUser: () => void;
-    // Sign up as a band (#73): '' = open jam song; otherwise a band id.
+    let adding = false;
+    // Songs added this session (#77) — newest first. { perfId, songId, title, artist, band }
+    let added: any[] = [];
+    // Sign up as a band (#73): '' = open jam; otherwise a band id. Set ONCE, applies
+    // to every song added this session (#77) — the win for a band's setlist.
     let myBands: { id: number; name: string }[] = [];
     let signupChoice = '';
     let bandsLoaded = false;
@@ -36,13 +32,11 @@
         .select('role, band ( id, name, who_can_sign_up, is_test )')
         .eq('user_id', uid);
       myBands = (data ?? [])
-        // Only bands the user is actually allowed to sign up.
         .filter((r: any) => r.band && (r.band.who_can_sign_up === 'members' || r.role === 'manager'))
         // A test band can't play a real event (RLS/RPC enforce it too) — hide the option (#76).
         .filter((r: any) => partyIsTest || !r.band.is_test)
         .map((r: any) => ({ id: r.band.id, name: r.band.name }));
     }
-    // Wait for the party's test flag before listing bands, so the filter is correct.
     $: if (userId && partyLoaded && !bandsLoaded) { bandsLoaded = true; loadMyBands(userId); }
 
     onMount(async () => {
@@ -58,12 +52,10 @@
       partyLoaded = true;
     });
 
-    onDestroy(() => {
-      if (unsubscribeUser) unsubscribeUser();
-    });
+    onDestroy(() => { if (unsubscribeUser) unsubscribeUser(); });
 
+    // Song search (unchanged): title/artist ilike, best-prefix-first.
     $: if (songSearch && songSearch.length >= 3) {
-      loadingSongs = true;
       supabase
         .from('song')
         .select('id, title, artist')
@@ -71,129 +63,122 @@
         .order('title', { ascending: true })
         .limit(20)
         .then(({ data, error }) => {
-          if (error) {
-            errorSongs = error.message;
-            songs = [];
-          } else {
-            // Custom sort: title starts with, artist starts with, title contains, artist contains
-            const sortedSongs = (data ?? []).sort((a, b) => {
-              const searchLower = songSearch.toLowerCase();
-              const aTitleStarts = (a.title ?? '').toLowerCase().startsWith(searchLower);
-              const bTitleStarts = (b.title ?? '').toLowerCase().startsWith(searchLower);
-              const aArtistStarts = (a.artist ?? '').toLowerCase().startsWith(searchLower);
-              const bArtistStarts = (b.artist ?? '').toLowerCase().startsWith(searchLower);
-              
-              if (aTitleStarts && !bTitleStarts) return -1;
-              if (!aTitleStarts && bTitleStarts) return 1;
-              if (aArtistStarts && !bArtistStarts) return -1;
-              if (!aArtistStarts && bArtistStarts) return 1;
-              
-              return (a.title ?? '').localeCompare(b.title ?? '');
-            });
-            songs = sortedSongs;
-            errorSongs = null;
-          }
-          loadingSongs = false;
+          if (error) { errorSongs = error.message; songs = []; return; }
+          const searchLower = songSearch.toLowerCase();
+          songs = (data ?? []).sort((a, b) => {
+            const aT = (a.title ?? '').toLowerCase().startsWith(searchLower);
+            const bT = (b.title ?? '').toLowerCase().startsWith(searchLower);
+            const aA = (a.artist ?? '').toLowerCase().startsWith(searchLower);
+            const bA = (b.artist ?? '').toLowerCase().startsWith(searchLower);
+            if (aT && !bT) return -1;
+            if (!aT && bT) return 1;
+            if (aA && !bA) return -1;
+            if (!aA && bA) return 1;
+            return (a.title ?? '').localeCompare(b.title ?? '');
+          });
+          errorSongs = null;
         });
     } else {
       songs = [];
-      loadingSongs = false;
     }
 
-    async function handleSubmit() {
-        if (!selectedSong || !partyId || !userId) {
-            toastError('Debes seleccionar una canción.');
+    // Tap a search result → add it right away (incremental, #77).
+    async function addSong(song: any) {
+      if (!partyId || !userId || adding) return;
+      if (added.some((a) => a.songId === song.id)) { toastInfo('Ya está en la lista.'); return; }
+      adding = true;
+      try {
+        const { data, error } = await supabase
+          .from('performance')
+          .insert([{ party: Number(partyId), song: Number(song.id), suggested_by: userId }])
+          .select('id');
+        if (error) { reportError(error); return; }
+        const perfId = data?.[0]?.id;
+        let band: any = null;
+        if (signupChoice && perfId) {
+          const { error: rpcErr } = await supabase.rpc('sign_band_up', { p_performance: perfId, p_band: Number(signupChoice) });
+          if (rpcErr) {
+            reportError(rpcErr);
+            await supabase.from('performance').delete().eq('id', perfId); // roll back the orphan
             return;
+          }
+          band = myBands.find((b) => b.id === Number(signupChoice)) ?? null;
         }
-
-        // Sanitize inputs
-        const safeRefLink = normalizeText(refLink, 500);
-        const safeKey = normalizeText(key, 20);
-        partyId = page.url.searchParams.get('partyId') ?? null;
-        submitting = true;
-
-        try {
-            const { data, error: dbError } = await supabase
-                .from('performance')
-                .insert([{
-                    party: partyId ? Number(partyId) : null,
-                    song: Number(selectedSong),
-                    suggested_by: userId,
-                    ref_link: safeRefLink || null,
-                    key: safeKey || null
-                }])
-                .select();
-
-            if (dbError) {
-                reportError(dbError);
-            } else {
-                const perfId = data?.[0]?.id;
-                // If a band was chosen, claim the song for it + sign up its lineup.
-                if (signupChoice && perfId) {
-                    const { error: rpcErr } = await supabase.rpc('sign_band_up', { p_performance: perfId, p_band: Number(signupChoice) });
-                    if (rpcErr) { reportError(rpcErr); submitting = false; return; }
-                }
-                toastSuccess(signupChoice ? '¡Banda agregada al setlist!' : '¡Agregada al setlist!');
-                setTimeout(() => {
-                    goto(`/parties/${partyId}`);
-                }, 1000);
-            }
-        } catch (e) {
-            toastError('No se pudo conectar con el servidor.');
-        }
-
-        submitting = false;
+        added = [{ perfId, songId: song.id, title: song.title, artist: song.artist, band }, ...added];
+      } catch {
+        toastError('No se pudo conectar con el servidor.');
+      } finally {
+        adding = false;
+      }
     }
+
+    async function removeAdded(item: any) {
+      const { error } = await supabase.from('performance').delete().eq('id', item.perfId);
+      if (error) { reportError(error); return; }
+      added = added.filter((a) => a.perfId !== item.perfId);
+    }
+
+    function done() { goto(`/parties/${partyId}`); }
 
     function loginWithGoogle() {
-      import('$lib/supabaseClient').then(({ supabase }) => {
-        supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: window.location.href }
-        });
-      });
+      supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
     }
 </script>
+
 <a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
-<h2 class="text-yellow text-2xl px-5 py-2">AGREGA UNA CANCIÓN AL SETLIST</h2>
+<h2 class="text-yellow text-2xl px-5 py-2">AGREGA CANCIONES AL SETLIST</h2>
+
 {#if !isAuthenticated}
   <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
     Debes <button type="button" class="text-cold-light underline" on:click={loginWithGoogle}>iniciar sesión</button> para agregar canciones al Setlist.
   </div>
 {:else}
-    <form on:submit|preventDefault={handleSubmit}>
-        <div class="flex flex-col w-full p-4 mb-4">
-            <label for="song" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 50 }}>Canción</label>
-            <SongSelect 
-              {songs} 
-              bind:value={songSearch} 
-              bind:selectedSongId={selectedSong} 
-              bind:error={songError} 
-            />
-            {#if songError}
-              <div class="text-red-600 text-sm mt-1">{songError}</div>
-            {/if}
-            <label for="ref_link" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 100 }}>Referencia</label>
-            <input id="ref_link" type="text" bind:value={refLink} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 100 }} />
-            <label for="key" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 150 }}>Tonalidad</label>
-            <input id="key" type="text" bind:value={key} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 150 }} />
-            {#if myBands.length}
-              <label for="signup" class="mb-1" in:fly={{ y: -30, duration: 400, delay: 175 }}>¿Quién la toca?</label>
-              <select id="signup" bind:value={signupChoice} class="p-2 border rounded-lg mb-4" in:fly={{ y: -30, duration: 400, delay: 175 }}>
-                <option value="">Ábrela — cualquiera se suma</option>
-                {#each myBands as b}
-                  <option value={b.id}>La toca {b.name}</option>
-                {/each}
-              </select>
-            {/if}
-        </div>
-        <div class="flex justify-center mb-8" in:fly={{ y: -30, duration: 400, delay: 200 }}>
-          <button class="bg-cold-base text-white text-sm rounded-full mx-auto p-2 px-6" type="submit" disabled={submitting || !!songError} in:fly={{ y: -30, duration: 400, delay: 200 }}>
-              {submitting ? 'Creando...' : 'Agregar'}
-          </button>
-        </div>
-    </form>
-    <p class="mt-6 text-center text-cold-light">
-      ¿No encuentras tu canción en la lista? <a href="/songs/create?from=performance&partyId={partyId}" class="text-cold-light underline">Agrégala aquí</a>.
-    </p>
+  <div class="flex flex-col w-full p-4 gap-4">
+    {#if myBands.length}
+      <div class="flex flex-col gap-1">
+        <label for="signup" class="text-cold-light text-sm">¿Quién las toca?</label>
+        <select id="signup" bind:value={signupChoice} class="p-2 border rounded-lg">
+          <option value="">Ábrela — cualquiera se suma</option>
+          {#each myBands as b}
+            <option value={b.id}>La toca {b.name}</option>
+          {/each}
+        </select>
+        <span class="text-cold-light/60 text-xs">Se aplica a cada canción que agregues.</span>
+      </div>
+    {/if}
+
+    <div class="flex flex-col gap-1">
+      <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
+      <SongSelect {songs} bind:value={songSearch} multiAdd on:select={(e) => addSong(e.detail)} />
+      {#if errorSongs}<div class="text-red-500 text-sm">{errorSongs}</div>{/if}
+    </div>
+
+    {#if added.length}
+      <div class="flex flex-col gap-2">
+        <span class="text-white text-sm">Agregadas · {added.length}</span>
+        <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+          {#each added as item (item.perfId)}
+            <li class="bg-base-900 px-4 py-3 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="text-yellow truncate">{item.title}</div>
+                <div class="text-sm text-cold-light truncate flex items-center gap-1">
+                  {item.artist}
+                  {#if item.band}<span class="text-cold-light/70 inline-flex items-center gap-1">· <Users size={12} /> {item.band.name}</span>{/if}
+                </div>
+              </div>
+              <button type="button" on:click={() => removeAdded(item)} aria-label="Quitar" class="text-red-400 hover:text-red-300 p-1 shrink-0"><X size={18} /></button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <button type="button" on:click={done} class="bg-cold-base text-white rounded-full px-6 py-2 self-center inline-flex items-center gap-2">
+      <Check size={18} /> {added.length ? 'Listo — ver toque' : 'Volver al toque'}
+    </button>
+  </div>
+
+  <p class="mt-2 mb-8 text-center text-cold-light">
+    ¿No encuentras tu canción en la lista? <a href="/songs/create?from=performance&partyId={partyId}" class="text-cold-light underline">Agrégala aquí</a>.
+  </p>
 {/if}

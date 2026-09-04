@@ -1,10 +1,18 @@
 <!-- SongSelect.svelte -->
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+
   export let songs: any[] = [];
   export let value: string = '';
   export let selectedSongId: string = '';
   export let error: string = '';
-  
+  // Multi-add mode (#77): a pick emits `select` and clears the box for the next
+  // search instead of filling the field. Single-add behavior is the default.
+  export let multiAdd: boolean = false;
+
+  const dispatch = createEventDispatcher();
+  export function focus() { inputRef?.focus(); }
+
   let isOpen = false;
   let inputRef: HTMLInputElement;
   let filteredSongs: any[] = [];
@@ -31,16 +39,26 @@
     // Delay closing to allow for clicks on options
     setTimeout(() => {
       isOpen = false;
-      validateSelection();
+      if (!multiAdd) validateSelection(); // multi-add commits on pick, not on blur
     }, 150);
   }
   
   function selectSong(song: any) {
-    value = `${song.title} - ${song.artist}`;
-    selectedSongId = song.id;
-    error = '';
-    isOpen = false;
-    inputRef.blur();
+    dispatch('select', song);
+    if (multiAdd) {
+      // Clear for the next search and keep the box focused for rapid entry.
+      value = '';
+      selectedSongId = '';
+      error = '';
+      filteredSongs = songs;
+      inputRef.focus();
+    } else {
+      value = `${song.title} - ${song.artist}`;
+      selectedSongId = song.id;
+      error = '';
+      isOpen = false;
+      inputRef.blur();
+    }
   }
   
   function validateSelection() {
