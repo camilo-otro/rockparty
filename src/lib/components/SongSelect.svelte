@@ -38,13 +38,15 @@
     if (!value) {
       filteredSongs = songs;
     }
+    dispatch('focus');
   }
-  
+
   function handleBlur() {
     // Delay closing to allow for clicks on options
     setTimeout(() => {
       isOpen = false;
       if (!multiAdd) validateSelection(); // multi-add commits on pick, not on blur
+      dispatch('blur');
     }, 150);
   }
   
@@ -92,7 +94,7 @@
   />
   
   {#if isOpen && filteredSongs.length > 0}
-    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+    <div class="absolute z-10 w-full mt-1 bg-base-950 border rounded-lg shadow-lg max-h-[55vh] overflow-y-auto">
       {#each filteredSongs as song}
         <button
           type="button"

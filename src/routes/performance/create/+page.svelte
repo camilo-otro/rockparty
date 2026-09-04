@@ -59,6 +59,9 @@
     // all work). Debounced with a latest-wins guard against out-of-order results.
     let searchSeq = 0;
     let searchTimer: any = null;
+    // On phones the keyboard covers the dropdown; pin the search field to the top
+    // of the viewport while focused so the suggestions get the space above it.
+    let searchFocused = false;
     $: scheduleSearch(songSearch);
     function scheduleSearch(q: string) {
       clearTimeout(searchTimer);
@@ -140,11 +143,15 @@
       </div>
     {/if}
 
-    <div class="flex flex-col gap-1">
+    <div class="flex flex-col gap-1 {searchFocused ? 'fixed inset-x-0 top-0 z-40 bg-base-950 p-4 shadow-lg md:static md:z-auto md:bg-transparent md:p-0 md:shadow-none' : ''}">
       <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
-      <SongSelect {songs} bind:value={songSearch} multiAdd serverFiltered on:select={(e) => addSong(e.detail)} />
+      <SongSelect {songs} bind:value={songSearch} multiAdd serverFiltered
+        on:select={(e) => addSong(e.detail)}
+        on:focus={() => (searchFocused = true)}
+        on:blur={() => (searchFocused = false)} />
       {#if errorSongs}<div class="text-red-500 text-sm">{errorSongs}</div>{/if}
     </div>
+    {#if searchFocused}<div class="h-16 md:hidden" aria-hidden="true"></div>{/if}
 
     {#if added.length}
       <div class="flex flex-col gap-2">
