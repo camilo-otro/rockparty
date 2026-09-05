@@ -9,26 +9,30 @@
   const LOS_PRUEBA = { id: 1, name: 'Los Prueba', members: 3 };
   const PULSE = { id: 2, name: 'Pulse', members: 4 };
 
-  // A realistic mix: an open jam, a 3-song band run, another open jam breaking
-  // it up, then a 2-song run — so grouping and its edge cases are both visible.
+  // A realistic jam night: RUNS of open songs (the common case) around two band
+  // sets — so how open songs behave is visible, not just the band grouping.
   const songs = [
     { n: 1, title: 'Crossfire', artist: 'Brandon Flowers', band: null },
-    { n: 2, title: 'One', artist: 'Metallica', band: LOS_PRUEBA },
-    { n: 3, title: 'Enter Sandman', artist: 'Metallica', band: LOS_PRUEBA },
-    { n: 4, title: 'Wasteland', artist: '10 Years', band: LOS_PRUEBA },
-    { n: 5, title: 'Beautiful Day', artist: 'U2', band: null },
-    { n: 6, title: 'Vertigo', artist: 'U2', band: PULSE },
-    { n: 7, title: 'Elevation', artist: 'U2', band: PULSE }
+    { n: 2, title: 'A Murder of One', artist: 'Counting Crows', band: null },
+    { n: 3, title: 'One', artist: 'Metallica', band: LOS_PRUEBA },
+    { n: 4, title: 'Enter Sandman', artist: 'Metallica', band: LOS_PRUEBA },
+    { n: 5, title: 'Wasteland', artist: '10 Years', band: LOS_PRUEBA },
+    { n: 6, title: 'Beautiful Day', artist: 'U2', band: null },
+    { n: 7, title: 'Numb', artist: 'Linkin Park', band: null },
+    { n: 8, title: 'Vertigo', artist: 'U2', band: PULSE },
+    { n: 9, title: 'Elevation', artist: 'U2', band: PULSE }
   ];
 
   const GAPS = ['/images/microphone.svg', '/images/guitar.svg', '/images/bass.svg', '/images/keyboard.svg', '/images/drums.svg'];
   const AVATAR = '/images/avatar-default.svg';
 
-  // Consecutive runs by the same band (null band = its own run of one).
+  // Consecutive runs: same band, OR a stretch of open songs (which stay one
+  // continuous list rather than becoming a stack of detached cards).
   type Run = { band: any; items: typeof songs };
   $: runs = songs.reduce<Run[]>((acc, s) => {
     const last = acc[acc.length - 1];
-    if (last && last.band && s.band && last.band.id === s.band.id) last.items.push(s);
+    const sameRun = last && (last.band && s.band ? last.band.id === s.band.id : !last.band && !s.band);
+    if (sameRun) last.items.push(s);
     else acc.push({ band: s.band, items: [s] });
     return acc;
   }, []);
@@ -110,20 +114,24 @@
             </div>
           </div>
         {:else}
-          {#each run.items as s}
-            <div class="bg-base-900 rounded-lg px-4 py-3 flex items-center gap-3">
-              <span class="text-gray-400 text-3xl font-medium w-7 shrink-0">{s.n}</span>
-              <div class="flex-1 min-w-0">
-                <div class="text-lg text-yellow truncate">{s.title}</div>
-                <div class="text-sm text-cold-light truncate">{s.artist}</div>
-              </div>
-              <div class="flex flex-row -space-x-2 shrink-0">
-                {#each GAPS as g}
-                  <img src={g} alt="" class="w-6 h-6 bg-base-900 rounded-full p-0.5 opacity-50" />
-                {/each}
-              </div>
-            </div>
-          {/each}
+          <!-- Open songs stay one continuous list (1px dividers), so a jam night
+               doesn't become a stack of detached cards. -->
+          <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+            {#each run.items as s}
+              <li class="bg-base-900 px-4 py-3 flex items-center gap-3">
+                <span class="text-gray-400 text-3xl font-medium w-7 shrink-0">{s.n}</span>
+                <div class="flex-1 min-w-0">
+                  <div class="text-lg text-yellow truncate">{s.title}</div>
+                  <div class="text-sm text-cold-light truncate">{s.artist}</div>
+                </div>
+                <div class="flex flex-row -space-x-2 shrink-0">
+                  {#each GAPS as g}
+                    <img src={g} alt="" class="w-6 h-6 bg-base-900 rounded-full p-0.5 opacity-50" />
+                  {/each}
+                </div>
+              </li>
+            {/each}
+          </ul>
         {/if}
       {/each}
     </div>
