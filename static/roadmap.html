@@ -96,6 +96,7 @@
   .tag.dsn{color:var(--purple-light); border:1px solid rgba(163,149,255,.45)}
   .tag.spec{color:var(--muted); border:1px solid var(--line)}
   .fbody .d{color:var(--muted); font-size:14px; margin-top:2px; max-width:64ch}
+  .fbody .d code{font-family:var(--sans); font-size:13.5px; color:#d6d2e6; background:rgba(255,255,255,.06); border-radius:4px; padding:1px 5px}
 
   .rollup{color:var(--dim); font-size:13.5px; margin:16px 2px 0; font-style:italic}
 
@@ -137,19 +138,22 @@
     <h1 class="wordmark">Rock <span class="the">the</span> House</h1>
     <p class="subtitle">Product Roadmap</p>
     <p class="tagline">An app for organizing jam sessions &mdash; <em>toques</em> &mdash; among musicians: line up a venue, build the setlist together, and see who's playing, running the show, or coming to watch. Spanish UI, mobile-first, dark theme.</p>
-    <p class="meta">Updated <b>25 Aug 2026</b> &nbsp;·&nbsp; Phases 0&ndash;1 shipped &nbsp;·&nbsp; Phase 2 in progress, everything built is live &nbsp;·&nbsp; SvelteKit + Supabase, live on Netlify</p>
+    <p class="meta">Updated <b>4 Sep 2026</b> &nbsp;·&nbsp; Phases 0&ndash;1 shipped &nbsp;·&nbsp; Phase 2 nearly done &nbsp;·&nbsp; Phase 4's <b>Bands</b> epic jumped the queue and shipped &nbsp;·&nbsp; SvelteKit + Supabase, live on Netlify</p>
   </header>
 
   <div class="stepper">
     <div class="step done"><div class="n">Phase 0</div><div class="t">Soundcheck</div><div class="s">Shipped</div></div>
     <div class="step done"><div class="n">Phase 1</div><div class="t">Doors</div><div class="s">Shipped</div></div>
-    <div class="step now"><div class="n">Phase 2</div><div class="t">Warm-up</div><div class="s">In progress</div></div>
-    <div class="step next"><div class="n">Phase 3</div><div class="t">Showtime</div><div class="s">Next</div></div>
-    <div class="step later"><div class="n">Phase 4</div><div class="t">Encore</div><div class="s">Later</div></div>
+    <div class="step now"><div class="n">Phase 2</div><div class="t">Warm-up</div><div class="s">2 left</div></div>
+    <div class="step next"><div class="n">Phase 3</div><div class="t">Showtime</div><div class="s">Flyer shipped</div></div>
+    <div class="step now"><div class="n">Phase 4</div><div class="t">Encore</div><div class="s">Bands shipped</div></div>
   </div>
+
+  <p class="rollup" style="text-align:center; margin:14px auto 0; max-width:70ch">The phases stopped running strictly in order: bands and song&nbsp;import were pulled forward because the setlist needed them, so Phase&nbsp;4 is partly done while Phase&nbsp;3 has only just started.</p>
 
   <div class="legend">
     <span><i class="mk ship">&#10003;</i> Shipped &amp; live</span>
+    <span><i class="mk flight"></i> Built, awaiting deploy</span>
     <span><i class="mk todo"></i> Not started</span>
     <span><i class="tag key" style="padding:2px 7px;border-radius:999px">Keystone</i> unlocks other work</span>
     <span><i class="tag dsn" style="padding:2px 7px;border-radius:999px">Design</i> wants your eye</span>
@@ -215,13 +219,15 @@
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#63</span><div class="fbody"><div class="name">Live updates</div><div class="d">Realtime: the notification bell and the setlist refresh when others act &mdash; no manual reload &mdash; without clobbering an in-progress edit.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#60</span><div class="fbody"><div class="name">Setlist context-sort views</div><div class="d">Non-destructive lenses over the setlist: &ldquo;gaps first&rdquo; and &ldquo;for you&rdquo; &mdash; running order stays untouched.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#36</span><div class="fbody"><div class="name">&ldquo;Te necesitan&rdquo; matching</div><div class="d">Home surfaces toques with an open slot in what you play &mdash; the musician side of matching. (Organizer&rarr;performer suggestions still open, below.)</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#64</span><div class="fbody"><div class="name">Contextual home hero<span class="tag dsn">Design</span></div><div class="d">The generic value-prop is now an invite tuned to what you <em>haven't</em> done yet &mdash; attended but never played, no instruments set, and so on.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#68</span><div class="fbody"><div class="name">Shareable links that preview</div><div class="d">Pasting a toque link into WhatsApp now shows a real card instead of a bare URL &mdash; the one route rendered server-side, plus domain reputation fixes.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#67</span><div class="fbody"><div class="name">Test data, hidden from real users</div><div class="d">Dev/test toques and venues are invisible to everyone but developers, so the live app can be exercised without polluting it.</div></div></li>
       </ul>
     </div>
 
     <div class="group">
-      <div class="glabel todo"><i class="mk todo"></i> Remaining</div>
+      <div class="glabel todo"><i class="mk todo"></i> Remaining <span class="c">&middot; 2 items</span></div>
       <ul class="feat">
-        <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#64</span><div class="fbody"><div class="name">Contextual home hero<span class="tag dsn">Design</span></div><div class="d">Replace the generic value-prop with an invite tuned to what you <em>haven't</em> done yet (attended but never played, no instruments set, &hellip;).</div></div></li>
         <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#61</span><div class="fbody"><div class="name">Song voting</div><div class="d">Players and attendees signal preference on setlist songs.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#36</span><div class="fbody"><div class="name">Organizer &rarr; performer suggestions</div><div class="d">The other half of matching: suggest musicians for a toque's open slots. Blocked on an invite / contact mechanism.</div></div></li>
       </ul>
@@ -234,13 +240,22 @@
       <span class="pn">Phase 3</span>
       <h2>Showtime</h2>
       <span class="desc">&mdash; the live experience</span>
-      <span class="pill next">Next</span>
+      <span class="pill next">Started</span>
     </div>
+
     <div class="group">
+      <div class="glabel ship"><i class="mk ship">&#10003;</i> Shipped &amp; live</div>
+      <ul class="feat">
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#39</span><div class="fbody"><div class="name">Public flyer pages<span class="tag dsn">Design</span></div><div class="d">A poster-style page per event at <code>/flyer/&hellip;</code>, composed from the toque itself &mdash; share to WhatsApp, RSVP or sign up to play straight from it. No login needed to look.</div></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <div class="glabel todo"><i class="mk todo"></i> Remaining</div>
       <ul class="feat">
         <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#37</span><div class="fbody"><div class="name">Live event mode<span class="tag spec">Has spec</span></div><div class="d">A &ldquo;run the show&rdquo; console for the night &mdash; advance the setlist, see who's up.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#38</span><div class="fbody"><div class="name">Applause &amp; history<span class="tag spec">Has spec</span></div><div class="d">Post-show appreciation, attendee-gated, kept as history &mdash; no engagement-farming.</div></div></li>
-        <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#39</span><div class="fbody"><div class="name">Public flyer pages<span class="tag dsn">Design</span></div><div class="d">Shareable, poster-like pages for an event.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#69</span><div class="fbody"><div class="name">A real flyer preview image<span class="tag dsn">Design</span></div><div class="d">Shared links currently preview with the brand wordmark. This wants a proper 1200&times;630 card per event &mdash; artwork, venue, date &mdash; generated automatically.</div></div></li>
       </ul>
     </div>
   </section>
@@ -250,13 +265,44 @@
     <div class="phead">
       <span class="pn">Phase 4</span>
       <h2>Encore</h2>
-      <span class="desc">&mdash; bands, reach, memories</span>
-      <span class="pill later">Later</span>
+      <span class="desc">&mdash; bands, songs, reach, memories</span>
+      <span class="pill now">Bands shipped</span>
     </div>
+
     <div class="group">
+      <div class="glabel ship"><i class="mk ship">&#10003;</i> Bands &mdash; shipped &amp; live <span class="c">&middot; the whole epic, #40 + 7 issues</span></div>
       <ul class="feat">
-        <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#40</span><div class="fbody"><div class="name">Bands<span class="tag dsn">Design spike first</span></div><div class="d">Group identity for musicians who play together &mdash; wants a design exploration before build.</div></div></li>
+        <li class="f key"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#40&thinsp;·&thinsp;70</span><div class="fbody"><div class="name">Bands as a first-class thing<span class="tag key">Keystone</span></div><div class="d">A band is now its own entity with its own roster and permissions &mdash; not just a habit some musicians have. Everything below hangs on it.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#71&thinsp;·&thinsp;72</span><div class="fbody"><div class="name">Create, manage, and show off a band<span class="tag dsn">Design</span></div><div class="d">Start a band, set the lineup and who plays what, name managers. Each band gets a public page with its members and its gig history.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#78</span><div class="fbody"><div class="name">Bandmates who aren't on the app yet</div><div class="d">A manager can list a member by name and instrument without them having an account &mdash; the lineup is complete from day one instead of half-empty while people sign up.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#75</span><div class="fbody"><div class="name">Band avatars<span class="tag dsn">Design</span></div><div class="d">Upload a photo, crop it in-app; it's resized and compressed in the browser before it ever leaves the phone, which keeps hosting inside the free tier.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#73&thinsp;·&thinsp;74</span><div class="fbody"><div class="name">Sign up as a band, approved as a unit<span class="tag dsn">Design</span></div><div class="d">A band claims a song in one move &mdash; no filling five slots one by one &mdash; and the organizer says yes or no to the whole band at once. The setlist then shows the band, not five separate names.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#76</span><div class="fbody"><div class="name">Test bands stay out of real toques</div><div class="d">The #67 test-data rules extended to bands, including a guard so a test band can't sign up for a real event.</div></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <div class="glabel ship"><i class="mk ship">&#10003;</i> Songs &amp; setlist &mdash; shipped &amp; live <span class="c">&middot; pulled forward from #45</span></div>
+      <ul class="feat">
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#80&thinsp;·&thinsp;83</span><div class="fbody"><div class="name">Add songs from Spotify<span class="tag spec">Has spec</span></div><div class="d">The old flaky autocomplete is gone. Search Spotify from inside the app and tap a result &mdash; title, artist, artwork, length and the link all come with it. Remaster tags are stripped and remix/live versions filtered out; a manual entry stays for anything not on Spotify.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#82</span><div class="fbody"><div class="name">Search that finds the song you meant</div><div class="d">&ldquo;one metallica&rdquo; now returns Metallica's <em>One</em> first. Title and artist are matched together, exact titles rank top, and short names like <em>U2</em> work.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#77</span><div class="fbody"><div class="name">Add several songs in one go</div><div class="d">Building a setlist is now search&thinsp;&rarr;&thinsp;tap&thinsp;&rarr;&thinsp;added, over and over, with one &ldquo;who plays these&rdquo; choice for the batch &mdash; instead of a full round-trip per song. On phones the field pins to the top so the keyboard stops covering the results.</div></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <div class="glabel flight"><i class="mk flight"></i> Built, awaiting deploy</div>
+      <ul class="feat">
+        <li class="f"><span class="fmk"><i class="mk flight"></i></span><span class="fid">&mdash;</span><div class="fbody"><div class="name">Band sets, collapsed<span class="tag dsn">Design</span></div><div class="d">A band's consecutive songs group into one set block with the lineup shown once, collapsible to a summary line &mdash; &ldquo;3 canciones &middot; ~18 min&rdquo;, estimated from song lengths plus a minute between each. Open jam songs stay one continuous list.</div></div></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <div class="glabel todo"><i class="mk todo"></i> Remaining</div>
+      <ul class="feat">
         <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#45</span><div class="fbody"><div class="name">Song-as-hub<span class="tag dsn">Design</span></div><div class="d">Build out the song detail page into a real hub (and then surface the songs library).</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#79</span><div class="fbody"><div class="name">Claim your spot in a band</div><div class="d">Phase 2 of the placeholder roster: a link a manager sends so a bandmate, once they sign up, becomes the real member behind their placeholder.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#81</span><div class="fbody"><div class="name">Store album art &amp; ISRC</div><div class="d">Spotify already hands these over on import; the columns to keep them aren't there yet. Unlocks artwork on song and setlist rows.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk todo"></i></span><span class="fid">#41&thinsp;·&thinsp;42</span><div class="fbody"><div class="name">Toques near me &middot; Memories &amp; comments</div><div class="d">Location-based discovery, and media + comments on past toques.</div></div></li>
       </ul>
     </div>
@@ -291,12 +337,12 @@
       <div class="dscol">
         <h4>Where your eye is wanted</h4>
         <div class="want">
-          <a href="https://github.com/camilo-otro/rockparty/issues/64" target="_blank" rel="noopener"><span class="wid">#64</span><span>Contextual home hero &mdash; the invitation, tuned per person</span></a>
-          <a href="https://github.com/camilo-otro/rockparty/issues/40" target="_blank" rel="noopener"><span class="wid">#40</span><span>Bands &mdash; a design spike before any build</span></a>
+          <a href="https://github.com/camilo-otro/rockparty/issues/69" target="_blank" rel="noopener"><span class="wid">#69</span><span>The flyer preview card &mdash; what a shared toque looks like in WhatsApp</span></a>
           <a href="https://github.com/camilo-otro/rockparty/issues/45" target="_blank" rel="noopener"><span class="wid">#45</span><span>Song-as-hub &mdash; the song detail page</span></a>
-          <a href="https://github.com/camilo-otro/rockparty/issues/39" target="_blank" rel="noopener"><span class="wid">#39</span><span>Public flyer pages &mdash; poster-like, shareable</span></a>
+          <a href="https://github.com/camilo-otro/rockparty/issues/37" target="_blank" rel="noopener"><span class="wid">#37</span><span>Live event mode &mdash; the console you run the night from</span></a>
+          <a href="https://github.com/camilo-otro/rockparty/issues/42" target="_blank" rel="noopener"><span class="wid">#42</span><span>Memories &mdash; what a past toque leaves behind</span></a>
         </div>
-        <p style="margin-top:14px; color:var(--muted); font-size:13.5px">A visual pass on the newer Phase&nbsp;2 surfaces (notifications, rehearsal list, role-based home) would also be welcome &mdash; they were built functionally-first.</p>
+        <p style="margin-top:14px; color:var(--muted); font-size:13.5px">The bands surfaces (band page, avatars, band blocks on the setlist) and the newer Phase&nbsp;2 ones (notifications, rehearsal list, role-based home) were all built functionally-first &mdash; a visual pass on any of them would be welcome. The flyer page is the most public surface and the least designed.</p>
       </div>
     </div>
   </div>
