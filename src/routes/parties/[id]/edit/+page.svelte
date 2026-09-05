@@ -17,6 +17,36 @@ let errorVenues: string | null = null;
 let submitting = false;
 let partyAdmins: string[] = [];
 let currentUserId: string | null = null;
+// Cancelling the toque moved here from the detail page — it's destructive, rare
+// and admin-only, so it belongs behind the edit gate rather than on the page
+// every musician and attendee reads. Two-step so it can't go off on one tap.
+let confirmingCancel = false;
+let cancelling = false;
+
+// A terminal toque has nothing left to cancel.
+$: canCancel = party && party.status !== 'cancelled' && party.status !== 'completed';
+
+async function cancelToque() {
+  if (!party || cancelling) return;
+  cancelling = true;
+  try {
+    // .select() so a silent RLS denial (0 rows) is distinguishable from success.
+    const { data, error } = await supabase
+      .from('party')
+      .update({ status: 'cancelled', cancel_reason: 'organizer' })
+      .eq('id', party.id)
+      .select('id');
+    if (error) { reportError(error); return; }
+    if (!data || data.length === 0) { toastError('No tienes permiso para cancelar este toque.'); return; }
+    toastSuccess('Toque cancelado.');
+    setTimeout(() => goto(`/parties/${party.id}`), 800);
+  } catch {
+    toastError('No se pudo conectar con el servidor.');
+  } finally {
+    cancelling = false;
+    confirmingCancel = false;
+  }
+}
 
 // Lifecycle
 onMount(async () => {
@@ -103,4 +133,27 @@ onMount(async () => {
     }}
     on:error={(e) => toastError(e.detail)}
   />
+
+  {#if canCancel}
+    <div class="m-4 mt-8 rounded-lg border border-red-400/30 p-4 flex flex-col gap-3">
+      <div class="flex flex-col gap-1">
+        <h3 class="text-white">Cancelar el toque</h3>
+        <p class="text-cold-light text-sm leading-snug">
+          Dejará de ser visible para el público. El setlist se conserva y puedes clonarlo en un nuevo borrador más adelante.
+        </p>
+      </div>
+      {#if confirmingCancel}
+        <div class="flex items-center gap-3">
+          <button type="button" on:click={cancelToque} disabled={cancelling} class="bg-red-500 hover:bg-red-400 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-60">
+            {cancelling ? 'Cancelando…' : 'Sí, cancelar el toque'}
+          </button>
+          <button type="button" on:click={() => (confirmingCancel = false)} class="text-cold-light hover:text-white text-sm px-2 py-2 transition">Volver</button>
+        </div>
+      {:else}
+        <button type="button" on:click={() => (confirmingCancel = true)} class="self-start text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">
+          Cancelar toque
+        </button>
+      {/if}
+    </div>
+  {/if}
 {/if}

@@ -629,7 +629,14 @@
         <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
         {#if party.is_test}<span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Datos de prueba</span>{/if}
       </div>
-      <StatusBadge status={party.status} />
+      <!-- "Confirmado" tells a visitor nothing they can't already infer from being
+           here — a confirmed toque is just the normal case. Every other status
+           does carry information (a draft, a pending approval, a cancellation),
+           so the badge stays for those. In lists it stays for all of them, where
+           it distinguishes one row from another. -->
+      {#if party.status !== 'confirmed'}
+        <StatusBadge status={party.status} />
+      {/if}
     </div>
     {#if canAdmin && party.status === 'draft'}
       <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
@@ -663,11 +670,12 @@
           <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm px-2 py-2 transition">Cancelar toque</button>
         </div>
       </div>
-    {:else if canAdmin && party.status !== 'completed' && party.status !== 'cancelled'}
-      <div class="flex justify-end">
-        <button on:click={cancelToque} class="text-red-400 hover:text-red-300 text-sm border border-red-400/40 hover:border-red-300 rounded-lg px-3 py-1 transition">Cancelar toque</button>
-      </div>
-    {:else if isVenueAdmin && (party.status === 'confirmed' || party.status === 'live')}
+    <!-- The organizer's "Cancelar toque" used to float here for every confirmed
+         toque. It's a rare, destructive action and only admins ever saw it, so it
+         now lives in the edit view instead of sitting on the page everyone reads.
+         The contextual ones below/above stay: they're part of a decision the
+         viewer is actually being asked to make. -->
+    {:else if isVenueAdmin && !canAdmin && (party.status === 'confirmed' || party.status === 'live')}
       <div class="bg-base-900 rounded-lg p-4 flex flex-col gap-3">
         <p class="text-cold-light text-sm leading-snug">
           Este toque está <span class="text-white">confirmado en tu local</span>. Como administrador del local puedes cancelarlo si es necesario.
