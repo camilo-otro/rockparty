@@ -25,6 +25,47 @@
     let bandsLoaded = false;
     let partyIsTest = false;
     let partyLoaded = false;
+    // What's ALREADY on this party's setlist, keyed by song id. Loaded once so a
+    // repeat is a visible choice rather than a surprise — someone else may have
+    // added the song, or you may have added it on an earlier visit (`added` only
+    // covers this session). Repeats stay allowed: two bands covering the same
+    // song, or an encore, are legitimate calls that belong to the organizer.
+    let existing: Record<string, { count: number; bands: string[] }> = {};
+
+    async function loadExisting(pid: string) {
+      const { data } = await supabase.from('performance').select('song, band_id').eq('party', Number(pid));
+      if (!data) return;
+      const bandIds = [...new Set(data.map((r: any) => r.band_id).filter(Boolean))];
+      const { data: bands } = bandIds.length
+        ? await supabase.from('band').select('id, name').in('id', bandIds)
+        : { data: [] as any[] };
+      const bandName: Record<string, string> = {};
+      for (const b of bands ?? []) bandName[b.id] = b.name;
+      const map: Record<string, { count: number; bands: string[] }> = {};
+      for (const r of data as any[]) {
+        if (r.song == null) continue;
+        const e = (map[r.song] ??= { count: 0, bands: [] });
+        e.count += 1;
+        const n = r.band_id ? bandName[r.band_id] : null;
+        if (n && !e.bands.includes(n)) e.bands.push(n);
+      }
+      existing = map;
+    }
+
+    // Badge text per song id for the search results. Session adds and pre-existing
+    // entries read differently because they behave differently (see addSong).
+    $: notes = (() => {
+      const n: Record<string, string> = {};
+      for (const [songId, e] of Object.entries(existing)) {
+        n[songId] = e.bands.length
+          ? `Ya en el setlist · ${e.bands.join(', ')}`
+          : e.count > 1
+            ? `Ya en el setlist ×${e.count}`
+            : 'Ya en el setlist';
+      }
+      for (const a of added) n[a.songId] = 'La agregaste hace un momento';
+      return n;
+    })();
 
     async function loadMyBands(uid: string) {
       const { data } = await supabase
@@ -48,6 +89,7 @@
       if (partyId) {
         const { data } = await supabase.from('party').select('is_test').eq('id', Number(partyId)).maybeSingle();
         partyIsTest = data?.is_test ?? false;
+        await loadExisting(partyId);
       }
       partyLoaded = true;
     });
@@ -104,7 +146,11 @@
     // Tap a search result → add it right away (incremental, #77).
     async function addSong(song: any) {
       if (!partyId || !userId || adding) return;
-      if (added.some((a) => a.songId === song.id)) { toastInfo('Ya está en la lista.'); return; }
+      // Added seconds ago and sitting right below — a second tap is a mis-tap, so
+      // block it. A song already on the setlist from BEFORE this session is a
+      // different case: it's badged in the results and the tap goes through.
+      if (added.some((a) => a.songId === song.id)) { toastInfo('Ya la agregaste.'); return; }
+      const timesAlready = existing[song.id]?.count ?? 0;
       adding = true;
       try {
         const { data, error } = await supabase
@@ -124,6 +170,7 @@
           band = myBands.find((b) => b.id === Number(signupChoice)) ?? null;
         }
         added = [{ perfId, songId: song.id, title: song.title, artist: song.artist, band }, ...added];
+        if (timesAlready) toastInfo(`Quedó ${timesAlready + 1} veces en el setlist.`);
       } catch {
         toastError('No se pudo conectar con el servidor.');
       } finally {
@@ -173,7 +220,7 @@
          results. Don't make this sticky — see pinSearchToTop. -->
     <div bind:this={searchWrap} class="flex flex-col gap-1">
       <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
-      <SongSelect {songs} bind:value={songSearch} multiAdd serverFiltered
+      <SongSelect {songs} {notes} bind:value={songSearch} multiAdd serverFiltered
         on:select={(e) => addSong(e.detail)}
         on:focus={pinSearchToTop} />
       {#if errorSongs}<div class="text-red-500 text-sm">{errorSongs}</div>{/if}

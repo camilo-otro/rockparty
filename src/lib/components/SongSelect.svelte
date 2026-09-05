@@ -12,6 +12,9 @@
   // Server-ranked mode (#82): `songs` is already the ranked/filtered result, so
   // don't re-filter it client-side (that would undo cross-field matches).
   export let serverFiltered: boolean = false;
+  // Optional per-row note keyed by song id (e.g. "Ya en el setlist"). Lets a
+  // caller flag a result without this component knowing why — it only renders.
+  export let notes: Record<string, string> = {};
 
   const dispatch = createEventDispatcher();
   export function focus() { inputRef?.focus(); }
@@ -103,6 +106,11 @@
         >
           <div class="font-medium">{song.title}</div>
           <div class="text-sm text-yellow">{song.artist}</div>
+          {#if notes[song.id]}
+            <div class="mt-1 text-xs text-cold-light flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-yellow shrink-0"></span>{notes[song.id]}
+            </div>
+          {/if}
         </button>
       {/each}
     </div>
