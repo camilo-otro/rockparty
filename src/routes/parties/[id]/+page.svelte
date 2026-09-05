@@ -42,10 +42,28 @@
   let usersLoaded = false;
   // In-app confirm/reason dialog (native prompt()/confirm() are blocked in some
   // browser contexts — mobile/webviews — where they throw and do nothing).
-  let confirmDialog: { title: string; body?: string; withReason: boolean; confirmLabel: string; run: (note: string | null) => Promise<void> | void } | null = null;
+  let confirmDialog: {
+    title: string;
+    body?: string;
+    // Optional consequence callout: what this action costs OTHER people, with
+    // their faces, so it isn't an abstract line of text.
+    warning?: string;
+    people?: { user_id: string; avatar: string; name: string }[];
+    withReason: boolean;
+    confirmLabel: string;
+    run: (note: string | null) => Promise<void> | void;
+  } | null = null;
   let dialogNote = '';
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
+  // Removing a song is allowed for a party admin OR the person who suggested it
+  // (the RLS delete policy says exactly this — see migrations, #77). Reordering
+  // stays admin-only, so edit mode can be useful to a non-admin with none of the
+  // arrows: their own suggestions are still theirs to take back.
+  function canRemoveSong(perf: any): boolean {
+    return canAdmin || (!!currentUserId && perf?.suggested_by === currentUserId);
+  }
+  $: mySuggestionCount = currentUserId ? performances.filter((p) => p.suggested_by === currentUserId).length : 0;
   // Venue admin of THIS party's venue (its creator or a listed venue_admin).
   $: isVenueAdmin = !!currentUserId && (venue?.created_by === currentUserId || venueAdmins.includes(currentUserId));
 
@@ -306,13 +324,36 @@
     if (err) reportError(err);
   }
 
-  // Remove a song from the setlist (#62). Party admins only (RLS enforces it);
-  // the DELETE cascades to this song's signups. Confirm first, and treat a
-  // 0-row delete as an RLS denial rather than silent success.
+  // Everyone who loses their spot if this song goes — approved and pending alike,
+  // minus whoever is doing the removing (losing your own spot is the point, not a
+  // consequence to warn about).
+  function affectedByRemoval(perf: any) {
+    const ids = new Set<string>();
+    for (const p of perf.performers ?? []) ids.add(p.user_id);
+    for (const p of perf.pending ?? []) ids.add(p.user_id);
+    if (currentUserId) ids.delete(currentUserId);
+    return [...ids].map((id) => ({ user_id: id, avatar: getUserAvatar(id), name: getUserNickname(id) }));
+  }
+
+  // Remove a song from the setlist (#62). Party admins and the song's suggester
+  // (RLS enforces it); the DELETE cascades to this song's signups. Confirm first,
+  // naming who else is affected, and treat a 0-row delete as an RLS denial rather
+  // than silent success.
   function removeSong(perf: any) {
+    const people = affectedByRemoval(perf);
+    const n = people.length;
+    const warning = !n
+      ? undefined
+      : perf.band
+        ? `La toca ${perf.band.name}. Al quitarla se cancela la participación de la banda.`
+        : n === 1
+          ? 'Ya hay un músico inscrito en esta canción y perderá su cupo.'
+          : `Ya hay ${n} músicos inscritos en esta canción y perderán su cupo.`;
     openDialog({
       title: '¿Quitar esta canción del setlist?',
-      body: `Se eliminará "${getSongTitle(perf.song)}" y las inscripciones a esta canción.`,
+      body: `Se eliminará "${getSongTitle(perf.song)}" del setlist.`,
+      warning,
+      people,
       withReason: false,
       confirmLabel: 'Quitar',
       run: async () => {
@@ -673,8 +714,10 @@
     <div class="flex items-center justify-between mt-4 mb-2">
       <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
       <!-- Edit mode covers removing a song as well as reordering, so it must be
-           reachable with a single song too (reordering just has nothing to do). -->
-      {#if canAdmin && performances.length > 0}
+           reachable with a single song too (reordering just has nothing to do),
+           and by a non-admin who suggested at least one song — they can take their
+           own back even though the arrows aren't theirs to use. -->
+      {#if performances.length > 0 && (canAdmin || mySuggestionCount > 0)}
         <button on:click={() => { editMode = !editMode; if (editMode) setlistView = 'orden'; }} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
           {editMode ? 'Listo' : 'Editar'}
         </button>
@@ -773,15 +816,22 @@
                     <div class="text-lg text-yellow truncate">{getSongTitle(perf.song)}</div>
                     <div class="text-sm text-cold-light truncate">{getSongArtist(perf.song)}</div>
                   </div>
-                  <!-- Nothing to reorder with a single song — the arrows would both
-                       be permanently disabled, so leave them out entirely. -->
-                  {#if performances.length > 1}
+                  <!-- Reordering is admin-only, and there's nothing to reorder with
+                       a single song — the arrows would both be permanently
+                       disabled, so leave them out entirely. -->
+                  {#if canAdmin && performances.length > 1}
                     <div class="flex flex-col shrink-0">
                       <button on:click={() => moveSong(index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
                       <button on:click={() => moveSong(index, 1)} disabled={index === performances.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
                     </div>
                   {/if}
-                  <button on:click={() => removeSong(perf)} aria-label="Quitar del setlist" class="p-1 ml-1 text-warm-base hover:text-red-400 shrink-0"><Trash2 size={20} /></button>
+                  {#if canRemoveSong(perf)}
+                    <button on:click={() => removeSong(perf)} aria-label="Quitar del setlist" class="p-1 ml-1 text-warm-base hover:text-red-400 shrink-0"><Trash2 size={20} /></button>
+                  {:else}
+                    <!-- Not yours to remove: keep the row's shape so the list stays
+                         aligned instead of the title stretching into the gap. -->
+                    <span class="w-7 shrink-0" aria-hidden="true"></span>
+                  {/if}
                 </div>
               {:else}
                 <a href={`/performance/${perf.id}`} class="block">
@@ -878,6 +928,24 @@
         <div class="bg-base-900 rounded-lg p-6 max-w-md w-full flex flex-col gap-3" on:click|stopPropagation>
           <h3 class="text-xl text-white">{confirmDialog.title}</h3>
           {#if confirmDialog.body}<p class="text-cold-light text-sm">{confirmDialog.body}</p>{/if}
+          {#if confirmDialog.warning}
+            <div class="flex items-start gap-2 bg-base-950 rounded-lg p-3">
+              <AlertTriangle class="text-yellow shrink-0 mt-0.5" size={18} />
+              <div class="flex flex-col gap-2 min-w-0">
+                <span class="text-white text-sm">{confirmDialog.warning}</span>
+                {#if confirmDialog.people?.length}
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    {#each confirmDialog.people as p (p.user_id)}
+                      <span class="inline-flex items-center gap-1.5 min-w-0">
+                        <img src={p.avatar} alt="" class="w-6 h-6 rounded-full border border-cold-base shrink-0" />
+                        <span class="text-cold-light text-xs truncate">{p.name}</span>
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
           {#if confirmDialog.withReason}
             <textarea bind:value={dialogNote} rows="2" maxlength="300" placeholder="Motivo (opcional)" class="p-2 border rounded-lg w-full resize-none"></textarea>
           {/if}
