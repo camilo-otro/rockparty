@@ -35,6 +35,11 @@ create extension if not exists pg_trgm;  -- for the song trigram search indexes
 create type public.party_status as enum
   ('draft', 'pending_venue', 'confirmed', 'live', 'completed', 'cancelled');
 
+-- live-show state of a single setlist slot (#37). The one 'playing' row per
+-- party is the now-playing pointer — there is no pointer column.
+create type public.performance_live_state as enum
+  ('queued', 'playing', 'played', 'skipped');
+
 -- how a venue pays performers (see docs/specs/venue-profile.md, #30)
 create type public.engagement_model as enum
   ('free', 'door_split', 'guarantee', 'pay_to_play', 'tips', 'bar_minimum', 'other');
@@ -214,7 +219,11 @@ create table if not exists public.performance (
   ref_link     varchar,
   key          varchar,             -- musical key
   "order"      smallint,            -- set-list position (reserved word — quoted)
-  suggested_by uuid references public.profile (id)
+  suggested_by uuid references public.profile (id),
+  -- live mode (#37)
+  live_state   public.performance_live_state not null default 'queued',
+  started_at   timestamptz,         -- set on advance; opens song applause (#38)
+  ended_at     timestamptz
   -- band_id added by ALTER below (band table defined later) — #40
 );
 
@@ -348,6 +357,11 @@ create index if not exists idx_band_created_by             on public.band (creat
 create index if not exists idx_band_member_user            on public.band_member (user_id);
 create index if not exists idx_bmi_instrument              on public.band_member_instrument (instrument_id);
 create index if not exists idx_performance_band            on public.performance (band_id);
+create index if not exists idx_performance_party_live_state on public.performance (party, live_state);
+-- At most one song playing per toque: two admins tapping Next at once get one
+-- winner and one 23505, never two now-playing songs (#37).
+create unique index if not exists performance_one_playing_per_party
+  on public.performance (party) where live_state = 'playing';
 create index if not exists idx_performance_user_band       on public.performance_user (band_id);
 
 -- =============================================================================
@@ -421,6 +435,15 @@ drop trigger if exists party_admin_presentation_guard on public.party_admin;
 create trigger party_admin_presentation_guard
   before update on public.party_admin
   for each row execute function public.party_admin_presentation_guard();
+
+-- Live mode (#37). SECURITY INVOKER on purpose: RLS stays the authorization
+-- boundary (performance/party UPDATE are already restricted to party admins);
+-- the is_party_admin guard just turns a silent 0-row update into a clear error.
+-- Each is one RPC so the two-row change is atomic and can't leave two songs
+-- playing. Full bodies in migrations/20260905_live_mode.sql.
+--   start_show(p_party)   -> bigint  party -> live, cue the first song
+--   advance_show(p_party) -> bigint  close current, open next (the workhorse)
+--   end_show(p_party)     -> void    close current, party -> completed
 
 -- Bands (#40). SECURITY DEFINER so they read band_member without RLS recursion.
 create or replace function public.is_band_manager(bid bigint)
