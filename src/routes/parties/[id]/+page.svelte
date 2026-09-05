@@ -4,7 +4,7 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy, Users } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy, Users, Radio } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -67,6 +67,11 @@
     run: (note: string | null) => Promise<void> | void;
   } | null = null;
   let dialogNote = '';
+
+  // Live mode (#37): the now-playing pointer is derived — the single performance
+  // with live_state 'playing' is it. No pointer column to fall out of sync.
+  $: isLive = party?.status === 'live';
+  $: nowPlaying = isLive ? performances.find((p) => p.live_state === 'playing') ?? null : null;
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
   // Removing a song is allowed for a party admin OR the person who suggested it
@@ -481,7 +486,7 @@
   // editMode / expandedApprovals, so an in-progress interaction isn't clobbered.
   let perfIdSet = new Set<number>(); // this party's performance ids, for filtering
   async function loadSetlist(pid: number) {
-    const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order, band_id').eq('party', pid);
+    const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order, band_id, live_state, started_at').eq('party', pid);
     if (perfErr) { errorPerformances = perfErr.message; return; }
     const perfs = (perfData ?? []).sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
     perfs.forEach((perf, index) => { perf.order = index; });
@@ -564,6 +569,11 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'performance_user' }, (payload: any) => {
         const rid = payload.new?.performance_id ?? payload.old?.performance_id;
         if (rid && perfIdSet.has(rid)) scheduleReload();
+      })
+      // Live mode (#37): `party` joined the realtime publication so a show
+      // starting or ending flips this page over without a reload.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'party', filter: `id=eq.${pid}` }, (payload: any) => {
+        if (payload.new) party = { ...party, ...payload.new };
       })
       .subscribe();
   }
@@ -715,6 +725,31 @@
         <p class="text-cold-light text-sm">El setlist se conserva más abajo. Puedes <a href={`/venues/${party.venue}`} class="text-cold-light underline">contactar al local</a> o crear un nuevo toque.</p>
       </div>
     {/if}
+    <!-- Live mode (#37): during a show this is the most important thing on the
+         page, so it sits above everything but the title. Streams over Realtime. -->
+    {#if isLive}
+      <div class="rounded-lg overflow-clip border border-warm-base/40">
+        <div class="bg-base-900 px-4 py-3">
+          <span class="inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-warm-base">
+            <span class="w-2 h-2 rounded-full bg-warm-base animate-pulse"></span> Sonando ahora
+          </span>
+          {#if nowPlaying}
+            <div class="mt-1 text-xl text-yellow leading-tight">{getSongTitle(nowPlaying.song)}</div>
+            <div class="text-sm text-cold-light">{getSongArtist(nowPlaying.song)}</div>
+            {#if nowPlaying.band}
+              <div class="mt-1 text-sm text-white inline-flex items-center gap-1.5"><Users size={14} /> {nowPlaying.band.name}</div>
+            {/if}
+          {:else}
+            <div class="mt-1 text-white text-sm">Entre canciones.</div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+    {#if canAdmin && (isLive || party.status === 'confirmed')}
+      <a href={`/parties/${party.id}/live`} class="self-start inline-flex items-center gap-2 text-sm rounded-lg px-3 py-1.5 transition {isLive ? 'bg-warm-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">
+        <Radio size={16} /> {isLive ? 'Dirigir el show' : 'Empezar el show'}
+      </a>
+    {/if}
     <div class="flex flex-wrap items-center gap-x-1 gap-y-1">
       <span>{shownOrganizers.length > 1 ? 'Organizan:' : 'Organizado por:'}</span>
       {#if usersLoaded}
@@ -843,7 +878,10 @@
         {:else}
         <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
           {#each run.items as perf, index (perf.id)}
-            <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
+            <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}
+                class:border-l-2={isLive && perf.live_state === 'playing'}
+                class:border-warm-base={isLive && perf.live_state === 'playing'}
+                class:opacity-50={isLive && (perf.live_state === 'played' || perf.live_state === 'skipped')}>
               {#if editMode}
                 <div class="flex items-center gap-2">
                   <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>

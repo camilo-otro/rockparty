@@ -420,34 +420,43 @@ export type Database = {
         Row: {
           band_id: number | null
           created_at: string
+          ended_at: string | null
           id: number
           key: string | null
+          live_state: Database["public"]["Enums"]["performance_live_state"]
           order: number | null
           party: number | null
           ref_link: string | null
           song: number | null
+          started_at: string | null
           suggested_by: string | null
         }
         Insert: {
           band_id?: number | null
           created_at?: string
+          ended_at?: string | null
           id?: number
           key?: string | null
+          live_state?: Database["public"]["Enums"]["performance_live_state"]
           order?: number | null
           party?: number | null
           ref_link?: string | null
           song?: number | null
+          started_at?: string | null
           suggested_by?: string | null
         }
         Update: {
           band_id?: number | null
           created_at?: string
+          ended_at?: string | null
           id?: number
           key?: string | null
+          live_state?: Database["public"]["Enums"]["performance_live_state"]
           order?: number | null
           party?: number | null
           ref_link?: string | null
           song?: number | null
+          started_at?: string | null
           suggested_by?: string | null
         }
         Relationships: [
@@ -849,9 +858,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_show: { Args: { p_party: number }; Returns: number }
       can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
+      end_show: { Args: { p_party: number }; Returns: undefined }
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
       is_party_admin: { Args: { pid: number }; Returns: boolean }
@@ -888,6 +899,7 @@ export type Database = {
         Args: { p_band: number; p_performance: number }
         Returns: undefined
       }
+      start_show: { Args: { p_party: number }; Returns: number }
     }
     Enums: {
       band_role: "manager" | "member"
@@ -906,6 +918,7 @@ export type Database = {
         | "live"
         | "completed"
         | "cancelled"
+      performance_live_state: "queued" | "playing" | "played" | "skipped"
       performer_approval: "auto" | "organizer" | "proponent" | "invite_only"
       signup_status: "pending" | "approved" | "declined"
     }
@@ -1053,6 +1066,7 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      performance_live_state: ["queued", "playing", "played", "skipped"],
       performer_approval: ["auto", "organizer", "proponent", "invite_only"],
       signup_status: ["pending", "approved", "declined"],
     },
