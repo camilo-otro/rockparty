@@ -71,11 +71,17 @@
       // Let the keyboard finish opening (it changes the visible viewport).
       setTimeout(async () => {
         if (!searchWrap) return;
+        // NB: the field must NOT be sticky — a stuck element reports rect.top 0,
+        // which would make this read its own scroll offset instead of its place
+        // in the document.
+        // Reserve one viewport of extra room. Any element is then guaranteed to be
+        // scrollable to the top, with no height arithmetic to get wrong. Set once
+        // and never changed, so it can't cause a jump on blur/add.
+        if (!spacerH) {
+          spacerH = window.innerHeight;
+          await tick();
+        }
         const top = searchWrap.getBoundingClientRect().top + window.scrollY;
-        const viewport = window.visualViewport?.height ?? window.innerHeight;
-        const roomBelow = document.documentElement.scrollHeight - top;
-        spacerH = Math.max(spacerH, Math.ceil(viewport - roomBelow)); // monotonic: never shrinks mid-session
-        await tick();
         window.scrollTo({ top, behavior: 'smooth' });
       }, 250);
     }
@@ -146,7 +152,9 @@
     Debes <button type="button" class="text-cold-light underline" on:click={loginWithGoogle}>iniciar sesión</button> para agregar canciones al Setlist.
   </div>
 {:else}
-  <div class="flex flex-col w-full p-4 gap-4">
+  <!-- padding-bottom gives the page just enough room to scroll the search field
+       to the top on mobile (see pinSearchToTop); 0 on desktop. -->
+  <div class="flex flex-col w-full p-4 gap-4" style="padding-bottom:{16 + spacerH}px">
     {#if myBands.length}
       <div class="flex flex-col gap-1">
         <label for="signup" class="text-cold-light text-sm">¿Quién las toca?</label>
@@ -160,9 +168,10 @@
       </div>
     {/if}
 
-    <!-- Stays in the flow (sticky, not fixed) so the layout never breaks; the page
-         scrolls it to the top on focus so the keyboard can't cover the results. -->
-    <div bind:this={searchWrap} class="flex flex-col gap-1 sticky top-0 z-30 bg-base-950 pb-2 md:static md:bg-transparent md:pb-0">
+    <!-- Stays in normal flow (never repositioned) so the layout can't break; on
+         focus the PAGE scrolls this to the top so the keyboard can't cover the
+         results. Don't make this sticky — see pinSearchToTop. -->
+    <div bind:this={searchWrap} class="flex flex-col gap-1">
       <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
       <SongSelect {songs} bind:value={songSearch} multiAdd serverFiltered
         on:select={(e) => addSong(e.detail)}
@@ -193,9 +202,6 @@
     <button type="button" on:click={done} class="bg-cold-base text-white rounded-full px-6 py-2 self-center inline-flex items-center gap-2">
       <Check size={18} /> {added.length ? 'Listo — ver toque' : 'Volver al toque'}
     </button>
-
-    <!-- Just enough scroll room for the search field to reach the top (mobile). -->
-    {#if spacerH > 0}<div class="md:hidden shrink-0" style="height:{spacerH}px" aria-hidden="true"></div>{/if}
   </div>
 
   <p class="mt-2 mb-8 text-center text-cold-light">
