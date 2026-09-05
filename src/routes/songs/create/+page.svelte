@@ -20,7 +20,7 @@
     let query = '';
     let searching = false;
     let searchError = '';
-    let results: { title: string; artist: string; art_url: string | null; spotify_url: string }[] = [];
+    let results: { title: string; artist: string; art_url: string | null; spotify_url: string; duration_s?: number | null }[] = [];
     let submitting = false;
     let searchSeq = 0;
     let searchTimer: any = null;
@@ -72,7 +72,7 @@
 
     // Reuse an existing song (by Spotify link, else title+artist) or insert a new
     // one, then continue.
-    async function insertOrReuse(row: { title: string; artist: string; ref_link: string | null }) {
+    async function insertOrReuse(row: { title: string; artist: string; ref_link: string | null; duration?: number | null }) {
       if (submitting) return;
       submitting = true;
       try {
@@ -80,7 +80,12 @@
           const { data: existing } = await supabase.from('song').select('id').eq('ref_link', row.ref_link).maybeSingle();
           if (existing) { toastSuccess('Esa canción ya estaba en la app.'); continueFlow(); return; }
         }
-        const { error } = await supabase.from('song').insert([{ title: row.title, artist: row.artist, ref_link: row.ref_link, added_by: userId }]);
+        const { error } = await supabase.from('song').insert([{
+          title: row.title, artist: row.artist, ref_link: row.ref_link, added_by: userId,
+          // song.duration is decimal MINUTES (the catalog's convention); the
+          // function gives seconds. Omit when unknown so the column default stands.
+          ...(row.duration ? { duration: row.duration } : {})
+        }]);
         if (error) {
           if ((error as any).code === '23505') { toastSuccess('Esa canción ya estaba en la app.'); continueFlow(); return; }
           reportError(error); return;
@@ -94,8 +99,13 @@
       }
     }
 
-    function addResult(r: { title: string; artist: string; spotify_url: string }) {
-      insertOrReuse({ title: normalizeText(r.title, 200), artist: normalizeText(r.artist, 200), ref_link: r.spotify_url });
+    function addResult(r: { title: string; artist: string; spotify_url: string; duration_s?: number | null }) {
+      insertOrReuse({
+        title: normalizeText(r.title, 200),
+        artist: normalizeText(r.artist, 200),
+        ref_link: r.spotify_url,
+        duration: r.duration_s ? Math.round((r.duration_s / 60) * 100) / 100 : null
+      });
     }
 
     function addManual() {

@@ -243,6 +243,31 @@
     const song = songs.find(s => s.id === songId);
     return song ? song.artist : '';
   }
+
+  // Estimated set length: song durations (song.duration is decimal MINUTES) plus
+  // a minute of transition between songs. Approximate by design — a handful of
+  // catalog songs still sit at the default duration.
+  const TRANSITION_MIN = 1;
+  function setMinutes(items: any[]): number {
+    const songMins = items.reduce((t, p) => t + (songs.find((s) => s.id === p.song)?.duration ?? 0), 0);
+    return songMins + Math.max(0, items.length - 1) * TRANSITION_MIN;
+  }
+  function formatMinutes(mins: number): string {
+    const m = Math.round(mins);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    const rest = m % 60;
+    return rest ? `${h} h ${rest} min` : `${h} h`;
+  }
+
+  // Band sets collapse to a summary; expand on tap. A set with something the
+  // viewer can approve stays open so the action isn't hidden.
+  let expandedSets = new Set<number>();
+  function toggleSet(key: number) {
+    if (expandedSets.has(key)) expandedSets.delete(key);
+    else expandedSets.add(key);
+    expandedSets = new Set(expandedSets);
+  }
   function getUserNickname(userId: string) {
     const usr = users.find(u => u.id === userId);
     return usr ? usr.nickname : 'Anónimo';
@@ -408,7 +433,7 @@
     const songIds = [...new Set(perfs.map((p) => p.song).filter((x): x is number => x != null))];
     const userIds = [...new Set(perfs.map((p) => p.suggested_by).filter((x): x is string => x != null))];
     if (party?.created_by) userIds.push(party.created_by);
-    const { data: songData } = songIds.length ? await supabase.from('song').select('id, title, artist').in('id', songIds) : { data: [] as any[] };
+    const { data: songData } = songIds.length ? await supabase.from('song').select('id, title, artist, duration').in('id', songIds) : { data: [] as any[] };
     const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status, band_id').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
     // Band-owned songs (#74): resolve band names for the setlist rows.
     const bandIds = [...new Set(perfs.map((p) => p.band_id).filter((x): x is number => x != null))];
@@ -687,26 +712,33 @@
         {/if}
         {#each runs as run}
         {#if run.band}
-          <!-- Band set (#74): the lineup is shown once for the whole run. -->
+          <!-- Band set (#74): lineup shown once; collapses to a summary. -->
+          {@const setKey = run.items[0].id}
+          {@const needsAction = run.items.some((p) => p.band?.pending && canApproveSong(p))}
+          {@const isOpen = expandedSets.has(setKey) || needsAction}
           <div class="rounded-lg overflow-clip border-l-2 border-cold-base">
-            <div class="bg-base-900 px-4 py-2.5 flex items-center gap-3">
+            <button type="button" on:click={() => toggleSet(setKey)} class="w-full bg-base-900 px-4 py-2.5 flex items-center gap-3 text-left hover:bg-base-950 transition">
               {#if run.band.avatar_url}
                 <img src={run.band.avatar_url} alt="" class="w-9 h-9 rounded-full object-cover border border-cold-base shrink-0" />
               {:else}
                 <span class="w-9 h-9 rounded-full bg-base-950 border border-cold-base flex items-center justify-center shrink-0"><Users size={16} class="text-cold-light" /></span>
               {/if}
               <div class="flex-1 min-w-0">
-                <a href={`/bands/${run.band.id}`} class="text-white truncate hover:text-cold-light block">{run.band.name}</a>
-                <div class="text-cold-light text-xs uppercase tracking-wide">
-                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'}{#if run.band.pending} · <span class="text-yellow">pendiente</span>{/if}
-                </div>
+                <span class="text-white truncate block">{run.band.name}</span>
+                <span class="text-cold-light text-xs uppercase tracking-wide">
+                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'} · ~{formatMinutes(setMinutes(run.items))}{#if run.band.pending} · <span class="text-yellow">pendiente</span>{/if}
+                </span>
               </div>
               <div class="flex flex-row -space-x-2 shrink-0">
                 {#each run.items[0].bandLineup ?? [] as m, i}
                   <img src={m.user_avatar || '/images/avatar-default.svg'} alt="" class="w-6 h-6 rounded-full border border-cold-base bg-base-900" style="z-index: {i + 1}" />
                 {/each}
               </div>
-            </div>
+              <span class="text-cold-light shrink-0">
+                {#if isOpen}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
+              </span>
+            </button>
+            {#if isOpen}
             <div class="flex flex-col gap-[1px] mt-[1px]">
               {#each run.items as perf (perf.id)}
                 <div class="bg-base-900" data-perf-id={perf.id}>
@@ -725,6 +757,7 @@
                 </div>
               {/each}
             </div>
+            {/if}
           </div>
         {:else}
         <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
