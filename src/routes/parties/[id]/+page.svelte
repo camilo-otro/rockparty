@@ -38,6 +38,19 @@
   let myInstrumentIds: number[] = []; // instruments the viewer plays (#32)
   let showShareModal = false;
   let partyAdmins: string[] = [];
+  // Co-organizers as PRESENTED (order + who opted out), separate from the
+  // permission list above. The creator is pinned first and isn't in this table,
+  // so nothing here can reorder or hide them.
+  let coOrganizers: { user_id: string; display_order: number | null; hidden: boolean }[] = [];
+  $: shownOrganizers = party
+    ? [
+        party.created_by,
+        ...coOrganizers
+          .filter((a) => !a.hidden && a.user_id !== party.created_by)
+          .sort((a, b) => (a.display_order ?? 9999) - (b.display_order ?? 9999))
+          .map((a) => a.user_id)
+      ].filter((id): id is string => !!id)
+    : [];
   let venueAdmins: string[] = [];
   let usersLoaded = false;
   // In-app confirm/reason dialog (native prompt()/confirm() are blocked in some
@@ -475,6 +488,9 @@
     const songIds = [...new Set(perfs.map((p) => p.song).filter((x): x is number => x != null))];
     const userIds = [...new Set(perfs.map((p) => p.suggested_by).filter((x): x is string => x != null))];
     if (party?.created_by) userIds.push(party.created_by);
+    // Co-organizers are named in the header and may appear nowhere else on the
+    // page, so their profiles have to be fetched here too.
+    userIds.push(...partyAdmins);
     const { data: songData } = songIds.length ? await supabase.from('song').select('id, title, artist, duration').in('id', songIds) : { data: [] as any[] };
     const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status, band_id').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
     // Band-owned songs (#74): resolve band names for the setlist rows.
@@ -561,8 +577,9 @@
     const { data, error: err } = await supabase.from('party').select('*').eq('id', Number(id)).single();
     party = data;
     // Fetch party admins
-    const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', Number(id));
+    const { data: adminData } = await supabase.from('party_admin').select('user_id, display_order, hidden').eq('party_id', Number(id));
     partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
+    coOrganizers = adminData ?? [];
     if (err) {
       error = err.message;
     } else {
@@ -698,7 +715,17 @@
         <p class="text-cold-light text-sm">El setlist se conserva más abajo. Puedes <a href={`/venues/${party.venue}`} class="text-cold-light underline">contactar al local</a> o crear un nuevo toque.</p>
       </div>
     {/if}
-    <div class="">Organizado por: {#if usersLoaded}<img src={getUserAvatar(party.created_by)} alt="User Avatar" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" /><span class="text-cold-light">{getUserNickname(party.created_by)}</span>{/if}</div>
+    <div class="flex flex-wrap items-center gap-x-1 gap-y-1">
+      <span>{shownOrganizers.length > 1 ? 'Organizan:' : 'Organizado por:'}</span>
+      {#if usersLoaded}
+        {#each shownOrganizers as organizerId, i (organizerId)}
+          <span class="inline-flex items-center">
+            <img src={getUserAvatar(organizerId)} alt="" class="w-5 h-5 border-yellow rounded-full inline-block mx-2" />
+            <span class="text-cold-light">{getUserNickname(organizerId)}</span>{#if i < shownOrganizers.length - 1}<span class="text-cold-light/50">,</span>{/if}
+          </span>
+        {/each}
+      {/if}
+    </div>
     <div class="text-lg mb-2 text-white">{party.description}</div>
     <div class="mb-2 text-white">{dayjs(party.date).locale('es').format('ddd D [de] MMMM, YYYY')}</div>
     <div class="mb-2 text-cold-light"><MapPin class="inline-block" size={18} /> {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>

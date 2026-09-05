@@ -152,11 +152,16 @@ create table if not exists public.party (
   is_test           boolean not null default false  -- test data, dev-only (#67)
 );
 
--- party_admin — who may administer a party (besides its creator).
+-- party_admin — who may administer a party (besides its creator), and how those
+-- organizers are PRESENTED on the detail page. The creator is pinned first and
+-- always visible, so nothing here can reorder or hide them (they're excluded
+-- from this list client-side even when they also hold a row).
 create table if not exists public.party_admin (
-  party_id   bigint not null references public.party (id),
-  created_at timestamptz not null default now(),
-  user_id    uuid not null references public.profile (id),
+  party_id      bigint not null references public.party (id),
+  created_at    timestamptz not null default now(),
+  user_id       uuid not null references public.profile (id),
+  display_order smallint,              -- position among co-organizers; nulls last
+  hidden        boolean not null default false,  -- asked not to be listed publicly
   primary key (party_id, user_id)
 );
 
@@ -372,6 +377,50 @@ create or replace function public.is_dev()
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.dev_user d where d.user_id = (select auth.uid()));
 $$;
+
+-- Is the current user an admin of this party (its creator, or a party_admin)?
+-- SECURITY DEFINER so party_admin's own policies can call it without re-entering
+-- RLS on that table.
+create or replace function public.is_party_admin(pid bigint)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+           select 1 from public.party p
+           where p.id = pid and p.created_by = (select auth.uid())
+         )
+      or exists (
+           select 1 from public.party_admin pa
+           where pa.party_id = pid and pa.user_id = (select auth.uid())
+         );
+$$;
+
+-- Column-level split on party_admin: ordering is a party-admin decision,
+-- visibility is personal. RLS is per-row, so a trigger does the narrowing.
+-- No JWT => not an end-user request (SQL editor, service_role, a migration);
+-- RLS already limits real traffic to `authenticated`, so it no-ops rather than
+-- locking maintenance out of the table.
+create or replace function public.party_admin_presentation_guard()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if (select auth.uid()) is null then
+    return new;
+  end if;
+  if new.party_id is distinct from old.party_id or new.user_id is distinct from old.user_id then
+    raise exception 'party_admin identity is not editable';
+  end if;
+  if new.hidden is distinct from old.hidden and old.user_id <> (select auth.uid()) then
+    raise exception 'only that organizer can change their own visibility';
+  end if;
+  if new.display_order is distinct from old.display_order and not public.is_party_admin(old.party_id) then
+    raise exception 'only a party admin can reorder organizers';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists party_admin_presentation_guard on public.party_admin;
+create trigger party_admin_presentation_guard
+  before update on public.party_admin
+  for each row execute function public.party_admin_presentation_guard();
 
 -- Bands (#40). SECURITY DEFINER so they read band_member without RLS recursion.
 create or replace function public.is_band_manager(bid bigint)
@@ -875,6 +924,12 @@ create policy "Enable delete for party admins" on public.party_admin
       where party_admin_1.party_id = party_admin.party_id and party_admin_1.user_id = auth.uid()
     )
   );
+-- Permissive union of both actors; party_admin_presentation_guard (above) decides
+-- which COLUMN each of them may actually touch.
+create policy "party_admin: reorder by admins, hide by self" on public.party_admin
+  for update to authenticated
+  using      (public.is_party_admin(party_id) or user_id = (select auth.uid()))
+  with check (public.is_party_admin(party_id) or user_id = (select auth.uid()));
 
 -- ---- performance ------------------------------------------------------------
 -- A hidden party's setlist stays hidden (gated by parent-party visibility).

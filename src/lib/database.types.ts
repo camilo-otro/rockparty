@@ -347,16 +347,22 @@ export type Database = {
       party_admin: {
         Row: {
           created_at: string
+          display_order: number | null
+          hidden: boolean
           party_id: number
           user_id: string
         }
         Insert: {
           created_at?: string
+          display_order?: number | null
+          hidden?: boolean
           party_id: number
           user_id: string
         }
         Update: {
           created_at?: string
+          display_order?: number | null
+          hidden?: boolean
           party_id?: number
           user_id?: string
         }
@@ -848,6 +854,7 @@ export type Database = {
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
+      is_party_admin: { Args: { pid: number }; Returns: boolean }
       notify_upcoming_toques: { Args: never; Returns: undefined }
       search_songs: {
         Args: { lim?: number; q: string }

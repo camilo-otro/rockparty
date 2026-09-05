@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 
 # MCP (references a local SUPABASE_ACCESS_TOKEN env var; keep infra details off the public repo)
 .mcp.json
+
+# Supabase CLI scratch (created by `supabase gen types`)
+supabase/.temp/
