@@ -138,7 +138,7 @@
     <h1 class="wordmark">Rock <span class="the">the</span> House</h1>
     <p class="subtitle">Product Roadmap</p>
     <p class="tagline">An app for organizing jam sessions &mdash; <em>toques</em> &mdash; among musicians: line up a venue, build the setlist together, and see who's playing, running the show, or coming to watch. Spanish UI, mobile-first, dark theme.</p>
-    <p class="meta">Updated <b>4 Sep 2026</b> &nbsp;·&nbsp; Phases 0&ndash;1 shipped &nbsp;·&nbsp; Phase 2 nearly done &nbsp;·&nbsp; Phase 4's <b>Bands</b> epic jumped the queue and shipped &nbsp;·&nbsp; SvelteKit + Supabase, live on Netlify</p>
+    <p class="meta">Updated <b>4 Sep 2026</b> &nbsp;·&nbsp; Phases 0&ndash;1 shipped &nbsp;·&nbsp; Phase 2 nearly done &nbsp;·&nbsp; Phase 4's <b>Bands</b> epic jumped the queue and shipped &nbsp;·&nbsp; everything built is live &nbsp;·&nbsp; SvelteKit + Supabase, on Netlify</p>
   </header>
 
   <div class="stepper">
@@ -153,7 +153,6 @@
 
   <div class="legend">
     <span><i class="mk ship">&#10003;</i> Shipped &amp; live</span>
-    <span><i class="mk flight"></i> Built, awaiting deploy</span>
     <span><i class="mk todo"></i> Not started</span>
     <span><i class="tag key" style="padding:2px 7px;border-radius:999px">Keystone</i> unlocks other work</span>
     <span><i class="tag dsn" style="padding:2px 7px;border-radius:999px">Design</i> wants your eye</span>
@@ -277,6 +276,7 @@
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#78</span><div class="fbody"><div class="name">Bandmates who aren't on the app yet</div><div class="d">A manager can list a member by name and instrument without them having an account &mdash; the lineup is complete from day one instead of half-empty while people sign up.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#75</span><div class="fbody"><div class="name">Band avatars<span class="tag dsn">Design</span></div><div class="d">Upload a photo, crop it in-app; it's resized and compressed in the browser before it ever leaves the phone, which keeps hosting inside the free tier.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#73&thinsp;·&thinsp;74</span><div class="fbody"><div class="name">Sign up as a band, approved as a unit<span class="tag dsn">Design</span></div><div class="d">A band claims a song in one move &mdash; no filling five slots one by one &mdash; and the organizer says yes or no to the whole band at once. The setlist then shows the band, not five separate names.</div></div></li>
+        <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">&mdash;</span><div class="fbody"><div class="name">Band sets, collapsed<span class="tag dsn">Design</span></div><div class="d">A band's consecutive songs group into one set block with the lineup shown once, collapsible to a summary line &mdash; &ldquo;3 canciones &middot; ~18 min&rdquo;, estimated from song lengths plus a minute between each. Open jam songs stay one continuous list.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#76</span><div class="fbody"><div class="name">Test bands stay out of real toques</div><div class="d">The #67 test-data rules extended to bands, including a guard so a test band can't sign up for a real event.</div></div></li>
       </ul>
     </div>
@@ -287,13 +287,6 @@
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#80&thinsp;·&thinsp;83</span><div class="fbody"><div class="name">Add songs from Spotify<span class="tag spec">Has spec</span></div><div class="d">The old flaky autocomplete is gone. Search Spotify from inside the app and tap a result &mdash; title, artist, artwork, length and the link all come with it. Remaster tags are stripped and remix/live versions filtered out; a manual entry stays for anything not on Spotify.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#82</span><div class="fbody"><div class="name">Search that finds the song you meant</div><div class="d">&ldquo;one metallica&rdquo; now returns Metallica's <em>One</em> first. Title and artist are matched together, exact titles rank top, and short names like <em>U2</em> work.</div></div></li>
         <li class="f"><span class="fmk"><i class="mk ship">&#10003;</i></span><span class="fid">#77</span><div class="fbody"><div class="name">Add several songs in one go</div><div class="d">Building a setlist is now search&thinsp;&rarr;&thinsp;tap&thinsp;&rarr;&thinsp;added, over and over, with one &ldquo;who plays these&rdquo; choice for the batch &mdash; instead of a full round-trip per song. On phones the field pins to the top so the keyboard stops covering the results.</div></div></li>
-      </ul>
-    </div>
-
-    <div class="group">
-      <div class="glabel flight"><i class="mk flight"></i> Built, awaiting deploy</div>
-      <ul class="feat">
-        <li class="f"><span class="fmk"><i class="mk flight"></i></span><span class="fid">&mdash;</span><div class="fbody"><div class="name">Band sets, collapsed<span class="tag dsn">Design</span></div><div class="d">A band's consecutive songs group into one set block with the lineup shown once, collapsible to a summary line &mdash; &ldquo;3 canciones &middot; ~18 min&rdquo;, estimated from song lengths plus a minute between each. Open jam songs stay one continuous list.</div></div></li>
       </ul>
     </div>
 
