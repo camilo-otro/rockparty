@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ChevronLeft, X, Users, Check } from 'lucide-svelte';
     import { goto } from '$app/navigation';
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, tick } from 'svelte';
     import { supabase } from '$lib/supabaseClient';
     import { page } from '$app/state';
     import { user } from '$lib/stores/user';
@@ -59,9 +59,26 @@
     // all work). Debounced with a latest-wins guard against out-of-order results.
     let searchSeq = 0;
     let searchTimer: any = null;
-    // On phones the keyboard covers the dropdown; pin the search field to the top
-    // of the viewport while focused so the suggestions get the space above it.
-    let searchFocused = false;
+    // On phones the keyboard covers the suggestions. Rather than repositioning the
+    // field (which breaks the layout and snaps back), scroll the PAGE so the field
+    // sits at the top of the viewport — it stays put across focus/blur. `spacerH`
+    // grows only as much as needed for the page to be able to scroll that far.
+    let searchWrap: HTMLElement;
+    let spacerH = 0;
+
+    async function pinSearchToTop() {
+      if (typeof window === 'undefined' || window.innerWidth >= 768) return; // desktop has room
+      // Let the keyboard finish opening (it changes the visible viewport).
+      setTimeout(async () => {
+        if (!searchWrap) return;
+        const top = searchWrap.getBoundingClientRect().top + window.scrollY;
+        const viewport = window.visualViewport?.height ?? window.innerHeight;
+        const roomBelow = document.documentElement.scrollHeight - top;
+        spacerH = Math.max(spacerH, Math.ceil(viewport - roomBelow)); // monotonic: never shrinks mid-session
+        await tick();
+        window.scrollTo({ top, behavior: 'smooth' });
+      }, 250);
+    }
     $: scheduleSearch(songSearch);
     function scheduleSearch(q: string) {
       clearTimeout(searchTimer);
@@ -143,15 +160,15 @@
       </div>
     {/if}
 
-    <div class="flex flex-col gap-1 {searchFocused ? 'fixed inset-x-0 top-0 z-40 bg-base-950 p-4 shadow-lg md:static md:z-auto md:bg-transparent md:p-0 md:shadow-none' : ''}">
+    <!-- Stays in the flow (sticky, not fixed) so the layout never breaks; the page
+         scrolls it to the top on focus so the keyboard can't cover the results. -->
+    <div bind:this={searchWrap} class="flex flex-col gap-1 sticky top-0 z-30 bg-base-950 pb-2 md:static md:bg-transparent md:pb-0">
       <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
       <SongSelect {songs} bind:value={songSearch} multiAdd serverFiltered
         on:select={(e) => addSong(e.detail)}
-        on:focus={() => (searchFocused = true)}
-        on:blur={() => (searchFocused = false)} />
+        on:focus={pinSearchToTop} />
       {#if errorSongs}<div class="text-red-500 text-sm">{errorSongs}</div>{/if}
     </div>
-    {#if searchFocused}<div class="h-16 md:hidden" aria-hidden="true"></div>{/if}
 
     {#if added.length}
       <div class="flex flex-col gap-2">
@@ -176,6 +193,9 @@
     <button type="button" on:click={done} class="bg-cold-base text-white rounded-full px-6 py-2 self-center inline-flex items-center gap-2">
       <Check size={18} /> {added.length ? 'Listo — ver toque' : 'Volver al toque'}
     </button>
+
+    <!-- Just enough scroll room for the search field to reach the top (mobile). -->
+    {#if spacerH > 0}<div class="md:hidden shrink-0" style="height:{spacerH}px" aria-hidden="true"></div>{/if}
   </div>
 
   <p class="mt-2 mb-8 text-center text-cold-light">
