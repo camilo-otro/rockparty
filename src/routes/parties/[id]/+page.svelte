@@ -4,7 +4,7 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
-  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy } from 'lucide-svelte';
+  import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy, Users } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -71,6 +71,22 @@
       : setlistView === 'para-ti'
         ? performances.filter((p) => openInstrumentIds(p).some((id) => myInstrumentIds.includes(id)))
         : performances;
+
+  // Band sets: a band's CONSECUTIVE songs render as one block with the lineup
+  // shown once, instead of repeating it on every row. Only in the running-order
+  // view — the other views re-sort/filter, so "consecutive" would be arbitrary —
+  // and never while reordering, where rows must stay individually movable.
+  // When grouping is off, everything is one open run => the original flat list.
+  $: grouping = !reorderMode && setlistView === 'orden';
+  $: runs = grouping
+    ? displayed.reduce<{ band: any; items: any[] }[]>((acc, p) => {
+        const last = acc[acc.length - 1];
+        const sameRun = last && (last.band && p.band ? last.band.id === p.band.id : !last.band && !p.band);
+        if (sameRun) last.items.push(p);
+        else acc.push({ band: p.band, items: [p] });
+        return acc;
+      }, [])
+    : [{ band: null, items: displayed }];
 
   async function setStatus(next: PartyStatus, reason: string | null = null): Promise<boolean> {
     if (!party) return false;
@@ -396,8 +412,8 @@
     const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status, band_id').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
     // Band-owned songs (#74): resolve band names for the setlist rows.
     const bandIds = [...new Set(perfs.map((p) => p.band_id).filter((x): x is number => x != null))];
-    const { data: bandData } = bandIds.length ? await supabase.from('band').select('id, name').in('id', bandIds) : { data: [] as any[] };
-    const bandNames: Record<number, string> = Object.fromEntries((bandData ?? []).map((b: any) => [b.id, b.name]));
+    const { data: bandData } = bandIds.length ? await supabase.from('band').select('id, name, avatar_url').in('id', bandIds) : { data: [] as any[] };
+    const bandsById: Record<number, any> = Object.fromEntries((bandData ?? []).map((b: any) => [b.id, b]));
     const performerUserIds = [...new Set((perfUsers ?? []).map((p) => p.user_id))];
     const allUserIds = [...new Set([...userIds, ...performerUserIds])];
     const { data: userData } = allUserIds.length ? await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds) : { data: [] as any[] };
@@ -436,7 +452,8 @@
                         .map((r) => ({ user_id: r.user_id, user_avatar: getUserAvatar(r.user_id) }));
         band = {
           id: perf.band_id,
-          name: bandNames[perf.band_id] ?? 'Banda',
+          name: bandsById[perf.band_id]?.name ?? 'Banda',
+          avatar_url: bandsById[perf.band_id]?.avatar_url ?? null,
           pending: pendingRows.length > 0 && approvedRows.length === 0,
           declined: approvedRows.length === 0 && pendingRows.length === 0
         };
@@ -664,11 +681,54 @@
       {:else if performances.length === 0}
         <div class="text-white">No hay canciones en el Setlist.</div>
       {:else}
-        <ul class="grid grid-cols-1 space-y-[1px]">
-          {#if displayed.length === 0}
-            <li class="bg-base-900 px-4 py-3 text-cold-light text-sm">Ninguna canción tiene un cupo en lo que tocas.</li>
-          {/if}
-          {#each displayed as perf, index (perf.id)}
+      <div class="flex flex-col gap-2">
+        {#if displayed.length === 0}
+          <div class="bg-base-900 rounded-lg px-4 py-3 text-cold-light text-sm">Ninguna canción tiene un cupo en lo que tocas.</div>
+        {/if}
+        {#each runs as run}
+        {#if run.band}
+          <!-- Band set (#74): the lineup is shown once for the whole run. -->
+          <div class="rounded-lg overflow-clip border-l-2 border-cold-base">
+            <div class="bg-base-900 px-4 py-2.5 flex items-center gap-3">
+              {#if run.band.avatar_url}
+                <img src={run.band.avatar_url} alt="" class="w-9 h-9 rounded-full object-cover border border-cold-base shrink-0" />
+              {:else}
+                <span class="w-9 h-9 rounded-full bg-base-950 border border-cold-base flex items-center justify-center shrink-0"><Users size={16} class="text-cold-light" /></span>
+              {/if}
+              <div class="flex-1 min-w-0">
+                <a href={`/bands/${run.band.id}`} class="text-white truncate hover:text-cold-light block">{run.band.name}</a>
+                <div class="text-cold-light text-xs uppercase tracking-wide">
+                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'}{#if run.band.pending} · <span class="text-yellow">pendiente</span>{/if}
+                </div>
+              </div>
+              <div class="flex flex-row -space-x-2 shrink-0">
+                {#each run.items[0].bandLineup ?? [] as m, i}
+                  <img src={m.user_avatar || '/images/avatar-default.svg'} alt="" class="w-6 h-6 rounded-full border border-cold-base bg-base-900" style="z-index: {i + 1}" />
+                {/each}
+              </div>
+            </div>
+            <div class="flex flex-col gap-[1px] mt-[1px]">
+              {#each run.items as perf (perf.id)}
+                <div class="bg-base-900" data-perf-id={perf.id}>
+                  <a href={`/performance/${perf.id}`} class="px-4 py-2 flex items-baseline gap-3">
+                    <span class="text-gray-400 text-xl font-medium w-7 shrink-0">{(perf.order ?? 0) + 1}</span>
+                    <span class="text-yellow truncate">{getSongTitle(perf.song)}</span>
+                    <span class="text-sm text-cold-light truncate ml-auto">{getSongArtist(perf.song)}</span>
+                  </a>
+                  {#if perf.band.pending && canApproveSong(perf)}
+                    <div class="px-4 pb-2 flex items-center gap-3">
+                      <span class="flex-1 text-xs text-yellow truncate">Aprobar a {perf.band.name}</span>
+                      <button on:click={() => decideBandSignup(perf, 'approved')} aria-label="Aprobar banda" class="p-1 text-green-500 hover:text-green-400"><Check size={18} /></button>
+                      <button on:click={() => decideBandSignup(perf, 'declined')} aria-label="Rechazar banda" class="p-1 text-red-500 hover:text-red-400"><X size={18} /></button>
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {:else}
+        <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
+          {#each run.items as perf, index (perf.id)}
             <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
               {#if reorderMode}
                 <div class="flex items-center gap-2">
@@ -734,6 +794,9 @@
             </li>
           {/each}
         </ul>
+        {/if}
+        {/each}
+      </div>
       {/if}
       {#if !reorderMode}
         <a href={`/performance/create?partyId=${party.id}`} class="w-full bg-cold-base text-white p-3 inline-block text-center">Sugerir una canción <Plus class="inline-block" /></a>
