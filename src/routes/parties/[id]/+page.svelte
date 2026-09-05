@@ -30,7 +30,7 @@
   let errorPerformances: string | null = null;
   let currentUserId: string | null = null;
   let unsubscribeUser: () => void;
-  let reorderMode = false;
+  let editMode = false;
   let setlistView: 'orden' | 'faltan' | 'para-ti' = 'orden'; // ephemeral view (#60)
   let justMovedId: number | null = null;
   let instrumentsById: Record<number, string> = {};
@@ -62,9 +62,9 @@
   $: songsForMe = myInstrumentIds.length ? performances.filter((p) => openInstrumentIds(p).some((id) => myInstrumentIds.includes(id))).length : 0;
 
   // Context-sort views (#60) — a non-destructive re-presentation of the setlist;
-  // the stored `order` (running order) is never touched. Reorder always uses the
-  // canonical order.
-  $: displayed = reorderMode
+  // the stored `order` (running order) is never touched. Edit mode always uses
+  // the canonical order.
+  $: displayed = editMode
     ? performances
     : setlistView === 'faltan'
       ? [...performances].sort((a, b) => openInstrumentIds(b).length - openInstrumentIds(a).length)
@@ -75,9 +75,9 @@
   // Band sets: a band's CONSECUTIVE songs render as one block with the lineup
   // shown once, instead of repeating it on every row. Only in the running-order
   // view — the other views re-sort/filter, so "consecutive" would be arbitrary —
-  // and never while reordering, where rows must stay individually movable.
+  // and never in edit mode, where rows must stay individually movable/removable.
   // When grouping is off, everything is one open run => the original flat list.
-  $: grouping = !reorderMode && setlistView === 'orden';
+  $: grouping = !editMode && setlistView === 'orden';
   $: runs = grouping
     ? displayed.reduce<{ band: any; items: any[] }[]>((acc, p) => {
         const last = acc[acc.length - 1];
@@ -277,7 +277,8 @@
     return usr && usr.avatarUrl ? usr.avatarUrl : '/images/avatar-default.svg';
   }
 
-  // Setlist reordering (#59): a dedicated mode with up/down arrows. Swapping two
+  // Setlist reordering (#59), one of the two things edit mode does (the other is
+  // removing a song, #62). Up/down arrows, no drag. Swapping two
   // adjacent items and re-numbering the array is deterministic — no drag, no
   // DOM↔data desync. We persist the FULL renumbered list (not just the two moved
   // rows) so any move leaves the stored order a clean 0..n — this self-heals the
@@ -423,7 +424,7 @@
 
   // Load / reload just the setlist (songs + signups). Extracted so Realtime (#63)
   // can refresh it live without re-fetching the whole party. Never touches
-  // reorderMode / expandedApprovals, so an in-progress interaction isn't clobbered.
+  // editMode / expandedApprovals, so an in-progress interaction isn't clobbered.
   let perfIdSet = new Set<number>(); // this party's performance ids, for filtering
   async function loadSetlist(pid: number) {
     const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order, band_id').eq('party', pid);
@@ -491,14 +492,14 @@
   }
 
   // Live setlist (#63): another user's signup/approval/song-change refreshes the
-  // list. Defer while the viewer is mid-reorder or has a dialog open, then flush.
+  // list. Defer while the viewer is mid-edit or has a dialog open, then flush.
   let setlistChannel: any = null;
   let pendingReload = false;
   function scheduleReload() {
-    if (reorderMode || confirmDialog) { pendingReload = true; return; }
+    if (editMode || confirmDialog) { pendingReload = true; return; }
     loadSetlist(Number(page.params.id));
   }
-  $: if (pendingReload && !reorderMode && !confirmDialog) { pendingReload = false; loadSetlist(Number(page.params.id)); }
+  $: if (pendingReload && !editMode && !confirmDialog) { pendingReload = false; loadSetlist(Number(page.params.id)); }
   function subscribeSetlist(pid: number) {
     setlistChannel = supabase
       .channel(`setlist-${pid}`)
@@ -671,13 +672,15 @@
     </div>
     <div class="flex items-center justify-between mt-4 mb-2">
       <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
-      {#if canAdmin && performances.length > 1}
-        <button on:click={() => { reorderMode = !reorderMode; if (reorderMode) setlistView = 'orden'; }} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
-          {reorderMode ? 'Listo' : 'Reordenar'}
+      <!-- Edit mode covers removing a song as well as reordering, so it must be
+           reachable with a single song too (reordering just has nothing to do). -->
+      {#if canAdmin && performances.length > 0}
+        <button on:click={() => { editMode = !editMode; if (editMode) setlistView = 'orden'; }} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
+          {editMode ? 'Listo' : 'Editar'}
         </button>
       {/if}
     </div>
-    {#if !reorderMode && !loadingPerformances && performances.length > 1}
+    {#if !editMode && !loadingPerformances && performances.length > 1}
       <div class="flex flex-wrap gap-2 mb-2">
         <button on:click={() => setlistView = 'orden'} class="text-xs rounded-full px-3 py-1 transition {setlistView === 'orden' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">Orden</button>
         <button on:click={() => setlistView = 'faltan'} class="text-xs rounded-full px-3 py-1 transition {setlistView === 'faltan' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">Faltan primero</button>
@@ -686,7 +689,7 @@
         {/if}
       </div>
     {/if}
-    {#if !reorderMode && !loadingPerformances && songsWithGaps > 0}
+    {#if !editMode && !loadingPerformances && songsWithGaps > 0}
       <div class="flex items-center gap-3 bg-base-900 rounded-lg px-4 py-3 mb-2">
         <AlertTriangle class="text-yellow shrink-0" size={20} />
         <span class="text-white text-sm">
@@ -763,17 +766,21 @@
         <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
           {#each run.items as perf, index (perf.id)}
             <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
-              {#if reorderMode}
+              {#if editMode}
                 <div class="flex items-center gap-2">
                   <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>
                   <div class="flex-1 min-w-0">
                     <div class="text-lg text-yellow truncate">{getSongTitle(perf.song)}</div>
                     <div class="text-sm text-cold-light truncate">{getSongArtist(perf.song)}</div>
                   </div>
-                  <div class="flex flex-col shrink-0">
-                    <button on:click={() => moveSong(index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
-                    <button on:click={() => moveSong(index, 1)} disabled={index === performances.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
-                  </div>
+                  <!-- Nothing to reorder with a single song — the arrows would both
+                       be permanently disabled, so leave them out entirely. -->
+                  {#if performances.length > 1}
+                    <div class="flex flex-col shrink-0">
+                      <button on:click={() => moveSong(index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
+                      <button on:click={() => moveSong(index, 1)} disabled={index === performances.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
+                    </div>
+                  {/if}
                   <button on:click={() => removeSong(perf)} aria-label="Quitar del setlist" class="p-1 ml-1 text-warm-base hover:text-red-400 shrink-0"><Trash2 size={20} /></button>
                 </div>
               {:else}
@@ -831,7 +838,7 @@
         {/each}
       </div>
       {/if}
-      {#if !reorderMode}
+      {#if !editMode}
         <a href={`/performance/create?partyId=${party.id}`} class="w-full bg-cold-base text-white p-3 inline-block text-center">Sugerir una canción <Plus class="inline-block" /></a>
       {/if}
     </div>
