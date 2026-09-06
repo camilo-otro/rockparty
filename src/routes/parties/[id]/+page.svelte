@@ -1053,8 +1053,7 @@
           {#each run.items as perf, index (perf.id)}
             <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}
                 class:border-l-2={isLive && perf.live_state === 'playing'}
-                class:border-warm-base={isLive && perf.live_state === 'playing'}
-                class:opacity-50={isLive && (perf.live_state === 'played' || perf.live_state === 'skipped')}>
+                class:border-warm-base={isLive && perf.live_state === 'playing'}>
               {#if editMode}
                 <div class="flex items-center gap-2">
                   <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>
