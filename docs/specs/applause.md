@@ -93,8 +93,20 @@ An organizer-adjustable grace period stays deferred.
 Per-target rule inside the window:
 
 - **Song** and **song-performer** — additionally require
-  `performance.started_at is not null`. That is live mode's now-playing pointer
-  having reached it; immediate appreciation is intentional.
+  `performance.started_at is not null` **and** `live_state <> 'skipped'`. The
+  first is live mode's now-playing pointer having reached it; immediate
+  appreciation is intentional, and a song stays clappable once it has played.
+
+  The skipped exclusion is not redundant: `skip_song` only ever marks the song
+  that is *currently playing*, so a skipped song always has a `started_at`. That
+  timestamp is an artifact of how the pointer works, not evidence anyone
+  performed it — tapping "Saltar" means it didn't happen. Timestamps are
+  deliberately **not** cleared on skip, because "we reached this song at 22:15
+  and skipped it" is real history that Stage 3's set times will want.
+
+  Claps placed while such a song *was* playing are left in place: someone
+  clapped something they heard, and deleting it would rewrite their opinion.
+  The song then shows its tally read-only.
 - **Performer / Event** — open for the whole window.
 
 ### 4. Attendee-gating on RSVP alone would ship a dead feature

@@ -496,6 +496,10 @@ create trigger party_admin_presentation_guard
 --   can_applaud(p_party) -> boolean
 --     status in ('live','completed') and now() < date + 2 days
 --     and (rsvp row or approved performer or party admin)
+-- Song targets additionally require started_at is not null AND
+-- live_state <> 'skipped' — a skipped song always has a start time (skip
+-- only ever marks the CURRENT song), but it never actually happened.
+-- See migrations/20260906_applause_not_skipped.sql.
 
 -- Bands (#40). SECURITY DEFINER so they read band_member without RLS recursion.
 create or replace function public.is_band_manager(bid bigint)

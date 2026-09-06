@@ -804,7 +804,7 @@
             {/if}
             <!-- Clapping opens the moment the song starts — you don't wait for it
                  to finish (principle 3). -->
-            {#if canApplaud}
+            {#if canApplaud && nowPlaying.live_state !== 'skipped'}
               {@const tally = songTally[nowPlaying.id]}
               <div class="mt-3">
                 <ApplauseButton size="md" count={tally?.count ?? 0} clapped={!!tally?.mine}
@@ -958,7 +958,7 @@
                       <span class="text-yellow truncate">{getSongTitle(perf.song)}</span>
                       <span class="text-sm text-cold-light truncate ml-auto">{getSongArtist(perf.song)}</span>
                     </a>
-                    {#if canApplaud && perf.started_at}
+                    {#if canApplaud && perf.started_at && perf.live_state !== 'skipped'}
                       <ApplauseButton count={tally?.count ?? 0} clapped={!!tally?.mine}
                                       busy={clapBusy.has('song:' + perf.id)} label={getSongTitle(perf.song)}
                                       on:toggle={() => toggleSongClap(perf)} />
@@ -1028,7 +1028,7 @@
                       </div>
                     </div>
                   </a>
-                  {#if canApplaud && perf.started_at}
+                  {#if canApplaud && perf.started_at && perf.live_state !== 'skipped'}
                     <ApplauseButton count={tally?.count ?? 0} clapped={!!tally?.mine}
                                     busy={clapBusy.has('song:' + perf.id)} label={getSongTitle(perf.song)}
                                     on:toggle={() => toggleSongClap(perf)} />
