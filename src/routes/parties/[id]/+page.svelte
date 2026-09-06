@@ -9,6 +9,7 @@
   import { user } from '$lib/stores/user';
   import ShareModal from '$lib/components/ShareModal.svelte';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
+  import ApplauseButton from '$lib/components/ApplauseButton.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
   import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
   import { normalizeText } from '$lib/sanitize';
@@ -67,6 +68,63 @@
     run: (note: string | null) => Promise<void> | void;
   } | null = null;
   let dialogNote = '';
+
+  // Applause (#38, Stage A). Tallies are derived into MAPS rather than read via
+  // helper functions: in legacy mode a `{fn(perf.id)}` in markup only re-runs when
+  // something named in that expression changes, so a function closing over
+  // `applause` would show stale counts. A map is named in the template.
+  let applause: { id: number; target_type: string; performance_id: number | null; from_user: string }[] = [];
+  let canApplaud = false;          // window open AND the viewer was there (RLS decides for real)
+  let clapBusy = new Set<string>();
+
+  async function loadApplause(pid: number) {
+    const { data } = await supabase
+      .from('applause')
+      .select('id, target_type, performance_id, from_user')
+      .eq('party_id', pid);
+    applause = (data ?? []) as any[];
+  }
+
+  $: songTally = (() => {
+    const m: Record<number, { count: number; mine: number | null }> = {};
+    for (const a of applause) {
+      if (a.target_type !== 'song' || a.performance_id == null) continue;
+      const e = (m[a.performance_id] ??= { count: 0, mine: null });
+      e.count += 1;
+      if (a.from_user === currentUserId) e.mine = a.id;
+    }
+    return m;
+  })();
+  $: eventTally = (() => {
+    let count = 0, mine: number | null = null;
+    for (const a of applause) {
+      if (a.target_type !== 'event') continue;
+      count += 1;
+      if (a.from_user === currentUserId) mine = a.id;
+    }
+    return { count, mine };
+  })();
+
+  // Toggle: a clap is inserted or deleted, never edited. The unique indexes make
+  // re-clapping clean, and RLS re-checks the window and target server-side.
+  async function toggleClap(key: string, mine: number | null, row: Record<string, any>) {
+    if (clapBusy.has(key) || !currentUserId || !party) return;
+    clapBusy = new Set(clapBusy).add(key);
+    try {
+      const { error: e } = mine
+        ? await supabase.from('applause').delete().eq('id', mine)
+        : await supabase.from('applause').insert({ party_id: party.id, from_user: currentUserId, ...row } as any);
+      if (e) { reportError(e); return; }
+      await loadApplause(party.id);
+    } catch {
+      toastError('No se pudo conectar con el servidor.');
+    } finally {
+      const next = new Set(clapBusy); next.delete(key); clapBusy = next;
+    }
+  }
+  const toggleEventClap = () => toggleClap('event', eventTally.mine, { target_type: 'event' });
+  const toggleSongClap = (perf: any) =>
+    toggleClap('song:' + perf.id, songTally[perf.id]?.mine ?? null, { target_type: 'song', performance_id: perf.id });
 
   // Live mode (#37): the now-playing pointer is derived — the single performance
   // with live_state 'playing' is it. No pointer column to fall out of sync.
@@ -605,6 +663,11 @@
       }
       // Load the setlist (extracted into loadSetlist so Realtime can reload it).
       await loadSetlist(Number(id));
+      // Applause (#38): tallies, plus whether THIS viewer may clap. RLS is the
+      // real gate; this only decides whether to offer the control.
+      await loadApplause(Number(id));
+      const { data: mayClap } = await supabase.rpc('can_applaud', { p_party: Number(id) });
+      canApplaud = !!mayClap;
       loadingPerformances = false;
       subscribeSetlist(Number(id));
     }
@@ -739,6 +802,17 @@
             {#if nowPlaying.band}
               <div class="mt-1 text-sm text-white inline-flex items-center gap-1.5"><Users size={14} /> {nowPlaying.band.name}</div>
             {/if}
+            <!-- Clapping opens the moment the song starts — you don't wait for it
+                 to finish (principle 3). -->
+            {#if canApplaud}
+              {@const tally = songTally[nowPlaying.id]}
+              <div class="mt-3">
+                <ApplauseButton size="md" count={tally?.count ?? 0} clapped={!!tally?.mine}
+                                busy={clapBusy.has('song:' + nowPlaying.id)}
+                                label={getSongTitle(nowPlaying.song)}
+                                on:toggle={() => toggleSongClap(nowPlaying)} />
+              </div>
+            {/if}
           {:else}
             <div class="mt-1 text-white text-sm">Entre canciones.</div>
           {/if}
@@ -773,6 +847,23 @@
           </button>
         {/if}
         <span class="text-cold-light text-sm">{rsvpCount} {rsvpCount === 1 ? 'asistente' : 'asistentes'}</span>
+      </div>
+    {/if}
+    <!-- The whole-night clap. Shown once the show is on or done; before that
+         there is nothing to applaud yet. -->
+    {#if canApplaud || eventTally.count}
+      <div class="flex items-center gap-3 bg-base-900 rounded-lg px-4 py-3">
+        <div class="flex-1 min-w-0">
+          <div class="text-white text-sm">¿Qué tal estuvo el toque?</div>
+          <div class="text-cold-light text-xs">
+            {eventTally.count === 0
+              ? 'Sé el primero en aplaudir'
+              : eventTally.count === 1 ? '1 persona aplaudió la noche' : eventTally.count + ' personas aplaudieron la noche'}
+          </div>
+        </div>
+        <ApplauseButton size="md" count={eventTally.count} clapped={!!eventTally.mine}
+                        busy={clapBusy.has('event')} readOnly={!canApplaud}
+                        label="la noche" on:toggle={toggleEventClap} />
       </div>
     {/if}
     <div class="mt-2 w-full flex items-center">
@@ -857,12 +948,24 @@
             {#if isOpen}
             <div class="flex flex-col gap-[1px] mt-[1px]">
               {#each run.items as perf (perf.id)}
+                {@const tally = songTally[perf.id]}
                 <div class="bg-base-900" data-perf-id={perf.id}>
-                  <a href={`/performance/${perf.id}`} class="px-4 py-2 flex items-baseline gap-3">
-                    <span class="text-gray-400 text-xl font-medium w-7 shrink-0">{(perf.order ?? 0) + 1}</span>
-                    <span class="text-yellow truncate">{getSongTitle(perf.song)}</span>
-                    <span class="text-sm text-cold-light truncate ml-auto">{getSongArtist(perf.song)}</span>
-                  </a>
+                  <!-- The clap sits BESIDE the link, never inside it: a button
+                       nested in an anchor is invalid and swallows the tap. -->
+                  <div class="flex items-center gap-2 pr-3">
+                    <a href={`/performance/${perf.id}`} class="px-4 py-2 flex items-baseline gap-3 flex-1 min-w-0">
+                      <span class="text-gray-400 text-xl font-medium w-7 shrink-0">{(perf.order ?? 0) + 1}</span>
+                      <span class="text-yellow truncate">{getSongTitle(perf.song)}</span>
+                      <span class="text-sm text-cold-light truncate ml-auto">{getSongArtist(perf.song)}</span>
+                    </a>
+                    {#if canApplaud && perf.started_at}
+                      <ApplauseButton count={tally?.count ?? 0} clapped={!!tally?.mine}
+                                      busy={clapBusy.has('song:' + perf.id)} label={getSongTitle(perf.song)}
+                                      on:toggle={() => toggleSongClap(perf)} />
+                    {:else if tally?.count}
+                      <ApplauseButton count={tally.count} readOnly />
+                    {/if}
+                  </div>
                   {#if perf.band.pending && canApproveSong(perf)}
                     <div class="px-4 pb-2 flex items-center gap-3">
                       <span class="flex-1 text-xs text-yellow truncate">Aprobar a {perf.band.name}</span>
@@ -907,22 +1010,32 @@
                   {/if}
                 </div>
               {:else}
-                <a href={`/performance/${perf.id}`} class="block">
-                  <div class="flex items-center gap-2">
-                    <span class="text-gray-400 text-3xl font-medium mr-2">{(perf.order ?? index) + 1}</span>
-                    <div class="flex-1">
-                      <PerformanceListItem
-                        title={getSongTitle(perf.song)}
-                        artist={getSongArtist(perf.song)}
-                        key={perf.key}
-                        performers={perf.performers || []}
-                        band={perf.band}
-                        lineup={perf.bandLineup || []}
-                        highlightInstrumentIds={myInstrumentIds}
-                      />
+                {@const tally = songTally[perf.id]}
+                <div class="flex items-center gap-2">
+                  <a href={`/performance/${perf.id}`} class="block flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-gray-400 text-3xl font-medium mr-2">{(perf.order ?? index) + 1}</span>
+                      <div class="flex-1">
+                        <PerformanceListItem
+                          title={getSongTitle(perf.song)}
+                          artist={getSongArtist(perf.song)}
+                          key={perf.key}
+                          performers={perf.performers || []}
+                          band={perf.band}
+                          lineup={perf.bandLineup || []}
+                          highlightInstrumentIds={myInstrumentIds}
+                        />
+                      </div>
                     </div>
-                  </div>
-                </a>
+                  </a>
+                  {#if canApplaud && perf.started_at}
+                    <ApplauseButton count={tally?.count ?? 0} clapped={!!tally?.mine}
+                                    busy={clapBusy.has('song:' + perf.id)} label={getSongTitle(perf.song)}
+                                    on:toggle={() => toggleSongClap(perf)} />
+                  {:else if tally?.count}
+                    <ApplauseButton count={tally.count} readOnly />
+                  {/if}
+                </div>
                 {#if perf.band && perf.band.pending && canApproveSong(perf)}
                   <div class="mt-2 flex items-center gap-3">
                     <span class="flex-1 text-sm text-yellow truncate">Aprobar a {perf.band.name}</span>

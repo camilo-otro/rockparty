@@ -21,6 +21,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      applause: {
+        Row: {
+          created_at: string
+          from_user: string
+          id: number
+          party_id: number
+          performance_id: number | null
+          performer_id: string | null
+          target_type: Database["public"]["Enums"]["applause_target"]
+        }
+        Insert: {
+          created_at?: string
+          from_user: string
+          id?: number
+          party_id: number
+          performance_id?: number | null
+          performer_id?: string | null
+          target_type: Database["public"]["Enums"]["applause_target"]
+        }
+        Update: {
+          created_at?: string
+          from_user?: string
+          id?: number
+          party_id?: number
+          performance_id?: number | null
+          performer_id?: string | null
+          target_type?: Database["public"]["Enums"]["applause_target"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applause_from_user_fkey"
+            columns: ["from_user"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applause_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applause_performance_id_fkey"
+            columns: ["performance_id"]
+            isOneToOne: false
+            referencedRelation: "performance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applause_performer_id_fkey"
+            columns: ["performer_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       band: {
         Row: {
           avatar_url: string | null
@@ -859,6 +918,7 @@ export type Database = {
     }
     Functions: {
       advance_show: { Args: { p_party: number }; Returns: number }
+      can_applaud: { Args: { p_party: number }; Returns: boolean }
       can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
@@ -909,6 +969,7 @@ export type Database = {
       undo_last_move: { Args: { p_party: number }; Returns: number }
     }
     Enums: {
+      applause_target: "event" | "performer" | "song" | "song_performer"
       band_role: "manager" | "member"
       engagement_model:
         | "free"
@@ -1055,6 +1116,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      applause_target: ["event", "performer", "song", "song_performer"],
       band_role: ["manager", "member"],
       engagement_model: [
         "free",
