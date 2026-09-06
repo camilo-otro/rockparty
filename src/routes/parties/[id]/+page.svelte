@@ -10,6 +10,7 @@
   import ShareModal from '$lib/components/ShareModal.svelte';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import ApplauseButton from '$lib/components/ApplauseButton.svelte';
+  import SongLineupApplause from '$lib/components/SongLineupApplause.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
   import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
   import { normalizeText } from '$lib/sanitize';
@@ -73,14 +74,16 @@
   // helper functions: in legacy mode a `{fn(perf.id)}` in markup only re-runs when
   // something named in that expression changes, so a function closing over
   // `applause` would show stale counts. A map is named in the template.
-  let applause: { id: number; target_type: string; performance_id: number | null; from_user: string }[] = [];
+  let applause: { id: number; target_type: string; performance_id: number | null; performer_id: string | null; from_user: string }[] = [];
+  // Which song rows have their lineup open for per-musician claps (#38 Stage B).
+  let openLineups = new Set<number>();
   let canApplaud = false;          // window open AND the viewer was there (RLS decides for real)
   let clapBusy = new Set<string>();
 
   async function loadApplause(pid: number) {
     const { data } = await supabase
       .from('applause')
-      .select('id, target_type, performance_id, from_user')
+      .select('id, target_type, performance_id, performer_id, from_user')
       .eq('party_id', pid);
     applause = (data ?? []) as any[];
   }
@@ -105,6 +108,36 @@
     return { count, mine };
   })();
 
+  // Per-night performer claps, keyed by user.
+  $: performerTally = (() => {
+    const m: Record<string, { count: number; mine: number | null }> = {};
+    for (const a of applause) {
+      if (a.target_type !== 'performer' || !a.performer_id) continue;
+      const e = (m[a.performer_id] ??= { count: 0, mine: null });
+      e.count += 1;
+      if (a.from_user === currentUserId) e.mine = a.id;
+    }
+    return m;
+  })();
+  // "You nailed THAT one" — keyed performance:user, so the same musician can be
+  // clapped separately on each song they played.
+  $: songPerformerTally = (() => {
+    const m: Record<string, { count: number; mine: number | null }> = {};
+    for (const a of applause) {
+      if (a.target_type !== 'song_performer' || !a.performer_id || a.performance_id == null) continue;
+      const e = (m[a.performance_id + ':' + a.performer_id] ??= { count: 0, mine: null });
+      e.count += 1;
+      if (a.from_user === currentUserId) e.mine = a.id;
+    }
+    return m;
+  })();
+
+  function toggleLineup(perfId: number) {
+    const next = new Set(openLineups);
+    next.has(perfId) ? next.delete(perfId) : next.add(perfId);
+    openLineups = next;
+  }
+
   // Toggle: a clap is inserted or deleted, never edited. The unique indexes make
   // re-clapping clean, and RLS re-checks the window and target server-side.
   async function toggleClap(key: string, mine: number | null, row: Record<string, any>) {
@@ -125,6 +158,12 @@
   const toggleEventClap = () => toggleClap('event', eventTally.mine, { target_type: 'event' });
   const toggleSongClap = (perf: any) =>
     toggleClap('song:' + perf.id, songTally[perf.id]?.mine ?? null, { target_type: 'song', performance_id: perf.id });
+  const togglePerformerClap = (userId: string) =>
+    toggleClap('performer:' + userId, performerTally[userId]?.mine ?? null,
+               { target_type: 'performer', performer_id: userId });
+  const toggleSongPerformerClap = (perfId: number, userId: string) =>
+    toggleClap('sp:' + perfId + ':' + userId, songPerformerTally[perfId + ':' + userId]?.mine ?? null,
+               { target_type: 'song_performer', performance_id: perfId, performer_id: userId });
 
   // Live mode (#37): the now-playing pointer is derived — the single performance
   // with live_state 'playing' is it. No pointer column to fall out of sync.
@@ -604,7 +643,24 @@
           declined: approvedRows.length === 0 && pendingRows.length === 0
         };
       }
-      return { ...perf, performers, pending, band, bandLineup };
+      // Unique musicians on this song, resolved for display, for per-musician
+      // applause (#38 Stage B). `performers` has one row per instrument, so the
+      // same person can appear twice — dedupe here rather than in markup.
+      const instrOf: Record<string, string> = {};
+      for (const r of performers) {
+        const n = instrumentsById[r.instrument_id];
+        if (n) instrOf[r.user_id] = instrOf[r.user_id] ? instrOf[r.user_id] + ', ' + n : n;
+      }
+      const seenClap = new Set<string>();
+      const clapLineup = (band ? bandLineup : performers)
+        .filter((r: any) => (seenClap.has(r.user_id) ? false : (seenClap.add(r.user_id), true)))
+        .map((r: any) => ({
+          user_id: r.user_id,
+          name: getUserNickname(r.user_id),
+          avatar: getUserAvatar(r.user_id),
+          instruments: instrOf[r.user_id] ?? ''
+        }));
+      return { ...perf, performers, pending, band, bandLineup, clapLineup };
     })
     // Hide a fully-declined band-owned song (band-or-nothing, #74).
     .filter((p) => !(p.band && p.band.declined));
@@ -965,7 +1021,21 @@
                     {:else if tally?.count}
                       <ApplauseButton count={tally.count} readOnly />
                     {/if}
+                      {#if perf.clapLineup?.length}
+                        <button type="button" on:click={() => toggleLineup(perf.id)}
+                                aria-expanded={openLineups.has(perf.id)}
+                                aria-label={'Quiénes tocaron ' + getSongTitle(perf.song)}
+                                class="p-1.5 text-cold-light/70 hover:text-white transition shrink-0">
+                          <Users size={16} />
+                        </button>
+                      {/if}
                   </div>
+                  {#if openLineups.has(perf.id)}
+                    <SongLineupApplause perfId={perf.id} lineup={perf.clapLineup ?? []}
+                                        tallies={songPerformerTally} busy={clapBusy}
+                                        canApplaud={canApplaud && !!perf.started_at && perf.live_state !== 'skipped'}
+                                        on:toggle={(e) => toggleSongPerformerClap(perf.id, e.detail)} />
+                  {/if}
                   {#if perf.band.pending && canApproveSong(perf)}
                     <div class="px-4 pb-2 flex items-center gap-3">
                       <span class="flex-1 text-xs text-yellow truncate">Aprobar a {perf.band.name}</span>
@@ -1035,7 +1105,21 @@
                   {:else if tally?.count}
                     <ApplauseButton count={tally.count} readOnly />
                   {/if}
+                    {#if perf.clapLineup?.length}
+                      <button type="button" on:click={() => toggleLineup(perf.id)}
+                              aria-expanded={openLineups.has(perf.id)}
+                              aria-label={'Quiénes tocaron ' + getSongTitle(perf.song)}
+                              class="p-1.5 text-cold-light/70 hover:text-white transition shrink-0">
+                        <Users size={16} />
+                      </button>
+                    {/if}
                 </div>
+                {#if openLineups.has(perf.id)}
+                  <SongLineupApplause perfId={perf.id} lineup={perf.clapLineup ?? []}
+                                    tallies={songPerformerTally} busy={clapBusy}
+                                    canApplaud={canApplaud && !!perf.started_at && perf.live_state !== 'skipped'}
+                                    on:toggle={(e) => toggleSongPerformerClap(perf.id, e.detail)} />
+                {/if}
                 {#if perf.band && perf.band.pending && canApproveSong(perf)}
                   <div class="mt-2 flex items-center gap-3">
                     <span class="flex-1 text-sm text-yellow truncate">Aprobar a {perf.band.name}</span>
@@ -1082,10 +1166,20 @@
     <div class="bg-base-950 rounded-lg overflow-hidden mt-2">
       <ul class="space-y-[1px]">
         {#each partyPerformers as performer}
+          {@const pTally = performerTally[performer.user_id]}
           <li class="flex flex-col bg-base-900 gap-2 p-4">
-            <div class="flex flex-row gap-2">
+            <div class="flex flex-row gap-2 items-center">
                 <img src={getUserAvatar(performer.user_id)} alt="Avatar" class="w-6 h-6 rounded-full" />
-                <span class="text-cold-light font-semibold">{getUserNickname(performer.user_id)}</span>
+                <span class="text-cold-light font-semibold flex-1 min-w-0 truncate">{getUserNickname(performer.user_id)}</span>
+                <!-- "You were great tonight" — the whole-night clap for a musician. -->
+                {#if canApplaud}
+                  <ApplauseButton count={pTally?.count ?? 0} clapped={!!pTally?.mine}
+                                  busy={clapBusy.has('performer:' + performer.user_id)}
+                                  label={getUserNickname(performer.user_id)}
+                                  on:toggle={() => togglePerformerClap(performer.user_id)} />
+                {:else if pTally?.count}
+                  <ApplauseButton count={pTally.count} readOnly />
+                {/if}
             </div>
             <div class="flex flex-row justify-between">
               <span class="text-sm text-white">{performer.instruments.join(', ')}</span>

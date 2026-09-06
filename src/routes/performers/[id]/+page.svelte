@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
-  import { ChevronLeft, Edit, Users } from 'lucide-svelte';
+  import { ChevronLeft, Edit, Users, HandMetal } from 'lucide-svelte';
   import { goto } from '$app/navigation';
   import { user } from '$lib/stores/user';
 
@@ -13,6 +13,11 @@
   let loading = true;
   let error: string | null = null;
   let currentUserId: string | null = null;
+  // Applause received (#38). Kept SEPARATE per target type rather than summed:
+  // "great all night" and "great on that song" are different endorsements, and
+  // merging them would also quietly reward whoever played the most songs.
+  let nightClaps = 0;
+  let songClaps = 0;
 
   onMount(async () => {
     const id = get(page).params.id;
@@ -23,11 +28,18 @@
       error = err.message;
     } else {
       performer = data;
-      const [{ data: instrData }, { data: bandRows }] = await Promise.all([
+      const [{ data: instrData }, { data: bandRows }, nightRes, songRes] = await Promise.all([
         supabase.from('profile_instrument').select('instrument(name)').eq('profile_id', id),
         // RLS hides test bands from non-devs, so this shows only the viewer-visible ones.
-        supabase.from('band_member').select('band ( id, name, avatar_url )').eq('user_id', id)
+        supabase.from('band_member').select('band ( id, name, avatar_url )').eq('user_id', id),
+        // head+count: we want the tallies, not the rows.
+        supabase.from('applause').select('id', { count: 'exact', head: true })
+          .eq('performer_id', id).eq('target_type', 'performer'),
+        supabase.from('applause').select('id', { count: 'exact', head: true })
+          .eq('performer_id', id).eq('target_type', 'song_performer')
       ]);
+      nightClaps = nightRes.count ?? 0;
+      songClaps = songRes.count ?? 0;
       instruments = (instrData ?? []).map((r: any) => r.instrument?.name).filter(Boolean);
       bands = (bandRows ?? []).map((r: any) => r.band).filter(Boolean);
     }
@@ -53,6 +65,23 @@
         />
       </div>
       <h2 class="text-3xl text-yellow font-medium mb-2 text-center">{performer.nickname}</h2>
+
+      {#if nightClaps || songClaps}
+        <div class="flex items-center justify-center gap-6 mb-2">
+          {#if nightClaps}
+            <div class="flex flex-col items-center">
+              <span class="text-2xl text-yellow inline-flex items-center gap-1.5"><HandMetal size={18} /> {nightClaps}</span>
+              <span class="text-[0.65rem] uppercase tracking-widest text-cold-light/70">por sus noches</span>
+            </div>
+          {/if}
+          {#if songClaps}
+            <div class="flex flex-col items-center">
+              <span class="text-2xl text-yellow inline-flex items-center gap-1.5"><HandMetal size={18} /> {songClaps}</span>
+              <span class="text-[0.65rem] uppercase tracking-widest text-cold-light/70">por canciones</span>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <section class="mt-6">
         <h3 class="text-lg text-white mb-2">Instrumentos</h3>

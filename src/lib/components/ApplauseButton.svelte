@@ -6,7 +6,7 @@
      in docs/specs/applause.md). -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { Hand } from 'lucide-svelte';
+  import { HandMetal } from 'lucide-svelte';
 
   export let count = 0;
   export let clapped = false;
@@ -26,7 +26,7 @@
   <!-- Still worth showing what the room thought, just not clickable. -->
   <span class="inline-flex items-center gap-1.5 rounded-full border border-cold-light/20 text-cold-light/60 {pad}"
         title={count === 1 ? '1 aplauso' : count + ' aplausos'}>
-    <Hand size={icon} />
+    <HandMetal size={icon} />
     {#if count}{count}{/if}
   </span>
 {:else}
@@ -38,7 +38,7 @@
                  {clapped
                    ? 'border-yellow text-yellow bg-yellow/10'
                    : 'border-cold-light/40 text-cold-light hover:border-cold-light hover:text-white'}">
-    <Hand size={icon} />
+    <HandMetal size={icon} />
     {#if count}{count}{/if}
   </button>
 {/if}
