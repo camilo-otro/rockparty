@@ -862,10 +862,15 @@ export type Database = {
       can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
+      end_current_song: { Args: { p_party: number }; Returns: undefined }
       end_show: { Args: { p_party: number }; Returns: undefined }
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
       is_party_admin: { Args: { pid: number }; Returns: boolean }
+      jump_to_song: {
+        Args: { p_party: number; p_performance: number }
+        Returns: number
+      }
       notify_upcoming_toques: { Args: never; Returns: undefined }
       search_songs: {
         Args: { lim?: number; q: string }
@@ -899,7 +904,9 @@ export type Database = {
         Args: { p_band: number; p_performance: number }
         Returns: undefined
       }
+      skip_song: { Args: { p_party: number }; Returns: number }
       start_show: { Args: { p_party: number }; Returns: number }
+      undo_last_move: { Args: { p_party: number }; Returns: number }
     }
     Enums: {
       band_role: "manager" | "member"

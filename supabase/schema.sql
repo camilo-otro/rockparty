@@ -444,6 +444,14 @@ create trigger party_admin_presentation_guard
 --   start_show(p_party)   -> bigint  party -> live, cue the first song
 --   advance_show(p_party) -> bigint  close current, open next (the workhorse)
 --   end_show(p_party)     -> void    close current, party -> completed
+-- Stage 2 (migrations/20260905_live_mode_stage2.sql) — the messy-reality
+-- controls; each clears the current row BEFORE opening another, so the
+-- one-playing invariant is never momentarily violated:
+--   jump_to_song(p_party, p_performance) -> bigint  encores / out-of-order
+--   skip_song(p_party)                   -> bigint  records 'skipped', advances
+--   end_current_song(p_party)            -> void    break between acts
+--   undo_last_move(p_party)              -> bigint  reverses the last move,
+--                                                   and un-ends a finished show
 
 -- Bands (#40). SECURITY DEFINER so they read band_member without RLS recursion.
 create or replace function public.is_band_manager(bid bigint)
