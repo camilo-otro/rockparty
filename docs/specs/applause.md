@@ -1,93 +1,180 @@
-# Applause — requirement spec
+# Applause — build spec
 
-**Status:** Draft · captured 2026-08-12 · roadmap phase: **Showtime** (Phase 3)
+**Status:** Ready to build · drafted 2026-08-12, resolved 2026-09-05 · roadmap phase: **Showtime** (Phase 3) · issue #38
+
+**Unblocked by live mode Stage 1**: `performance.started_at` is now written when a
+song starts, which is the trigger this spec was waiting on.
 
 ## Purpose
 Let attendees give a single, lightweight sign of appreciation during a toque —
 pointed at a **performer**, a **song**, or the **whole night** — and keep it as
 history, *without* pulling attention away from the live music.
 
-## Design principles
-1. **Minimal in-event interaction.** An attendee's only in-event action is *one
-   clap per target*. No feeds, no chat, no repeated tapping, no realtime clap
-   animations. The app should keep people present in the room.
-2. **One clap, one meaning.** Applause is a deduped endorsement (one per person
-   per target), so tallies are honest — not a mash-the-button counter.
+## Design principles (unchanged)
+1. **Minimal in-event interaction.** One clap per target. No feeds, no chat, no
+   repeated tapping, no realtime clap animations. Keep people present in the room.
+2. **One clap, one meaning.** A deduped endorsement, so tallies are honest — not
+   a mash-the-button counter.
 3. **Give it the moment it's felt.** Clapping opens as soon as there's something
    to clap for; you don't wait for a song to finish.
 
-## Targets (three kinds)
+## Targets
 | Target | Meaning | Points at |
 |---|---|---|
-| **Performer** | "you were great tonight" | a `profile` |
+| **Performer** | "you were great tonight" | a `profile`, **scoped to this toque** |
 | **Song** | "that rendition was great" | a `performance` (setlist slot) |
 | **Event** | "what a night" | the `party` |
 
-The applause control appears on all three surfaces. **Counts are kept per target
-and NOT merged** — a song's applause is not added to its performers' totals. An
-aggregated "career applause" can be computed later (see Deferred).
+Counts are kept per target and **not merged** — a song's applause is not added to
+its performers' totals. Aggregated "career applause" stays deferred.
 
-## When clapping is open (the window)
-Applause for a toque is open within a window:
-- **opens_at** — when the toque goes live (status → live / event start).
-- **closes_at** — event end + a grace period (organizer-adjustable; default:
-  through the following day).
+## Resolved decisions
 
-Outside the window, tallies are read-only history.
+The draft left four open, and reviewing its data model against Postgres turned up
+two defects. All six settled below.
+
+### 1. The draft's `unique` constraint does not actually dedupe — fixed
+The draft proposed:
+
+    unique (from_user, target_type, performer_id, performance_id)
+
+In Postgres, **NULLs are distinct in a unique index by default**. For an event
+clap both target columns are NULL, so `(me, 'event', NULL, NULL)` can be inserted
+any number of times — the exact mash-the-button behaviour principle 2 forbids.
+The same hole applies to performer claps (`performance_id` NULL) and song claps
+(`performer_id` NULL).
+
+Use three partial unique indexes instead — clearer than `nulls not distinct`
+(available on this project's PG 17.6, but silent about intent):
+
+    create unique index applause_one_event_per_user
+      on public.applause (from_user, party_id)      where target_type = 'event';
+    create unique index applause_one_performer_per_user
+      on public.applause (from_user, party_id, performer_id) where target_type = 'performer';
+    create unique index applause_one_song_per_user
+      on public.applause (from_user, performance_id) where target_type = 'song';
+
+### 2. Performer applause is per-toque, not per-lifetime — fixed
+The draft's unique key omitted `party_id` for the performer target, which would
+have meant you can clap a given musician **once ever**, not once per night. The
+target means "you were great *tonight*", so `party_id` belongs in the key (above).
+
+### 3. The window must not depend on someone remembering to tap "End show"
+The draft derived `closes_at` from event end. If an organizer forgets to end the
+show — likely, at 2am — the status stays `live` and the window never closes.
+
+Derive it from the date instead, which always exists:
+
+- **opens** when `party.status` is `live` or `completed`
+- **closes** at `party.date + 2 days` (i.e. through the end of the following day)
+
+Same rule, no new column, and it survives a show that was never formally ended.
+An organizer-adjustable grace period stays deferred.
 
 Per-target rule inside the window:
-- **Song** — opens the moment the song **starts playing** (live mode marks it
-  current) and stays open until the window closes. Immediate appreciation is
+
+- **Song** — additionally requires `performance.started_at is not null`. That is
+  live mode's now-playing pointer having reached it; immediate appreciation is
   intentional.
-- **Performer** — open for the whole window.
-- **Event** — open for the whole window.
+- **Performer / Event** — open for the whole window.
 
-Song timing depends on live mode's "now playing" pointer. Before/without live
-mode, fall back to: songs are clappable once the event is live.
+### 4. Attendee-gating on RSVP alone would ship a dead feature
+The draft says attendees only, meaning a `party_rsvp` row. **There is exactly one
+RSVP row in the entire production database.** Gate on that and essentially nobody
+at the 19 Sep toque can clap.
 
-## Who can applaud
-**Attendees only** — someone who has RSVP'd / is marked present. Depends on the
-RSVP / attendance primitive (roadmap Phase 2).
+Widen "was there" to any of:
+
+- an RSVP row for this party, **or**
+- an approved `performance_user` row on one of its songs (you played), **or**
+- a party admin (you ran it)
+
+Still meaningfully gated — a random signed-in stranger cannot clap a show they had
+nothing to do with — without depending on a primitive nobody uses. Prompting RSVP
+harder is a separate question; this shouldn't block on it.
+
+### 5. Un-clap: allowed
+A mis-tap should be correctable, consistent with how live mode treats every
+action. DELETE your own row; the partial unique index means re-clapping is clean.
+This is not engagement-farming — it can only reduce a tally.
+
+### 6. No realtime on applause
+The tally reflects stored rows and refreshes on load. `applause` deliberately does
+**not** join the realtime publication: a room full of phones clapping would be the
+noisiest possible table, for a number nobody watches tick. Principle 1.
 
 ## Data model
-```
-applause(
-  id             pk,
-  created_at     timestamptz default now(),
-  party_id       -> party        not null,  -- every clap lives inside an event window
-  from_user      -> profile      not null,  -- the applauder (must be an attendee)
-  target_type    enum 'event' | 'performer' | 'song',
-  performer_id   -> profile      null,      -- set iff target_type = 'performer'
-  performance_id -> performance  null,      -- set iff target_type = 'song'
-  check  (exactly one target column is set, matching target_type),
-  unique (from_user, target_type, performer_id, performance_id)
-)
-```
-Rationale: real foreign keys keep referential integrity (vs a generic
-`target_id`); `party_id` is always present so the window + attendee checks are
-trivial; the `unique` constraint enforces one-clap-per-target.
 
-## Where it surfaces (reads)
-- **Performer profile** — total applause received (performer-target).
-- **Song / performance** — applause tally; a "crowd favorite" signal for the setlist.
-- **Event recap** — the night's total.
+    create type public.applause_target as enum ('event', 'performer', 'song');
 
-## Rules summary
-- Attendee-gated (RSVP).
-- Within `[opens_at, closes_at]`; song target additionally requires the song to
-  have started playing.
-- One endorsement per person per target (unique constraint).
-- No realtime/cosmetic applause; the tally simply reflects stored endorsements.
+    create table public.applause (
+      id             bigint generated by default as identity primary key,
+      created_at     timestamptz not null default now(),
+      party_id       bigint not null references public.party (id) on delete cascade,
+      from_user      uuid   not null references public.profile (id) on delete cascade,
+      target_type    public.applause_target not null,
+      performer_id   uuid   references public.profile (id) on delete cascade,
+      performance_id bigint references public.performance (id) on delete cascade,
+      -- exactly one target column set, matching target_type
+      constraint applause_target_shape check (
+        (target_type = 'event'     and performer_id is null     and performance_id is null) or
+        (target_type = 'performer' and performer_id is not null and performance_id is null) or
+        (target_type = 'song'      and performer_id is null     and performance_id is not null)
+      )
+    );
 
-## RLS notes
-- **INSERT** — authenticated attendee only; the window must be open; the target
-  must belong to this `party`; the `unique` constraint absorbs duplicates.
-- **SELECT** — open (public read, consistent with the rest of the app).
-- **UPDATE** — none.
-- **DELETE** — optional "un-clap" (toggle off); decide later.
+Plus the three partial unique indexes above, and lookup indexes on
+`(party_id, target_type)`, `(performance_id)`, `(performer_id)`.
 
-## Deferred / later
-- **Aggregated "career applause"** — attributing a song's applause to the
-  musicians who played it. Computed later; per-target counters stay separate now.
-- **Un-clap** (toggle a clap back off) — allow or not.
-- **Grace-period default + organizer override** UI.
+Real foreign keys rather than a generic `target_id`, so referential integrity is
+the database's job. `party_id` is always present, which makes the window and
+"was there" checks cheap.
+
+## Security
+
+RLS is the whole boundary, as everywhere in this app. The interesting one is
+INSERT, which has to enforce four things at once, so it leans on a helper:
+
+    -- SECURITY DEFINER: reads party_rsvp / performance_user without RLS recursion.
+    create function public.can_applaud(p_party bigint) returns boolean ...
+    --   party.status in ('live','completed')
+    --   and now() < party.date + interval '2 days'
+    --   and (rsvp row  or  approved performer  or  party admin)
+
+- **INSERT** — `from_user = auth.uid()` **and** `public.can_applaud(party_id)`
+  **and** the target belongs to this party:
+  - song → `performance.party = party_id and performance.started_at is not null`
+  - performer → that profile has an approved `performance_user` row on this party
+    (so you cannot clap someone who did not play)
+- **SELECT** — public, consistent with the rest of the app.
+- **UPDATE** — none. A clap is not editable; it is inserted or deleted.
+- **DELETE** — `from_user = auth.uid()` only (un-clap).
+
+The target checks are what stop a crafted request clapping a song from another
+toque, or a profile who was not on stage. UI hiding is not security here.
+
+## Staging
+
+### Stage A — the night
+1. Migration: enum, table, check constraint, three partial unique indexes,
+   `can_applaud`, RLS policies. Reconcile `schema.sql`, regenerate types.
+2. **Song applause** on the setlist row and the now-playing banner, live and after.
+3. **Event applause** once on the detail page.
+4. Tallies read from stored rows; no realtime.
+
+### Stage B — people
+5. **Performer applause** on the musician rows of a toque.
+6. Totals on the performer profile (per-toque and lifetime sum).
+
+### Stage C — the recap
+7. Event recap: the night's totals, crowd-favourite song, alongside the Stage 3
+   live-mode history (set times, what actually got played).
+
+## Deferred
+- Aggregated "career applause" attributing a song's claps to its musicians.
+- Organizer-adjustable grace period + its UI.
+- Any realtime or animated applause.
+
+## Dependencies
+Live mode Stage 1 (`performance.started_at`) — **done** · party status model ·
+`party_rsvp` (exists, barely used — see decision 4).
