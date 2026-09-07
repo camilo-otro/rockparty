@@ -14,28 +14,26 @@
   let songSpotify: string | null = null; // the song's Spotify link (all songs have one)
 
   // Deterministic "learn this song" search links (#66) — free, no API/scraping.
-  // YouTube uses the ENGLISH instrument term (surfaces far more tutorials).
-  const TUTORIAL_INSTRUMENTS = [
-    { es: 'Voz', en: 'vocals' },
-    { es: 'Guitarra líder', en: 'lead guitar' },
-    { es: 'Guitarra rítmica', en: 'rhythm guitar' },
-    { es: 'Bajo', en: 'bass' },
-    { es: 'Teclado', en: 'keyboard' },
-    { es: 'Batería', en: 'drums' }
-  ];
+  // YouTube needs the ENGLISH term (surfaces far more tutorials) while the
+  // instrument table is Spanish. Matched on the NORMALISED name rather than an
+  // id, so a re-seed with different ids still resolves.
+  function youtubeTermFor(name: string): string | null {
+    const n = (name ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (n.includes('voz') || n.includes('vocal')) return 'vocals';
+    if (n.includes('guitarra') && n.includes('ritmica')) return 'rhythm guitar';
+    if (n.includes('guitarra')) return 'lead guitar';
+    if (n.includes('bajo')) return 'bass';
+    if (n.includes('teclado') || n.includes('piano')) return 'keyboard';
+    if (n.includes('bateria') || n.includes('drum')) return 'drums';
+    return null;
+  }
   $: songQuery = `${songArtist} ${songTitle}`.trim();
   $: ugLink = songQuery ? `https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(songQuery)}` : null;
-  // Reference songQuery directly so these recompute when the song data loads.
-  $: tutorials = TUTORIAL_INSTRUMENTS.map((t) => ({
-    es: t.es,
-    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${songQuery} ${t.en} tutorial`)}`
-  }));
   let loading = true;
   let error: string | null = null;
   let suggestedBy: any = null;
-  let showModal = false;
+  let signingUp = false;
   let instruments: any[] = [];
-  let loadingInstruments = false;
   let signedUpUsers: any[] = [];
   let showShareModal = false;
   let unsubscribeUser: () => void;
@@ -68,6 +66,21 @@
   // for open spots (pending applicants still leave a spot open to compete for).
   $: takenInstrumentIds = new Set(signedUpUsers.filter((u) => u.status === 'approved').map((u) => u.instrument_id));
   $: availableInstruments = instruments.filter((i) => !takenInstrumentIds.has(i.id));
+
+  // Tutorials are for whoever committed to play, and only for the instrument they
+  // are actually on. Six pills for six instruments read as an instrument chooser —
+  // which is exactly what the signup list is — so people tapped the wrong six and
+  // ended up on YouTube. Pending counts: you want to start learning while you wait.
+  $: myParts = currentUserId
+    ? signedUpUsers.filter((u) => u.user_id === currentUserId && (u.status === 'approved' || u.status === 'pending'))
+    : [];
+  $: myTutorials = myParts
+    .map((u) => ({ name: u.instrument as string, term: youtubeTermFor(u.instrument) }))
+    .filter((t) => !!t.term && !!songQuery)
+    .map((t) => ({
+      name: t.name,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${songQuery} ${t.term} tutorial`)}`
+    }));
 
   function groupByInstrument(rows: any[]): { instrument_id: number; instrument: string; applicants: any[] }[] {
     const map = new Map<number, { instrument_id: number; instrument: string; applicants: any[] }>();
@@ -148,27 +161,26 @@
     signedUpUsers = await fetchSignedUpUsers(performance.id);
   }
 
-  function openModal() {
-    showModal = true;
-  }
-
   async function selectInstrument(instrument: any) {
     const userId = get(user)?.id;
-    if (!userId || !performance?.id) {
-        showModal = false;
-        return;
+    if (!userId || !performance?.id || signingUp) return;
+    signingUp = true;
+    try {
+      const { data, error: e } = await supabase.from('performance_user').upsert({
+          performance_id: performance.id,
+          user_id: userId,
+          instrument_id: instrument.id
+      }, { onConflict: 'performance_id,user_id,instrument_id' }).select('status');
+      // The trigger can reject (e.g. invite-only) or set status to 'pending'.
+      if (e) { reportError(e); return; }
+      // Name the undo in the toast: signing up is one tap now, so the way back
+      // out should be as easy to find as the way in.
+      if (data?.[0]?.status === 'pending') toastInfo(`Solicitud enviada para ${instrument.name}. Puedes cancelarla arriba.`);
+      else toastSuccess(`Te inscribiste en ${instrument.name}. Puedes quitarte arriba.`);
+      await refreshSignedUpUsers();
+    } finally {
+      signingUp = false;
     }
-    const { data, error: e } = await supabase.from('performance_user').upsert({
-        performance_id: performance.id,
-        user_id: userId,
-        instrument_id: instrument.id
-    }, { onConflict: 'performance_id,user_id,instrument_id' }).select('status');
-    showModal = false;
-    // The trigger can reject (e.g. invite-only) or set status to 'pending'.
-    if (e) { reportError(e); return; }
-    if (data?.[0]?.status === 'pending') toastInfo('Solicitud enviada. Un organizador debe aprobarte.');
-    else toastSuccess('¡Te inscribiste para tocar!');
-    await refreshSignedUpUsers();
   }
 
   // Re-request after a decline: the row still exists as 'declined', so delete it
@@ -206,10 +218,6 @@
       .eq('instrument_id', Number(instrumentId));
     if (e) { reportError(e); return; }
     await refreshSignedUpUsers();
-  }
-
-  function closeModal() {
-    showModal = false;
   }
 
   function loginWithGoogle() {
@@ -278,12 +286,22 @@
             <a href={ugLink} target="_blank" rel="noopener" class="text-sm text-white hover:text-cold-light inline-flex items-center gap-1 border border-cold-light/30 rounded-lg px-3 py-1">Acordes (Ultimate Guitar) <ExternalLink size={14} /></a>
           {/if}
         </div>
-        <div class="text-xs text-cold-light mb-1">Tutoriales en YouTube por instrumento:</div>
-        <div class="flex flex-wrap gap-2">
-          {#each tutorials as t}
-            <a href={t.url} target="_blank" rel="noopener" class="text-xs text-cold-light hover:text-white border border-cold-light/30 rounded-full px-3 py-1">{t.es}</a>
-          {/each}
-        </div>
+        {#if myTutorials.length}
+          <!-- Only what YOU are playing, and labelled as a YouTube link rather
+               than as a bare instrument name — the old version was six pills
+               named exactly like the six signup options. -->
+          <div class="text-xs text-cold-light mb-1">
+            {myTutorials.length === 1 ? 'Tutorial para lo que vas a tocar:' : 'Tutoriales para lo que vas a tocar:'}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            {#each myTutorials as t (t.name)}
+              <a href={t.url} target="_blank" rel="noopener"
+                 class="text-xs text-cold-light hover:text-white border border-cold-light/30 rounded-full px-3 py-1 inline-flex items-center gap-1">
+                {t.name} en YouTube <ExternalLink size={12} />
+              </a>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       <h3 class="text-2xl text-white font-medium mt-6 mb-2">Participantes</h3>
@@ -331,8 +349,28 @@
         {#if currentUserId}
           {#if canSelfSignup}
             {#if availableInstruments.length}
-              <div class="w-full flex justify-center">
-                <button class="bg-cold-base text-white rounded-lg p-2 px-4 mb-4" on:click={openModal}>{autoApprove ? 'Inscríbete para tocar' : 'Solicitar para tocar'}</button>
+              <!-- Instruments inline rather than behind a modal: the modal WAS the
+                   confusion — the only instrument list on screen was the YouTube
+                   one. No confirm step, because undo is already one tap on your
+                   own row in Participantes, and a confirm in front of the primary
+                   action is the opposite of streamlining it. -->
+              <div class="bg-base-950 rounded-lg p-4 mb-4 flex flex-col gap-3">
+                <div>
+                  <div class="text-white">¿Qué vas a tocar?</div>
+                  <p class="text-cold-light text-xs mt-0.5 leading-snug">
+                    {autoApprove
+                      ? 'Toca tu instrumento y quedas inscrito. Si te equivocas, puedes quitarte arriba.'
+                      : 'Toca tu instrumento para enviar tu solicitud — el organizador la aprueba.'}
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  {#each availableInstruments as inst (inst.id)}
+                    <button type="button" on:click={() => selectInstrument(inst)} disabled={signingUp}
+                            class="border border-cold-base bg-cold-base text-white rounded-lg px-4 py-2 text-sm hover:bg-cold-light hover:text-black transition disabled:opacity-50">
+                      {inst.name}
+                    </button>
+                  {/each}
+                </div>
               </div>
             {:else}
               <div class="w-full text-center text-cold-light mb-4">Todos los cupos están tomados.</div>
@@ -351,35 +389,6 @@
     </div>
   {/if}
 </div>
-
-<!-- Modal -->
-{#if showModal}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click={closeModal}>
-    <div class="bg-base-900 rounded-lg p-6 max-w-md w-full mx-4" on:click|stopPropagation>
-      <h3 class="text-xl text-yellow font-bold mb-4">Selecciona tu instrumento</h3>
-      {#if loadingInstruments}
-        <div class="text-center text-white">Cargando instrumentos...</div>
-      {:else if availableInstruments.length === 0}
-        <div class="text-center text-cold-light">Todos los cupos están tomados.</div>
-      {:else}
-        <div class="space-y-2">
-          {#each availableInstruments as instrument}
-            <button 
-              class="w-full text-left p-3 border border-cold-base rounded-lg bg-cold-base text-white hover:bg-cold-light transition active:bg-yellow active:text-black"
-              on:mousedown={() => instrument._down = true}
-              on:mouseup={() => { instrument._down = false; selectInstrument(instrument); }}
-              on:touchstart={() => instrument._down = true}
-              on:touchend={() => { instrument._down = false; selectInstrument(instrument); }}
-            >
-              {instrument.name}
-            </button>
-          {/each}
-        </div>
-      {/if}
-      <button class="mt-4 px-4 py-2 bg-cold-base text-white rounded-lg hover:bg-cold-light" on:click={closeModal}>Cancelar</button>
-    </div>
-  </div>
-{/if}
 
 <!-- Share Modal -->
 {#if showShareModal}
