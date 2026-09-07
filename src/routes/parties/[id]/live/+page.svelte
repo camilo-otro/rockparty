@@ -25,6 +25,10 @@
   let busy = false;
   let unsubscribeUser: () => void;
   let channel: any = null;
+  // Ending the show is one tap next to a button tapped ~90 times a night,
+  // on a phone, on stage. Two-step rather than a modal — the console is
+  // one-thumb by design.
+  let confirmingEnd = false;
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
   $: ordered = [...perfs].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.id - b.id);
@@ -115,6 +119,7 @@
   const takeABreak  = () => exec(() => supabase.rpc('end_current_song', { p_party: partyId }), 'Pausa — nada sonando.');
   const undo        = () => exec(() => supabase.rpc('undo_last_move', { p_party: partyId }), 'Listo, volvimos atrás.');
   const jumpTo      = (id: number) => exec(() => supabase.rpc('jump_to_song', { p_party: partyId, p_performance: id }));
+  const endShow     = async () => { await exec(() => supabase.rpc('end_show', { p_party: partyId }), 'Show terminado.'); confirmingEnd = false; };
 
   // Nothing has finished yet => nothing to undo. Keeps the button honest rather
   // than letting the RPC raise at someone mid-show.
@@ -288,20 +293,40 @@
 
     <!-- The workhorse, pinned where a thumb already is. -->
     {#if isLive}
-      <div class="fixed bottom-0 inset-x-0 bg-base-950/95 border-t border-base-900 p-4 flex items-center gap-3">
-        <button on:click={undo} disabled={busy || !canUndo} aria-label="Volver a la anterior" title="Volver a la anterior"
-                class="text-cold-light hover:text-white border border-cold-light/30 hover:border-cold-light rounded-lg px-4 py-5 transition disabled:opacity-30 shrink-0">
-          <Undo2 size={20} />
-        </button>
-        <button on:click={() => exec(() => supabase.rpc('advance_show', { p_party: partyId }))} disabled={busy}
-                class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-5 text-xl inline-flex items-center justify-center gap-3 transition disabled:opacity-50">
-          <SkipForward size={26} /> {upcoming.length ? 'Siguiente' : 'Terminar la última'}
-        </button>
-        <button on:click={() => exec(() => supabase.rpc('end_show', { p_party: partyId }), 'Show terminado.')} disabled={busy}
-                aria-label="Terminar el show"
-                class="text-red-400 hover:text-red-300 border border-red-400/40 hover:border-red-300 rounded-lg px-4 py-5 transition disabled:opacity-50">
-          <Square size={20} />
-        </button>
+      <div class="fixed bottom-0 inset-x-0 bg-base-950/95 border-t border-base-900 p-4">
+        {#if confirmingEnd}
+          <!-- The WIDE button is the safe one on purpose: a thumb reaching for
+               where Siguiente normally sits gets "Volver", not the ending. -->
+          <div class="flex flex-col gap-2">
+            <span class="text-white text-sm text-center">¿Terminar el show?</span>
+            <div class="flex items-center gap-3">
+              <button on:click={() => (confirmingEnd = false)} disabled={busy}
+                      class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-5 text-lg transition disabled:opacity-50">
+                Volver
+              </button>
+              <button on:click={endShow} disabled={busy}
+                      class="text-red-400 hover:text-red-300 border border-red-400/40 hover:border-red-300 rounded-lg px-4 py-5 text-sm transition disabled:opacity-50 shrink-0">
+                {busy ? 'Terminando…' : 'Sí, terminar'}
+              </button>
+            </div>
+          </div>
+        {:else}
+          <div class="flex items-center gap-3">
+            <button on:click={undo} disabled={busy || !canUndo} aria-label="Volver a la anterior" title="Volver a la anterior"
+                    class="text-cold-light hover:text-white border border-cold-light/30 hover:border-cold-light rounded-lg px-4 py-5 transition disabled:opacity-30 shrink-0">
+              <Undo2 size={20} />
+            </button>
+            <button on:click={() => exec(() => supabase.rpc('advance_show', { p_party: partyId }))} disabled={busy}
+                    class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-5 text-xl inline-flex items-center justify-center gap-3 transition disabled:opacity-50">
+              <SkipForward size={26} /> {upcoming.length ? 'Siguiente' : 'Terminar la última'}
+            </button>
+            <button on:click={() => (confirmingEnd = true)} disabled={busy}
+                    aria-label="Terminar el show" title="Terminar el show"
+                    class="text-red-400 hover:text-red-300 border border-red-400/40 hover:border-red-300 rounded-lg px-4 py-5 transition disabled:opacity-50">
+              <Square size={20} />
+            </button>
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
