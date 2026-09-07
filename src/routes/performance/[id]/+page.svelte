@@ -91,22 +91,43 @@
     return [...map.values()];
   }
 
+  // Was a 2N+1: one profile query AND one instrument query per signup row, in a
+  // sequential for-loop. Five signups meant eleven round trips (~1.9s), re-run
+  // after every signup. Now: one query for the rows, one .in() for the distinct
+  // profiles. Instrument names come from `instruments`, which this page already
+  // loads in full for the signup buttons — those per-row lookups were fetching
+  // data we had.
   async function fetchSignedUpUsers(performanceId: string) {
-    const { data: perfUsers } = await supabase.from('performance_user').select('user_id, instrument_id, status, created_at').eq('performance_id', Number(performanceId)).order('created_at', { ascending: true });
-    const users: any[] = [];
-    for (const perfUser of perfUsers ?? []) {
-      const { data: userData } = await supabase.from('profile').select('nickname').eq('id', perfUser.user_id).single();
-      const { data: instrumentData } = await supabase.from('instrument').select('name').eq('id', perfUser.instrument_id).single();
-      users.push({
-        nickname: userData?.nickname ?? perfUser.user_id,
-        instrument: instrumentData?.name ?? '',
-        instrument_id: perfUser.instrument_id,
-        user_id: perfUser.user_id,
-        status: perfUser.status,
-        created_at: perfUser.created_at
-      });
-    }
-    return users;
+    const { data: perfUsers } = await supabase
+      .from('performance_user')
+      .select('user_id, instrument_id, status, created_at')
+      .eq('performance_id', Number(performanceId))
+      .order('created_at', { ascending: true });
+    const rows = perfUsers ?? [];
+    if (!rows.length) return [];
+
+    const userIds = [...new Set(rows.map((r) => r.user_id))];
+    const instrIds = [...new Set(rows.map((r) => r.instrument_id))];
+    // Fall back to a single .in() when the instrument list has not landed yet
+    // (refreshSignedUpUsers can run before onMount finishes).
+    const missingInstruments = instrIds.some((id) => !instruments.some((i: any) => i.id === id));
+    const [profileRes, instrRes] = await Promise.all([
+      supabase.from('profile').select('id, nickname').in('id', userIds),
+      missingInstruments
+        ? supabase.from('instrument').select('id, name').in('id', instrIds)
+        : Promise.resolve({ data: instruments })
+    ]);
+    const nameById = Object.fromEntries((profileRes.data ?? []).map((u: any) => [u.id, u.nickname]));
+    const instrById = Object.fromEntries((instrRes.data ?? []).map((i: any) => [i.id, i.name]));
+
+    return rows.map((r) => ({
+      nickname: nameById[r.user_id] ?? r.user_id,
+      instrument: instrById[r.instrument_id] ?? '',
+      instrument_id: r.instrument_id,
+      user_id: r.user_id,
+      status: r.status,
+      created_at: r.created_at
+    }));
   }
 
   onMount(async () => {
@@ -114,41 +135,57 @@
       currentUserId = u?.id ?? null;
     });
     const id = get(page).params.id;
-    const { data, error: err } = await supabase.from('performance').select('*').eq('id', Number(id)).single();
+    // Waves, not a staircase (#85, see #84). Measured before: 3805ms across a
+    // 16-request ladder, each rung ~175ms of pure latency.
+    //
+    // Wave 1: the performance row, plus the instrument list (static, depends on
+    // nothing, and fetchSignedUpUsers below reads it instead of querying per row).
+    const [perfRes, instrRes] = await Promise.all([
+      supabase.from('performance').select('*').eq('id', Number(id)).maybeSingle(),
+      supabase.from('instrument').select('id, name')
+    ]);
+    instruments = instrRes.data ?? [];
+    const { data, error: err } = perfRes;
     if (err) {
-      error = err.message;
+      error = 'No se pudo cargar la canción. Revisa tu conexión e intenta de nuevo.';
+    } else if (!data) {
+      error = 'No encontramos esta canción, o no tienes acceso. ¿Iniciaste sesión?';
     } else {
       performance = data;
-      // Fetch song title
-      if (performance?.song) {
-        const { data: songData } = await supabase.from('song').select('title, artist, ref_link').eq('id', performance.song).single();
-        songTitle = songData?.title ?? '';
-        songArtist = songData?.artist ?? '';
-        songSpotify = songData?.ref_link ?? null;
-      }
-      // Fetch the parent party's approval mode + admins (drives request framing).
-      if (performance?.party) {
-        const { data: partyData } = await supabase.from('party').select('id, created_by, performer_approval').eq('id', performance.party).single();
-        party = partyData;
-        const { data: adminData } = await supabase.from('party_admin').select('user_id').eq('party_id', performance.party);
-        partyAdmins = (adminData ?? []).map((a) => a.user_id);
-      }
-      // Band-owned song: resolve the band name for the label.
-      if (performance?.band_id) {
-        const { data: bandData } = await supabase.from('band').select('name').eq('id', performance.band_id).maybeSingle();
-        bandName = bandData?.name ?? 'una banda';
-      }
-      // Fetch suggested by user nickname from user table
-      if (performance?.suggested_by) {
-        const { data: userData } = await supabase.from('profile').select('nickname, avatarUrl: avatar_url').eq('id', performance.suggested_by).single();
-        suggestedBy = userData;
-      }
-      // Fetch signed up users for this performance
-      signedUpUsers = await fetchSignedUpUsers(id);
+      // Wave 2: everything hanging off the performance row — none of these needs
+      // another's result. party_admin needs only performance.party, not the party
+      // row itself, so it belongs here rather than behind the party fetch.
+      await Promise.all([
+        performance?.song
+          ? supabase.from('song').select('title, artist, ref_link').eq('id', performance.song).maybeSingle()
+              .then(({ data: sd }) => {
+                songTitle = sd?.title ?? '';
+                songArtist = sd?.artist ?? '';
+                songSpotify = sd?.ref_link ?? null;
+              })
+          : Promise.resolve(),
+        // The parent party's approval mode + admins (drives request framing).
+        performance?.party
+          ? Promise.all([
+              supabase.from('party').select('id, created_by, performer_approval').eq('id', performance.party).maybeSingle(),
+              supabase.from('party_admin').select('user_id').eq('party_id', performance.party)
+            ]).then(([partyRes, adminRes]) => {
+              party = partyRes.data;
+              partyAdmins = (adminRes.data ?? []).map((a: any) => a.user_id);
+            })
+          : Promise.resolve(),
+        // Band-owned song: resolve the band name for the label.
+        performance?.band_id
+          ? supabase.from('band').select('name').eq('id', performance.band_id).maybeSingle()
+              .then(({ data: bd }) => { bandName = bd?.name ?? 'una banda'; })
+          : Promise.resolve(),
+        performance?.suggested_by
+          ? supabase.from('profile').select('nickname, avatarUrl: avatar_url').eq('id', performance.suggested_by).maybeSingle()
+              .then(({ data: ud }) => { suggestedBy = ud; })
+          : Promise.resolve(),
+        fetchSignedUpUsers(id).then((rows) => { signedUpUsers = rows; })
+      ]);
     }
-    // Fetch instruments once on mount
-    const { data: instrumentData } = await supabase.from('instrument').select('id, name');
-    instruments = instrumentData ?? [];
     loading = false;
   });
 
