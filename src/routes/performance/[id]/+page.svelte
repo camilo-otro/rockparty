@@ -289,7 +289,7 @@
                than as a bare instrument name — the old version was six pills
                named exactly like the six signup options. -->
           <div class="text-xs text-cold-light mb-1">
-            {myTutorials.length === 1 ? 'Tutorial para lo que vas a tocar:' : 'Tutoriales para lo que vas a tocar:'}
+            {myTutorials.length === 1 ? 'Tutorial para tu instrumento' : 'Tutoriales para tus instrumentos'}
           </div>
           <div class="flex flex-wrap gap-2">
             {#each myTutorials as t (t.name)}
