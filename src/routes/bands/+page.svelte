@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
+  import { showTest, keepTest } from '$lib/stores/showTest';
   import { user } from '$lib/stores/user';
   import { Plus, ChevronRight, Crown, Users } from 'lucide-svelte';
 
@@ -8,6 +9,7 @@
   let isAuthenticated = false;
   let loading = true;
   let bands: { id: number; name: string; role: string; is_test: boolean; avatar_url: string | null }[] = [];
+  $: visibleBands = keepTest(bands, $showTest);
   let unsub: () => void;
 
   onMount(async () => {
@@ -40,7 +42,7 @@
         <div class="bg-base-900 p-6 text-cold-light text-center">Aún no tienes bandas. Crea una para agendarla en toques.</div>
       {:else}
         <ul class="p-0 space-y-[1px]">
-          {#each bands as b}
+          {#each visibleBands as b}
             <a href={`/bands/${b.id}`} class="block">
               <li class="flex flex-row items-center bg-base-900 cursor-pointer hover:bg-base-950 transition px-4 py-3">
                 {#if b.avatar_url}

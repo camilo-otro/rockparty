@@ -5,6 +5,7 @@
   import { ChevronLeft, Edit, Instagram } from 'lucide-svelte';
   import { goto } from '$app/navigation';
   import { user } from '$lib/stores/user';
+  import { showTest, keepTest } from '$lib/stores/showTest';
   import PartyListItem from '$lib/components/PartyListItem.svelte';
 
   let venue: any = null;
@@ -28,6 +29,9 @@
     bar_minimum: 'Consumo mínimo',
     other: 'Otro'
   };
+
+  $: visibleUpcoming = keepTest(upcomingParties, $showTest);
+  $: visiblePending = keepTest(pendingParties, $showTest);
 
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -184,11 +188,11 @@
       </div>
     </div>
 
-    {#if isVenueAdmin && pendingParties.length > 0}
+    {#if isVenueAdmin && visiblePending.length > 0}
       <section class="mt-6 mx-4">
         <h3 class="text-2xl text-yellow mb-3 tracking-wide">POR APROBAR</h3>
         <ul class="p-0 space-y-[1px] rounded-lg overflow-clip">
-          {#each pendingParties as party}
+          {#each visiblePending as party}
             <PartyListItem party={party} venueName={venue.name} />
           {/each}
         </ul>
@@ -197,11 +201,11 @@
 
     <section class="mt-6 mx-4">
       <h3 class="text-2xl text-white mb-3 tracking-wide">PRÓXIMOS TOQUES</h3>
-      {#if upcomingParties.length === 0}
+      {#if visibleUpcoming.length === 0}
         <div class="text-cold-light">No hay próximos toques en este local.</div>
       {:else}
         <ul class="p-0 space-y-[1px] rounded-lg overflow-clip">
-          {#each upcomingParties as party}
+          {#each visibleUpcoming as party}
             <PartyListItem party={party} venueName={venue.name} />
           {/each}
         </ul>

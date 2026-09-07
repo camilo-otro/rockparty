@@ -3,6 +3,9 @@
     import { supabase } from '$lib/supabaseClient';
     import { ChevronLeft } from 'lucide-svelte';
     import VenueListItem from '$lib/components/VenueListItem.svelte';
+    import { showTest, keepTest } from '$lib/stores/showTest';
+
+    $: visibleVenues = keepTest(venues, $showTest);
 
     let venues: any[] = [];
     let loading = true;
@@ -44,7 +47,7 @@
                 <div class="text-white p-4">No hay locales registrados.</div>
             {:else}
                 <ul class="p-0 space-y-[1px]">
-                  {#each venues as venue}
+                  {#each visibleVenues as venue}
                     <VenueListItem venue={venue} />
                   {/each}
                 </ul>

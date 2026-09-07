@@ -7,7 +7,8 @@
   import logo from '$lib/assets/images/Logo.png';
   import Toasts from '$lib/components/Toasts.svelte';
   import { unreadCount, refreshUnread, subscribeUnread, unsubscribeUnread } from '$lib/stores/notifications';
-  import { refreshDev } from '$lib/stores/dev';
+  import { isDev, refreshDev } from '$lib/stores/dev';
+  import { showTest } from '$lib/stores/showTest';
   export let data
 
   $: ({ supabase, session } = data)
@@ -98,11 +99,26 @@
         </a>
         <img src={session.user?.user_metadata?.avatar_url && session.user.user_metadata.avatar_url.trim() !== '' ? session.user.user_metadata.avatar_url : '/images/avatar-default.svg'} alt="User Avatar" class="w-8 h-8 rounded-full cursor-pointer ring-2 ring-yellow ring-offset-2 ring-offset-base-950" on:click={toggleMenu} />
         {#if showMenu}
-          <div bind:this={menuRef} class="absolute right-0 top-full w-40 bg-base-900 rounded-lg shadow-lg z-10 overflow-hidden" in:scale={{ duration: 200 }}>
+          <div bind:this={menuRef} class="absolute right-0 top-full w-48 bg-base-900 rounded-lg shadow-lg z-10 overflow-hidden" in:scale={{ duration: 200 }}>
             <a href="/parties/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis toques</a>
             <a href="/rehearsal" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Lista de ensayo</a>
             <a href="/bands" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis bandas</a>
             <a href={`/performers/${session.user.id}`} on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Ver mi perfil</a>
+            {#if $isDev}
+              <!-- Dev-only: RLS already keeps test rows away from everyone else,
+                   so this switch is purely about a dev's own signal-to-noise. -->
+              <button
+                class="w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950 flex items-center justify-between gap-2 border-t border-base-950"
+                role="switch"
+                aria-checked={$showTest}
+                on:click={() => showTest.update((v) => !v)}
+              >
+                <span class="text-sm">Datos de prueba</span>
+                <span class="w-9 h-5 rounded-full shrink-0 relative transition-colors {$showTest ? 'bg-cold-base' : 'bg-base-950'}">
+                  <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all {$showTest ? 'left-[1.125rem]' : 'left-0.5'}"></span>
+                </span>
+              </button>
+            {/if}
             <button class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950" on:click={signOut}>Cerrar sesión</button>
           </div>
         {/if}

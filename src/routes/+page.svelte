@@ -5,6 +5,7 @@
   import PartyListItem from '$lib/components/PartyListItem.svelte';
   import VenueListItem from '$lib/components/VenueListItem.svelte';
   import { user } from '$lib/stores/user';
+  import { showTest, keepTest } from '$lib/stores/showTest';
 
   let parties: any[] = [];
   let venues: any[] = [];
@@ -35,6 +36,15 @@
     organize:    { icon: CalendarPlus, title: 'Arma tu propio toque',     body: 'Ya te subiste a una tarima — ahora organiza tu propia noche.',                   cta: 'Planea un toque',         href: () => '/parties/create' }
   } as const;
   $: hero = heroVariant === 'none' ? null : HERO[heroVariant];
+
+  // Test rows only ever reach a dev (RLS), and even then stay hidden until the
+  // header switch is on. $showTest is named in each expression so legacy-mode
+  // reactivity re-runs them when it's flipped.
+  $: visibleParties = keepTest(parties, $showTest).slice(0, 5);
+  $: visibleTopVenues = keepTest(topVenues, $showTest).slice(0, 5);
+  $: visiblePending = keepTest(pendingApprovals, $showTest);
+  $: visibleVenueUpcoming = keepTest(venueUpcoming, $showTest);
+  $: visibleNeedsYou = $showTest ? needsYou : needsYou.filter((m) => !m.party?.is_test);
 
   onMount(async () => {
     user.subscribe((u) => { currentUserId = u?.id ?? null; })();
@@ -74,8 +84,10 @@
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const venueCounts: Record<string | number, number> = {};
     for (const party of upcomingParties) venueCounts[party.venue] = (venueCounts[party.venue] || 0) + 1;
-    topVenues = venues.map((v) => ({ ...v, count: venueCounts[v.id] || 0 })).sort((a, b) => b.count - a.count).slice(0, 5);
-    parties = upcomingParties.slice(0, 5);
+    // Keep these FULL and ranked; the top-5 cut happens after the test filter
+    // below, so hidden test rows can't push real toques off the home page.
+    topVenues = venues.map((v) => ({ ...v, count: venueCounts[v.id] || 0 })).sort((a, b) => b.count - a.count);
+    parties = upcomingParties;
 
     if (uid) {
       // Venue-manager sections (#55).
@@ -183,14 +195,14 @@
     </section>
   {/if}
 
-  {#if pendingApprovals.length}
+  {#if visiblePending.length}
     <section>
       <h2 class="text-3xl text-white m-4 mb-4 flex items-center gap-2">
-        <AlertTriangle class="text-yellow" size={28} /> POR APROBAR · {pendingApprovals.length}
+        <AlertTriangle class="text-yellow" size={28} /> POR APROBAR · {visiblePending.length}
       </h2>
       <div class="m-4 mt-0 rounded-lg overflow-clip">
         <ul class="p-0 space-y-[1px]">
-          {#each pendingApprovals as party}
+          {#each visiblePending as party}
             <PartyListItem {party} venueName={getVenueName(party.venue)} showStatus />
           {/each}
         </ul>
@@ -198,12 +210,12 @@
     </section>
   {/if}
 
-  {#if venueUpcoming.length}
+  {#if visibleVenueUpcoming.length}
     <section>
       <h2 class="text-3xl text-white m-4 mb-4">TUS LOCALES</h2>
       <div class="m-4 mt-0 rounded-lg overflow-clip">
         <ul class="p-0 space-y-[1px]">
-          {#each venueUpcoming as party}
+          {#each visibleVenueUpcoming as party}
             <PartyListItem {party} venueName={getVenueName(party.venue)} showStatus />
           {/each}
         </ul>
@@ -211,13 +223,13 @@
     </section>
   {/if}
 
-  {#if needsYou.length}
+  {#if visibleNeedsYou.length}
     <section>
       <h2 class="text-3xl text-white m-4 mb-1">TE NECESITAN</h2>
       <p class="text-cold-light text-sm mx-4 mb-4">Toques con un cupo abierto en lo que tocas.</p>
       <div class="m-4 mt-0 rounded-lg overflow-clip">
         <ul class="p-0 space-y-[1px]">
-          {#each needsYou as m}
+          {#each visibleNeedsYou as m}
             <PartyListItem party={m.party} venueName={getVenueName(m.party.venue)} noteBadge={{ text: m.needed.join(' · '), cls: 'bg-cold-base text-white' }} />
           {/each}
         </ul>
@@ -237,7 +249,7 @@
         <div>No hay próximos toques registrados.</div>
       {:else}
         <ul class="p-0 space-y-[1px]">
-          {#each parties as party}
+          {#each visibleParties as party}
             <PartyListItem party={party} venueName={getVenueName(party.venue)} />
           {/each}
           <li class="bg-base-900 flex flex-row w-full">
@@ -259,7 +271,7 @@
         <div>No hay locales con fiestas próximas.</div>
       {:else}
         <ul class="p-0 space-y-[1px]">
-          {#each topVenues as venue}
+          {#each visibleTopVenues as venue}
             <VenueListItem venue={venue} />
           {/each}
           <li class="bg-base-900 flex flex-row w-full">

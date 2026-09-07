@@ -3,6 +3,7 @@
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft } from 'lucide-svelte';
   import PartyListItem from '$lib/components/PartyListItem.svelte';
+  import { showTest, keepTest } from '$lib/stores/showTest';
 
   // 'loading' until auth is known, so we don't flash the logged-out gate.
   let authState: 'loading' | 'in' | 'out' = 'loading';
@@ -15,8 +16,21 @@
   let venues: Record<number, string> = {};
 
   const IN_PROGRESS = ['draft', 'pending_venue'];
-  const UPCOMING = ['confirmed', 'live'];
-  const PAST = ['completed', 'cancelled'];
+
+  // Local YYYY-MM-DD (never toISOString — that's UTC and can shift the day).
+  const _now = new Date();
+  const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+
+  // Past/upcoming is decided by the DATE, not the status. It used to be purely
+  // status-driven (UPCOMING = confirmed|live, PAST = completed|cancelled), which
+  // was wrong in both directions: nothing ever sets `completed`, so a toque from
+  // last year sat under PRÓXIMOS forever, while a toque cancelled months ahead of
+  // time showed under PASADOS.
+  //
+  // `completed` still forces past regardless of date — that status is set by
+  // running a show to the end, and its date is typically today.
+  const isInProgress = (p: any) => IN_PROGRESS.includes(p.status);
+  const isPast = (p: any) => p.status === 'completed' || String(p.date) < todayStr;
 
   // One badge per toque, by precedence: playing (approved) > pending > declined.
   function signupBadge(statuses: Set<string>): { text: string; cls: string } {
@@ -86,19 +100,26 @@
   const byDateAsc = (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime();
   const byDateDesc = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime();
 
+  // `$showTest` is named in each expression on purpose — Svelte legacy mode
+  // tracks dependencies textually, so hiding the store read inside keepTest()
+  // alone would leave these stale when the switch is flipped.
+  $: misToques = keepTest(parties, $showTest);
+  $: misToco = keepTest(playParties, $showTest);
+  $: misAsisto = keepTest(asistoParties, $showTest);
+
   // In-progress first (the toques that are otherwise unreachable), then upcoming, then past.
-  $: enProceso = parties.filter((p) => IN_PROGRESS.includes(p.status)).sort(byDateAsc);
-  $: proximos = parties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
-  $: pasados = parties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
+  $: enProceso = misToques.filter(isInProgress).sort(byDateAsc);
+  $: proximos = misToques.filter((p) => !isInProgress(p) && !isPast(p)).sort(byDateAsc);
+  $: pasados = misToques.filter((p) => !isInProgress(p) && isPast(p)).sort(byDateDesc);
   // "Toco" toques: upcoming first, then past (drafts you can't see aren't here).
-  $: tocoProximos = playParties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
-  $: tocoPasados = playParties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
+  $: tocoProximos = misToco.filter((p) => !isPast(p)).sort(byDateAsc);
+  $: tocoPasados = misToco.filter((p) => isPast(p)).sort(byDateDesc);
   // "Asisto" toques (RSVP): upcoming first, then past.
-  $: asistoProximos = asistoParties.filter((p) => UPCOMING.includes(p.status)).sort(byDateAsc);
-  $: asistoPasados = asistoParties.filter((p) => PAST.includes(p.status)).sort(byDateDesc);
-  $: hasOrganizo = parties.length > 0;
-  $: hasToco = playParties.length > 0;
-  $: hasAsisto = asistoParties.length > 0;
+  $: asistoProximos = misAsisto.filter((p) => !isPast(p)).sort(byDateAsc);
+  $: asistoPasados = misAsisto.filter((p) => isPast(p)).sort(byDateDesc);
+  $: hasOrganizo = misToques.length > 0;
+  $: hasToco = misToco.length > 0;
+  $: hasAsisto = misAsisto.length > 0;
 
   function venueName(id: number) {
     return venues[id] ?? 'Sin local';
@@ -158,7 +179,7 @@
           <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each tocoProximos as party}
-              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus noteBadge={signupBadgeByParty[party.id]} />
             {/each}
           </ul>
         {/if}
@@ -166,7 +187,7 @@
           <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each tocoPasados as party}
-              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus noteBadge={signupBadgeByParty[party.id]} />
             {/each}
           </ul>
         {/if}
@@ -178,7 +199,7 @@
           <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each asistoProximos as party}
-              <PartyListItem {party} venueName={venueName(party.venue)} />
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
             {/each}
           </ul>
         {/if}
@@ -186,7 +207,7 @@
           <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each asistoPasados as party}
-              <PartyListItem {party} venueName={venueName(party.venue)} />
+              <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
             {/each}
           </ul>
         {/if}

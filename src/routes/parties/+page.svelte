@@ -3,6 +3,7 @@
     import { supabase } from '$lib/supabaseClient';
     import { ChevronLeft, Plus } from 'lucide-svelte';
     import PartyListItem from '$lib/components/PartyListItem.svelte';
+    import { showTest, keepTest } from '$lib/stores/showTest';
 
     let parties: any[] = [];
     let venues: any[] = [];
@@ -41,11 +42,14 @@
 
     // Reactive so the lists recompute when the filters (or data) change, not
     // only on a tab switch.
+    // $showTest is named here (not just inside keepTest) so legacy-mode
+    // reactivity re-runs these when the switch is flipped.
+    $: visibleParties = keepTest(parties, $showTest);
     $: upcomingParties = applyFilters(
-        parties.filter(p => new Date(p.date) >= new Date()), venueFilter, dateFilter
+        visibleParties.filter(p => new Date(p.date) >= new Date()), venueFilter, dateFilter
     ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     $: pastParties = applyFilters(
-        parties.filter(p => new Date(p.date) < new Date()), venueFilter, dateFilter
+        visibleParties.filter(p => new Date(p.date) < new Date()), venueFilter, dateFilter
     ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     $: hasFilters = venueFilter !== '' || dateFilter !== '';
 
