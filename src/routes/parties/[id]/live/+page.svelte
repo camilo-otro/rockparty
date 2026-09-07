@@ -9,7 +9,7 @@
   import { supabase } from '$lib/supabaseClient';
   import { user } from '$lib/stores/user';
   import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
-  import { ChevronLeft, Play, SkipForward, Square, Users, Check, Undo2, Pause } from 'lucide-svelte';
+  import { ChevronLeft, Play, SkipForward, Square, Users, Check, Undo2, Pause, Ban } from 'lucide-svelte';
 
   let partyId = 0;
   let party: any = null;
@@ -111,7 +111,7 @@
   }
 
   // Stage 2 — the messy-reality controls. Every one is correctable.
-  const skip        = () => exec(() => supabase.rpc('skip_song', { p_party: partyId }), 'Canción saltada.');
+  const skip        = () => exec(() => supabase.rpc('skip_song', { p_party: partyId }), 'Marcada como no tocada.');
   const takeABreak  = () => exec(() => supabase.rpc('end_current_song', { p_party: partyId }), 'Pausa — nada sonando.');
   const undo        = () => exec(() => supabase.rpc('undo_last_move', { p_party: partyId }), 'Listo, volvimos atrás.');
   const jumpTo      = (id: number) => exec(() => supabase.rpc('jump_to_song', { p_party: partyId, p_performance: id }));
@@ -217,9 +217,17 @@
           </div>
           {#if nowPlaying}
             <div class="bg-base-950 px-4 py-2 flex items-center gap-4 border-t border-base-900">
+              <!-- NOT the same as Siguiente: both cue the next song, but this one
+                   records 'skipped' rather than 'played'. That has consequences —
+                   a skipped song isn't clappable and is excluded from what
+                   actually got played — so it needs its own icon and a label
+                   naming the record, not the movement. "Cancelar" is avoided: it
+                   already means ending the toque, and the setlist trash already
+                   means removing the song outright. -->
               <button type="button" on:click={skip} disabled={busy}
+                      title="La canción no se tocó — queda en el setlist, marcada como no tocada"
                       class="text-cold-light hover:text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-40">
-                <SkipForward size={15} /> Saltar
+                <Ban size={15} /> No se tocó
               </button>
               <button type="button" on:click={takeABreak} disabled={busy}
                       class="text-cold-light hover:text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-40">
@@ -263,12 +271,12 @@
                   <button type="button" on:click={() => jumpTo(p.id)} disabled={busy}
                           class="w-full text-left text-sm flex items-center gap-2 py-1 hover:text-white transition disabled:opacity-40 {p.live_state === 'skipped' ? 'text-cold-light/40' : 'text-cold-light/70'}">
                     {#if p.live_state === 'skipped'}
-                      <SkipForward size={14} class="shrink-0" />
+                      <Ban size={14} class="shrink-0" />
                     {:else}
                       <Check size={14} class="text-green-500 shrink-0" />
                     {/if}
                     <span class="truncate">{songTitle(p)}</span>
-                    {#if p.live_state === 'skipped'}<span class="text-xs shrink-0">saltada</span>{/if}
+                    {#if p.live_state === 'skipped'}<span class="text-xs shrink-0">no se tocó</span>{/if}
                   </button>
                 </li>
               {/each}
