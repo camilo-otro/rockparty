@@ -831,6 +831,16 @@ create trigger party_status_notify
   after update on public.party
   for each row execute function public.notify_party_status();
 
+-- purge_stale_test_parties (#67 follow-up): deletes TEST toques that are
+-- cancelled (>1 day) or past-dated; future-dated ones are kept however old.
+-- Every FK into party is ON DELETE CASCADE, so this also removes their
+-- setlists, signups, RSVPs, admin rows and applause. Destructive, no undo.
+-- Scheduled daily 15:00 via pg_cron ('purge-stale-test-parties').
+-- NOTE: EXECUTE is revoked from PUBLIC, not just anon/authenticated — those
+-- roles INHERIT from PUBLIC, so revoking only from them is a no-op and left the
+-- bulk delete callable by anon. See migrations/20260907_purge_revoke_from_public.sql.
+--   purge_stale_test_parties() -> integer  (rows deleted)
+
 -- notify_upcoming_toques (#51): day-before reminder for confirmed toques →
 -- organizer + approved performers. Scheduled daily via pg_cron (job
 -- 'daily-toque-reminders'); see migrations/20260825_notification_producers.sql.
