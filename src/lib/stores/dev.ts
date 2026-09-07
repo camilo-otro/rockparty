@@ -13,8 +13,11 @@ export const isDev = writable(false);
 // is a self-sustaining loop (Supabase's own docs warn against calling their
 // methods from that callback). Omit it and we fetch, which is fine off that path.
 export async function refreshDev(knownUid?: string | null): Promise<void> {
+  // `undefined` means "caller doesn't know" -> ask. An explicit `null` means the
+  // caller KNOWS there's no user (a SIGNED_OUT session), so don't re-enter the
+  // auth client to be told the same thing.
   let uid = knownUid ?? null;
-  if (uid === undefined || uid === null) {
+  if (knownUid === undefined) {
     const { data: auth } = await supabase.auth.getUser();
     uid = auth?.user?.id ?? null;
   }
