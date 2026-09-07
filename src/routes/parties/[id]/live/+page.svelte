@@ -256,13 +256,24 @@
           {#if upcoming.length}
             <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
               {#each upcoming as p, i (p.id)}
+                <!-- What actually plays after this one: the lowest-order song still
+                     queued, i.e. the first upcoming that isn't this one. Naming it
+                     beats describing the rule. `upcoming` is referenced here so the
+                     text can't go stale if the queue changes under an open confirm. -->
+                {@const nextUp = upcoming.find((u) => u.id !== p.id)}
                 <li class="bg-base-900">
                   {#if pendingJump === p.id}
                     <div class="px-4 py-3 flex flex-col gap-2">
                       <div>
                         <div class="text-yellow truncate">¿Adelantar "{songTitle(p)}"?</div>
                         <p class="text-cold-light text-xs leading-snug mt-1">
-                          Sonará ahora. Después, Siguiente retoma por la primera pendiente — no se salta ninguna.
+                          {#if !nextUp}
+                            Suena ahora. Es la última que queda pendiente.
+                          {:else if i === 0}
+                            Suena ahora — es la que seguía de todos modos.
+                          {:else}
+                            Suena ahora. Al terminar sigue «{songTitle(nextUp)}» — las anteriores no se pierden.
+                          {/if}
                         </p>
                       </div>
                       <div class="flex items-center gap-3">
@@ -303,7 +314,11 @@
                     <div class="flex flex-col gap-2 py-2">
                       <div class="text-yellow text-sm truncate">¿Repetir "{songTitle(p)}"?</div>
                       <p class="text-cold-light text-xs leading-snug">
-                        Sonará ahora. Después, Siguiente retoma por la primera pendiente.
+                        {#if upcoming.length}
+                          Suena ahora. Al terminar sigue «{songTitle(upcoming[0])}».
+                        {:else}
+                          Suena ahora. Después no queda nada pendiente.
+                        {/if}
                       </p>
                       <div class="flex items-center gap-3">
                         <button type="button" on:click={() => jumpTo(p.id)} disabled={busy}
