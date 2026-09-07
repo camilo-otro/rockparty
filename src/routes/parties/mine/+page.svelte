@@ -132,6 +132,25 @@
   $: hasToco = misToco.length > 0;
   $: hasAsisto = misAsisto.length > 0;
 
+  type TabId = 'organizo' | 'toco' | 'asisto';
+  let activeTab: TabId | null = null;
+
+  // Only tabs with something in them. Counts are shown so you can tell where
+  // your toques are without opening each one.
+  $: tabs = [
+    { id: 'organizo' as TabId, label: 'ORGANIZO', n: misToques.length, upcoming: enProceso.length + proximos.length },
+    { id: 'toco' as TabId, label: 'TOCO', n: misToco.length, upcoming: tocoProximos.length },
+    { id: 'asisto' as TabId, label: 'ASISTO', n: misAsisto.length, upcoming: asistoProximos.length }
+  ].filter((t) => t.n > 0);
+
+  // Open on a tab that has something COMING UP — someone who plays every week
+  // but organises once a year shouldn't land on a stale ORGANIZO list. The same
+  // statement re-points if the current tab empties out, which happens when the
+  // test-data switch is flipped off while sitting on an all-test tab.
+  $: if (tabs.length && !tabs.some((t) => t.id === activeTab)) {
+    activeTab = (tabs.find((t) => t.upcoming > 0) ?? tabs[0]).id;
+  }
+
   function venueName(id: number) {
     return venues[id] ?? 'Sin local';
   }
@@ -156,8 +175,25 @@
         <a href="/parties/create" class="bg-cold-base text-white rounded-lg px-4 py-2 self-center">Organiza un toque</a>
       </div>
     {:else}
-      {#if hasOrganizo}
-        <h2 class="text-2xl text-cold-light mx-4 mb-3 tracking-widest">ORGANIZO</h2>
+      <!-- Tabs instead of three stacked sections: the page used to make you
+           scroll past everything you organise to reach what you're playing. -->
+      <div class="flex gap-1 mx-4 mb-4 border-b border-base-900">
+        {#each tabs as t}
+          <button
+            class="px-3 py-2 border-b-2 -mb-px text-sm tracking-widest whitespace-nowrap transition-colors"
+            class:border-yellow={activeTab === t.id}
+            class:text-white={activeTab === t.id}
+            class:border-transparent={activeTab !== t.id}
+            class:text-cold-light={activeTab !== t.id}
+            aria-current={activeTab === t.id ? 'page' : undefined}
+            on:click={() => (activeTab = t.id)}
+          >
+            {t.label}<span class="ml-1.5 text-xs opacity-60">{t.n}</span>
+          </button>
+        {/each}
+      </div>
+
+      {#if activeTab === 'organizo'}
         {#if enProceso.length}
           <h3 class="text-xl text-yellow mx-4 mb-2">EN PROCESO</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
@@ -192,8 +228,7 @@
         {/if}
       {/if}
 
-      {#if hasToco}
-        <h2 class="text-2xl text-cold-light mx-4 mb-3 mt-6 tracking-widest">TOCO</h2>
+      {#if activeTab === 'toco'}
         {#if tocoProximos.length}
           <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
@@ -220,8 +255,7 @@
         {/if}
       {/if}
 
-      {#if hasAsisto}
-        <h2 class="text-2xl text-cold-light mx-4 mb-3 mt-6 tracking-widest">ASISTO</h2>
+      {#if activeTab === 'asisto'}
         {#if asistoProximos.length}
           <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
