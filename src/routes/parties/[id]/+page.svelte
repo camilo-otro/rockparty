@@ -583,9 +583,23 @@
   // editMode / expandedApprovals, so an in-progress interaction isn't clobbered.
   let perfIdSet = new Set<number>(); // this party's performance ids, for filtering
   async function loadSetlist(pid: number) {
-    const { data: perfData, error: perfErr } = await supabase.from('performance').select('id, song, suggested_by, ref_link, key, order, band_id, live_state, started_at').eq('party', pid);
+    // Ordered SERVER-side. Without this, PostgREST returns rows in physical
+    // order, which an UPDATE changes (a new tuple version lands elsewhere) — so
+    // start_show / advance_show visibly reshuffled the setlist. The id tiebreak
+    // keeps it deterministic even if two rows share an order.
+    const { data: perfData, error: perfErr } = await supabase
+      .from('performance')
+      .select('id, song, suggested_by, ref_link, key, order, band_id, live_state, started_at')
+      .eq('party', pid)
+      .order('order', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true });
     if (perfErr) { errorPerformances = perfErr.message; return; }
-    const perfs = (perfData ?? []).sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+    const perfs = (perfData ?? []).sort(
+      (a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id
+    );
+    // Renumber 0..n for display. Safe only because the list above is now
+    // deterministically ordered — moveSong persists these values, so a scrambled
+    // list would have written the scramble to the DB.
     perfs.forEach((perf, index) => { perf.order = index; });
     const songIds = [...new Set(perfs.map((p) => p.song).filter((x): x is number => x != null))];
     const userIds = [...new Set(perfs.map((p) => p.suggested_by).filter((x): x is string => x != null))];

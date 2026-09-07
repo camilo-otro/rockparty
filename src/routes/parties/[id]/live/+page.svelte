@@ -54,7 +54,11 @@
     const { data, error: e } = await supabase
       .from('performance')
       .select('id, song, order, band_id, live_state, started_at, ended_at')
-      .eq('party', partyId);
+      .eq('party', partyId)
+      // Same reason as the detail page: physical row order shifts on every
+      // UPDATE, and the console updates rows constantly.
+      .order('order', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true });
     if (e) { error = e.message; return; }
     perfs = data ?? [];
     const songIds = [...new Set(perfs.map((p) => p.song).filter(Boolean))] as number[];

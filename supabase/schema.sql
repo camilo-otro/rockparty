@@ -472,6 +472,14 @@ create trigger party_admin_presentation_guard
   before update on public.party_admin
   for each row execute function public.party_admin_presentation_guard();
 
+-- Every performance gets a running-order position (#37). Songs added through the
+-- setlist flow never set "order", so they landed NULL — and with all orders NULL
+-- the client sort had nothing to order by, leaving the setlist at the mercy of
+-- Postgres' physical row order, which an UPDATE changes. In the DB rather than
+-- one client so the multi-add flow, the clone flow and anything later are all
+-- covered. Body in migrations/20260906_performance_default_order.sql.
+--   performance_default_order()  BEFORE INSERT -> order = max(order)+1 per party
+
 -- Live mode (#37). SECURITY INVOKER on purpose: RLS stays the authorization
 -- boundary (performance/party UPDATE are already restricted to party admins);
 -- the is_party_admin guard just turns a silent 0-row update into a clear error.
