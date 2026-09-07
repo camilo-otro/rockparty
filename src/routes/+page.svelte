@@ -42,18 +42,33 @@
     // contextual one once their participation signals resolve (below).
     if (!currentUserId) heroVariant = 'generic';
 
-    // Public discovery data (everyone).
-    const { data: partyData, error: partyErr } = await supabase
-      .from('party').select('id, title, date, venue, status, is_test')
-      .in('status', ['confirmed', 'live']).order('date', { ascending: true });
-    const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address, is_test');
-    if (partyErr || venueErr) {
-      error = partyErr?.message ?? venueErr?.message ?? null;
+    // WAVE 1 (#90, see #84). Public discovery, the two venue-management lookups,
+    // the user's instruments, the instrument catalogue and the three participation
+    // counts need nothing from each other — only the user id, which is already
+    // local. So they cost ONE round trip between them instead of six in series.
+    const uid = currentUserId;
+    const skipped = { data: [] as any[], count: null, error: null };
+    const w1: any[] = await Promise.all([
+      supabase.from('party').select('id, title, date, venue, status, is_test')
+        .in('status', ['confirmed', 'live']).order('date', { ascending: true }),
+      supabase.from('venue').select('id, name, address, is_test'),
+      uid ? supabase.from('venue').select('id').eq('created_by', uid) : skipped,
+      uid ? supabase.from('venue_admin').select('venue_id').eq('user_id', uid) : skipped,
+      uid ? supabase.from('profile_instrument').select('instrument_id').eq('profile_id', uid) : skipped,
+      uid ? supabase.from('instrument').select('id, name') : skipped,
+      uid ? supabase.from('party').select('id', { count: 'exact', head: true }).eq('created_by', uid) : skipped,
+      uid ? supabase.from('performance_user').select('user_id', { count: 'exact', head: true }).eq('user_id', uid) : skipped,
+      uid ? supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('user_id', uid) : skipped
+    ]);
+    const [partyRes, venueRes, ownedRes, adminRes, myInstrRes, instrRes, toquesRes, signupsRes, rsvpsRes] = w1;
+
+    if (partyRes.error || venueRes.error) {
+      error = partyRes.error?.message ?? venueRes.error?.message ?? null;
       loading = false;
       return;
     }
-    parties = partyData ?? [];
-    venues = venueData ?? [];
+    parties = partyRes.data ?? [];
+    venues = venueRes.data ?? [];
     const upcomingParties = parties
       .filter((p) => new Date(p.date) >= now)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -62,38 +77,39 @@
     topVenues = venues.map((v) => ({ ...v, count: venueCounts[v.id] || 0 })).sort((a, b) => b.count - a.count).slice(0, 5);
     parties = upcomingParties.slice(0, 5);
 
-    // Venue-manager sections (#55).
-    if (currentUserId) {
-      const [{ data: owned }, { data: adminOf }] = await Promise.all([
-        supabase.from('venue').select('id').eq('created_by', currentUserId),
-        supabase.from('venue_admin').select('venue_id').eq('user_id', currentUserId)
-      ]);
-      managedVenueIds = [...new Set([...(owned ?? []).map((v) => v.id), ...(adminOf ?? []).map((a) => a.venue_id)])];
-
-      if (managedVenueIds.length) {
-        const { data: pend } = await supabase
-          .from('party').select('id, title, date, venue, status, is_test')
-          .eq('status', 'pending_venue').in('venue', managedVenueIds).order('date', { ascending: true });
-        pendingApprovals = pend ?? [];
-        const { data: vu } = await supabase
-          .from('party').select('id, title, date, venue, status, is_test')
-          .in('status', ['confirmed', 'live']).in('venue', managedVenueIds).gte('date', todayStr).order('date', { ascending: true });
-        venueUpcoming = vu ?? [];
-      }
-
+    if (uid) {
+      // Venue-manager sections (#55).
+      managedVenueIds = [...new Set([...(ownedRes.data ?? []).map((v: any) => v.id), ...(adminRes.data ?? []).map((a: any) => a.venue_id)])];
       // #36: match the user's instruments against open slots in upcoming toques.
-      const { data: myInstr } = await supabase.from('profile_instrument').select('instrument_id').eq('profile_id', currentUserId);
-      const myInstrumentIds = (myInstr ?? []).map((r) => r.instrument_id);
-      if (myInstrumentIds.length && upcomingParties.length) {
-        const upIds = upcomingParties.map((p) => p.id);
-        const { data: perfRows } = await supabase.from('performance').select('id, party').in('party', upIds);
-        const perfIds = (perfRows ?? []).map((p) => p.id);
+      const myInstrumentIds: number[] = (myInstrRes.data ?? []).map((r: any) => r.instrument_id);
+      const instrList: any[] = instrRes.data ?? [];
+      const instrName = new Map(instrList.map((i: any) => [i.id, i.name]));
+      const allInstrIds = instrList.map((i: any) => i.id);
+
+      // WAVE 2 — the three queries that needed ids from wave 1, and nothing from
+      // one another: the two venue-manager lists and this party's performances.
+      const upIds = upcomingParties.map((p) => p.id);
+      const wantsSlots = myInstrumentIds.length > 0 && upIds.length > 0;
+      const w2: any[] = await Promise.all([
+        managedVenueIds.length
+          ? supabase.from('party').select('id, title, date, venue, status, is_test')
+              .eq('status', 'pending_venue').in('venue', managedVenueIds).order('date', { ascending: true })
+          : skipped,
+        managedVenueIds.length
+          ? supabase.from('party').select('id, title, date, venue, status, is_test')
+              .in('status', ['confirmed', 'live']).in('venue', managedVenueIds).gte('date', todayStr).order('date', { ascending: true })
+          : skipped,
+        wantsSlots ? supabase.from('performance').select('id, party').in('party', upIds) : skipped
+      ]);
+      pendingApprovals = w2[0].data ?? [];
+      venueUpcoming = w2[1].data ?? [];
+      const perfRows: any[] = w2[2].data ?? [];
+
+      if (wantsSlots) {
+        const perfIds = perfRows.map((p: any) => p.id);
         const { data: appr } = perfIds.length
           ? await supabase.from('performance_user').select('performance_id, instrument_id, user_id').eq('status', 'approved').in('performance_id', perfIds)
           : { data: [] as any[] };
-        const { data: instrData } = await supabase.from('instrument').select('id, name');
-        const instrName = new Map((instrData ?? []).map((i: any) => [i.id, i.name]));
-        const allInstrIds = (instrData ?? []).map((i: any) => i.id);
 
         const filledByPerf: Record<number, Set<number>> = {};
         const myApprovedParties = new Set<number>();
@@ -120,17 +136,11 @@
           .filter((x) => x.needed.length > 0);
       }
 
-      // Participation signals that drive the contextual hero (#64).
-      const [{ count: myToques }, { count: mySignups }, { count: myRsvps }] = await Promise.all([
-        supabase.from('party').select('id', { count: 'exact', head: true }).eq('created_by', currentUserId),
-        supabase.from('performance_user').select('user_id', { count: 'exact', head: true }).eq('user_id', currentUserId),
-        supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('user_id', currentUserId)
-      ]);
       const hasInstruments = myInstrumentIds.length > 0;
-      const hasPlayed = (mySignups ?? 0) > 0;
-      const hasOrganized = (myToques ?? 0) > 0;
+      const hasPlayed = (signupsRes.count ?? 0) > 0;
+      const hasOrganized = (toquesRes.count ?? 0) > 0;
       const managesVenue = managedVenueIds.length > 0;
-      const hasAttended = (myRsvps ?? 0) > 0;
+      const hasAttended = (rsvpsRes.count ?? 0) > 0;
       // Priority: brand-new → generic; plays but no profile instruments → set them;
       // attendee/ready musician with no live matches → invite to play; player who
       // hasn't organized → invite to organize; otherwise no hero (fully engaged /
