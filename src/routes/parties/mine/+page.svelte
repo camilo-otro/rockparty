@@ -30,18 +30,35 @@
     if (!session?.user) { authState = 'out'; return; }
     const uid = session.user.id;
 
-    const { data } = await supabase
-      .from('party')
-      .select('id, title, description, date, venue, status, is_test')
-      .eq('created_by', uid);
-    parties = data ?? [];
+    // Wave 1: all three of these need only the user id (#86, see #84). They were
+    // running in series, which cost two round trips for nothing.
+    const PARTY_COLS = 'id, title, description, date, venue, status, is_test';
+    const [organizedRes, myRowsRes, rsvpRes] = await Promise.all([
+      supabase.from('party').select(PARTY_COLS).eq('created_by', uid),
+      supabase.from('performance_user').select('performance_id, status').eq('user_id', uid),
+      supabase.from('party_rsvp').select('party_id').eq('user_id', uid)
+    ]);
+    parties = organizedRes.data ?? [];
     const organizedIds = new Set(parties.map((p) => p.id));
+    const myRows = myRowsRes.data;
+    const rsvpRows = rsvpRes.data;
 
-    // Toques where the user has at least one signup (any status).
-    const { data: myRows } = await supabase.from('performance_user').select('performance_id, status').eq('user_id', uid);
+    // Wave 2: the RSVP'd toques need only ids we now have, so they go in flight
+    // alongside the performance lookup rather than after the whole playing chain.
+    const rsvpIds = [...new Set((rsvpRows ?? []).map((r) => r.party_id))].filter((id) => !organizedIds.has(id));
     const perfIds = [...new Set((myRows ?? []).map((r) => r.performance_id))];
+    const [perfRowsRes, asistoRes] = await Promise.all([
+      perfIds.length
+        ? supabase.from('performance').select('id, party').in('id', perfIds)
+        : Promise.resolve({ data: [] as any[] }),
+      rsvpIds.length
+        ? supabase.from('party').select(PARTY_COLS).in('id', rsvpIds)
+        : Promise.resolve({ data: [] as any[] })
+    ]);
+    asistoParties = asistoRes.data ?? [];
+
     if (perfIds.length) {
-      const { data: perfRows } = await supabase.from('performance').select('id, party').in('id', perfIds);
+      const perfRows = perfRowsRes.data;
       const partyByPerf = Object.fromEntries((perfRows ?? []).map((p: any) => [p.id, p.party]));
       const statusByParty: Record<number, Set<string>> = {};
       for (const r of myRows ?? []) {
@@ -51,24 +68,11 @@
       }
       const playIds = Object.keys(statusByParty).map(Number);
       if (playIds.length) {
-        const { data: pData } = await supabase
-          .from('party')
-          .select('id, title, description, date, venue, status, is_test')
-          .in('id', playIds);
+        // Genuinely a further hop: needs the performance -> party mapping above.
+        const { data: pData } = await supabase.from('party').select(PARTY_COLS).in('id', playIds);
         playParties = pData ?? [];
         signupBadgeByParty = Object.fromEntries(playIds.map((id) => [id, signupBadge(statusByParty[id])]));
       }
-    }
-
-    // Toques the user is attending (RSVP), excluding ones they organize.
-    const { data: rsvpRows } = await supabase.from('party_rsvp').select('party_id').eq('user_id', uid);
-    const rsvpIds = [...new Set((rsvpRows ?? []).map((r) => r.party_id))].filter((id) => !organizedIds.has(id));
-    if (rsvpIds.length) {
-      const { data: aData } = await supabase
-        .from('party')
-        .select('id, title, description, date, venue, status, is_test')
-        .in('id', rsvpIds);
-      asistoParties = aData ?? [];
     }
 
     const venueIds = [...new Set([...parties, ...playParties, ...asistoParties].map((p) => p.venue).filter(Boolean))];
