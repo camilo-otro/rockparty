@@ -10,43 +10,44 @@ export const ssr = true;
 export const load: PageLoad = async ({ params }) => {
   const id = Number(params.id);
 
-  const { data: party } = await supabase
-    .from('party')
-    .select('id, title, date, description, venue, status, is_test')
-    .eq('id', id)
-    .maybeSingle();
-
-  let venue: { name: string | null; address: string | null } | null = null;
-  let songs: string[] = [];
-  let songCount = 0;
-  let musicianCount = 0;
-  let rsvpCount = 0;
-
-  if (party) {
-    if (party.venue != null) {
-      const { data: v } = await supabase
-        .from('venue').select('name, address').eq('id', party.venue).maybeSingle();
-      venue = v;
-    }
-    const { data: perfs } = await supabase
+  // ONE wave (#89, see #84). This load blocks the flyer's first byte — it's the
+  // page a stranger opens from a shared link, so serial round trips here are the
+  // most expensive in the app. Both real dependencies are gone via embeds:
+  // the venue rides along on the party row, and the signups ride along on the
+  // performances (which is what made this a 5-hop chain).
+  //
+  // RLS applies to embedded rows exactly as it did to the separate queries, so
+  // an anon crawler still sees only what the policies allow.
+  const [partyRes, perfRes, rsvpRes] = await Promise.all([
+    supabase
+      .from('party')
+      // Aliased so the embed doesn't shadow the scalar `party.venue` column.
+      .select('id, title, date, description, venue, status, is_test, venue_ref:venue ( name, address )')
+      .eq('id', id)
+      .maybeSingle(),
+    supabase
       .from('performance')
-      .select('id, order, song ( title )')
+      .select('id, order, song ( title ), performance_user ( user_id, status )')
       .eq('party', id)
-      .order('order', { ascending: true });
-    const rows = perfs ?? [];
-    songCount = rows.length;
-    songs = rows.map((r: any) => r.song?.title).filter(Boolean).slice(0, 5);
+      .order('order', { ascending: true }),
+    supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', id)
+  ]);
 
-    const perfIds = rows.map((r: any) => r.id);
-    if (perfIds.length) {
-      const { data: appr } = await supabase
-        .from('performance_user').select('user_id').eq('status', 'approved').in('performance_id', perfIds);
-      musicianCount = new Set((appr ?? []).map((a: any) => a.user_id)).size;
-    }
-    const { count } = await supabase
-      .from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', id);
-    rsvpCount = count ?? 0;
+  const party = partyRes.data;
+  // A party the anon/current role can't SELECT means the flyer falls back to the
+  // generic brand card — don't report counts for a toque we can't show.
+  if (!party) {
+    return { party: null, venue: null, songs: [] as string[], songCount: 0, musicianCount: 0, rsvpCount: 0 };
   }
 
-  return { party, venue, songs, songCount, musicianCount, rsvpCount };
+  const venue = ((party as any).venue_ref ?? null) as { name: string | null; address: string | null } | null;
+  const rows = (perfRes.data ?? []) as any[];
+  const songs = rows.map((r) => r.song?.title).filter(Boolean).slice(0, 5) as string[];
+  // Status is filtered here rather than on the embed: it's a handful of rows per
+  // setlist, and it keeps the single round trip.
+  const musicianCount = new Set(
+    rows.flatMap((r) => (r.performance_user ?? []).filter((s: any) => s.status === 'approved').map((s: any) => s.user_id))
+  ).size;
+
+  return { party, venue, songs, songCount: rows.length, musicianCount, rsvpCount: rsvpRes.count ?? 0 };
 };
