@@ -34,47 +34,40 @@
 
   onMount(async () => {
     const id = page.params.id;
-    const { data, error: err } = await supabase.from('venue').select('*').eq('id', Number(id)).single();
-    if (err) {
-      error = err.message;
-    } else {
-      venue = data;
-      
-      // Fetch venue type name
-      if (venue.venue_type) {
-        const { data: venueTypeData } = await supabase.from('venue_type').select('name').eq('id', venue.venue_type).single();
-        venueType = venueTypeData;
-      }
-      
-      // Fetch venue admins
-      const { data: adminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id));
-      venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
-
-      // Fetch this venue's equipment (with quantity + description)
-      const { data: equipData } = await supabase.from('venue_equipment').select('quantity, notes, equipment(name)').eq('venue_id', Number(id));
-      equipment = (equipData ?? [])
-        .map((r: any) => ({ name: r.equipment?.name, quantity: r.quantity, notes: r.notes }))
-        .filter((e: any) => e.name);
-
-      // Fetch this venue's upcoming toques (public statuses, future-dated)
-      const { data: partyData } = await supabase
-        .from('party')
+    // ONE wave (#88, see #84). Only the venue-type name ever depended on the
+    // venue row, and PostgREST can embed that over the FK — so nothing here has
+    // to wait for anything else. Aliased (`type_ref`) so the embed doesn't
+    // shadow the scalar `venue.venue_type` column the template still reads.
+    const [venueRes, adminRes, equipRes, partyRes, pendingRes] = await Promise.all([
+      supabase.from('venue').select('*, type_ref:venue_type(name)').eq('id', Number(id)).single(),
+      supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id)),
+      supabase.from('venue_equipment').select('quantity, notes, equipment(name)').eq('venue_id', Number(id)),
+      supabase.from('party')
         .select('id, title, date, venue, is_test')
         .eq('venue', Number(id))
         .in('status', ['confirmed', 'live'])
         .gte('date', todayStr)
-        .order('date', { ascending: true });
-      upcomingParties = partyData ?? [];
-
+        .order('date', { ascending: true }),
       // Pending-approval queue (only venue admins can read pending_venue toques
-      // for this venue, per the party SELECT policy).
-      const { data: pendingData } = await supabase
-        .from('party')
+      // for this venue, per the party SELECT policy — non-admins just get [] ).
+      supabase.from('party')
         .select('id, title, date, venue, is_test')
         .eq('venue', Number(id))
         .eq('status', 'pending_venue')
-        .order('date', { ascending: true });
-      pendingParties = pendingData ?? [];
+        .order('date', { ascending: true })
+    ]);
+
+    if (venueRes.error) {
+      error = venueRes.error.message;
+    } else {
+      venue = venueRes.data;
+      venueType = (venueRes.data as any)?.type_ref ?? null;
+      venueAdmins = (adminRes.data ?? []).map((a: any) => a.user_id);
+      equipment = (equipRes.data ?? [])
+        .map((r: any) => ({ name: r.equipment?.name, quantity: r.quantity, notes: r.notes }))
+        .filter((e: any) => e.name);
+      upcomingParties = partyRes.data ?? [];
+      pendingParties = pendingRes.data ?? [];
     }
     user.subscribe(u => {
       currentUserId = u?.id ?? null;
