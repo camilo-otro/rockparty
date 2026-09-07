@@ -29,6 +29,7 @@
   //
   // `completed` still forces past regardless of date — that status is set by
   // running a show to the end, and its date is typically today.
+  const isCancelled = (p: any) => p.status === 'cancelled';
   const isInProgress = (p: any) => IN_PROGRESS.includes(p.status);
   const isPast = (p: any) => p.status === 'completed' || String(p.date) < todayStr;
 
@@ -107,16 +108,26 @@
   $: misToco = keepTest(playParties, $showTest);
   $: misAsisto = keepTest(asistoParties, $showTest);
 
+  // Cancelled is its own bucket, sorted newest-first and rendered last in each
+  // group. A cancelled toque isn't "upcoming" (it isn't happening) and isn't
+  // really "past" either (it may be months away) — and either way it's the least
+  // relevant thing on the page, so it gets its own de-emphasised list at the
+  // bottom rather than diluting the two that matter. isCancelled is checked
+  // FIRST everywhere so a cancelled toque appears exactly once.
+  //
   // In-progress first (the toques that are otherwise unreachable), then upcoming, then past.
-  $: enProceso = misToques.filter(isInProgress).sort(byDateAsc);
-  $: proximos = misToques.filter((p) => !isInProgress(p) && !isPast(p)).sort(byDateAsc);
-  $: pasados = misToques.filter((p) => !isInProgress(p) && isPast(p)).sort(byDateDesc);
+  $: enProceso = misToques.filter((p) => !isCancelled(p) && isInProgress(p)).sort(byDateAsc);
+  $: proximos = misToques.filter((p) => !isCancelled(p) && !isInProgress(p) && !isPast(p)).sort(byDateAsc);
+  $: pasados = misToques.filter((p) => !isCancelled(p) && !isInProgress(p) && isPast(p)).sort(byDateDesc);
+  $: cancelados = misToques.filter(isCancelled).sort(byDateDesc);
   // "Toco" toques: upcoming first, then past (drafts you can't see aren't here).
-  $: tocoProximos = misToco.filter((p) => !isPast(p)).sort(byDateAsc);
-  $: tocoPasados = misToco.filter((p) => isPast(p)).sort(byDateDesc);
+  $: tocoProximos = misToco.filter((p) => !isCancelled(p) && !isPast(p)).sort(byDateAsc);
+  $: tocoPasados = misToco.filter((p) => !isCancelled(p) && isPast(p)).sort(byDateDesc);
+  $: tocoCancelados = misToco.filter(isCancelled).sort(byDateDesc);
   // "Asisto" toques (RSVP): upcoming first, then past.
-  $: asistoProximos = misAsisto.filter((p) => !isPast(p)).sort(byDateAsc);
-  $: asistoPasados = misAsisto.filter((p) => isPast(p)).sort(byDateDesc);
+  $: asistoProximos = misAsisto.filter((p) => !isCancelled(p) && !isPast(p)).sort(byDateAsc);
+  $: asistoPasados = misAsisto.filter((p) => !isCancelled(p) && isPast(p)).sort(byDateDesc);
+  $: asistoCancelados = misAsisto.filter(isCancelled).sort(byDateDesc);
   $: hasOrganizo = misToques.length > 0;
   $: hasToco = misToco.length > 0;
   $: hasAsisto = misAsisto.length > 0;
@@ -171,6 +182,14 @@
             {/each}
           </ul>
         {/if}
+        {#if cancelados.length}
+          <h3 class="text-xl text-cold-light/60 mx-4 mb-2">CANCELADOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each cancelados as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} />
+            {/each}
+          </ul>
+        {/if}
       {/if}
 
       {#if hasToco}
@@ -179,7 +198,7 @@
           <h3 class="text-xl text-white mx-4 mb-2">PRÓXIMOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each tocoProximos as party}
-              <PartyListItem {party} venueName={venueName(party.venue)} showStatus noteBadge={signupBadgeByParty[party.id]} />
+              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
             {/each}
           </ul>
         {/if}
@@ -187,7 +206,15 @@
           <h3 class="text-xl text-white mx-4 mb-2">PASADOS</h3>
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each tocoPasados as party}
-              <PartyListItem {party} venueName={venueName(party.venue)} showStatus noteBadge={signupBadgeByParty[party.id]} />
+              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
+            {/each}
+          </ul>
+        {/if}
+        {#if tocoCancelados.length}
+          <h3 class="text-xl text-cold-light/60 mx-4 mb-2">CANCELADOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each tocoCancelados as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} noteBadge={signupBadgeByParty[party.id]} />
             {/each}
           </ul>
         {/if}
@@ -208,6 +235,14 @@
           <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
             {#each asistoPasados as party}
               <PartyListItem {party} venueName={venueName(party.venue)} showStatus />
+            {/each}
+          </ul>
+        {/if}
+        {#if asistoCancelados.length}
+          <h3 class="text-xl text-cold-light/60 mx-4 mb-2">CANCELADOS</h3>
+          <ul class="m-4 mt-0 rounded-lg overflow-clip p-0 space-y-[1px]">
+            {#each asistoCancelados as party}
+              <PartyListItem {party} venueName={venueName(party.venue)} />
             {/each}
           </ul>
         {/if}
