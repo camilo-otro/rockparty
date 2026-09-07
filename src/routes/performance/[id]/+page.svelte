@@ -173,10 +173,8 @@
       }, { onConflict: 'performance_id,user_id,instrument_id' }).select('status');
       // The trigger can reject (e.g. invite-only) or set status to 'pending'.
       if (e) { reportError(e); return; }
-      // Name the undo in the toast: signing up is one tap now, so the way back
-      // out should be as easy to find as the way in.
-      if (data?.[0]?.status === 'pending') toastInfo(`Solicitud enviada para ${instrument.name}. Puedes cancelarla arriba.`);
-      else toastSuccess(`Te inscribiste en ${instrument.name}. Puedes quitarte arriba.`);
+      if (data?.[0]?.status === 'pending') toastInfo(`Solicitud enviada para ${instrument.name}.`);
+      else toastSuccess(`Te inscribiste en ${instrument.name}.`);
       await refreshSignedUpUsers();
     } finally {
       signingUp = false;
@@ -351,16 +349,16 @@
             {#if availableInstruments.length}
               <!-- Instruments inline rather than behind a modal: the modal WAS the
                    confusion — the only instrument list on screen was the YouTube
-                   one. No confirm step, because undo is already one tap on your
-                   own row in Participantes, and a confirm in front of the primary
-                   action is the opposite of streamlining it. -->
+                   one. No confirm step: undo is one tap on your own row in
+                   Participantes, and a confirm in front of the primary action is
+                   the opposite of streamlining it. -->
               <div class="bg-base-950 rounded-lg p-4 mb-4 flex flex-col gap-3">
                 <div>
                   <div class="text-white">¿Qué vas a tocar?</div>
                   <p class="text-cold-light text-xs mt-0.5 leading-snug">
                     {autoApprove
-                      ? 'Toca tu instrumento y quedas inscrito. Si te equivocas, puedes quitarte arriba.'
-                      : 'Toca tu instrumento para enviar tu solicitud — el organizador la aprueba.'}
+                      ? 'Toca tu instrumento para inscribirte.'
+                      : 'Toca tu instrumento para solicitar — el organizador aprueba.'}
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
