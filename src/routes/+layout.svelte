@@ -49,13 +49,22 @@
   }
 
   onMount(() => {
-    const { data } = supabase.auth.onAuthStateChange((event, _session) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        invalidate('supabase:auth')
-        refreshDev();
-        if (event === 'SIGNED_IN') { refreshUnread(); subscribeUnread(); }
-        else unsubscribeUnread();
-      }
+    // Supabase re-emits SIGNED_IN on its own (token refresh, tab focus, and after
+    // any auth call) — measured firing on an idle page every few seconds. Acting
+    // on every one meant 5 wasted requests a pop, forever, and refreshDev()'s
+    // getUser() call from in here triggered the NEXT SIGNED_IN: a self-sustaining
+    // loop. Two fixes: only react when the signed-in user actually CHANGES, and
+    // take the uid from the session instead of asking the auth client for it.
+    let lastUid: string | null = session?.user?.id ?? null;
+    const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') return;
+      const uid = newSession?.user?.id ?? null;
+      if (uid === lastUid) return;   // same user as before: nothing to redo
+      lastUid = uid;
+      invalidate('supabase:auth')
+      refreshDev(uid);
+      if (uid) { refreshUnread(); subscribeUnread(); }
+      else unsubscribeUnread();
     })
 
     document.addEventListener('mousedown', handleClickOutside);

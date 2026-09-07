@@ -7,9 +7,17 @@ import { supabase } from '$lib/supabaseClient';
 // editor), so this is a display convenience — RLS is the real boundary.
 export const isDev = writable(false);
 
-export async function refreshDev(): Promise<void> {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth?.user?.id;
+// Pass `knownUid` when the caller already has the user id — notably from an
+// onAuthStateChange session. Calling supabase.auth.getUser() from inside that
+// callback re-enters the auth client and makes it emit another SIGNED_IN, which
+// is a self-sustaining loop (Supabase's own docs warn against calling their
+// methods from that callback). Omit it and we fetch, which is fine off that path.
+export async function refreshDev(knownUid?: string | null): Promise<void> {
+  let uid = knownUid ?? null;
+  if (uid === undefined || uid === null) {
+    const { data: auth } = await supabase.auth.getUser();
+    uid = auth?.user?.id ?? null;
+  }
   if (!uid) {
     isDev.set(false);
     return;
