@@ -563,12 +563,14 @@
   let rsvpBusy = false;
   async function loadRsvp() {
     if (!party?.id) return;
-    const { count } = await supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', party.id);
-    rsvpCount = count ?? 0;
-    if (currentUserId) {
-      const { data } = await supabase.from('party_rsvp').select('user_id').eq('party_id', party.id).eq('user_id', currentUserId).maybeSingle();
-      iAmGoing = !!data;
-    }
+    const [countRes, mineRes] = await Promise.all([
+      supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', party.id),
+      currentUserId
+        ? supabase.from('party_rsvp').select('user_id').eq('party_id', party.id).eq('user_id', currentUserId).maybeSingle()
+        : Promise.resolve({ data: null })
+    ]);
+    rsvpCount = countRes.count ?? 0;
+    iAmGoing = !!mineRes.data;
   }
   async function toggleRsvp() {
     if (!currentUserId || !party?.id || rsvpBusy) return;
@@ -621,17 +623,23 @@
     // Co-organizers are named in the header and may appear nowhere else on the
     // page, so their profiles have to be fetched here too.
     userIds.push(...partyAdmins);
-    const { data: songData } = songIds.length ? await supabase.from('song').select('id, title, artist, duration').in('id', songIds) : { data: [] as any[] };
-    const { data: perfUsers } = perfs.length ? await supabase.from('performance_user').select('user_id, instrument_id, performance_id, status, band_id').in('performance_id', perfs.map((p) => p.id)) : { data: [] as any[] };
     // Band-owned songs (#74): resolve band names for the setlist rows.
     const bandIds = [...new Set(perfs.map((p) => p.band_id).filter((x): x is number => x != null))];
-    const { data: bandData } = bandIds.length ? await supabase.from('band').select('id, name, avatar_url').in('id', bandIds) : { data: [] as any[] };
+    // One wave, not three: these depend on the performance rows but not on each
+    // other. Each round trip to Supabase is ~175ms of pure latency, so serialising
+    // them cost half a second for nothing.
+    const [songRes, perfUserRes, bandRes] = await Promise.all([
+      songIds.length ? supabase.from('song').select('id, title, artist, duration').in('id', songIds) : Promise.resolve({ data: [] as any[] }),
+      perfs.length ? supabase.from('performance_user').select('user_id, instrument_id, performance_id, status, band_id').in('performance_id', perfs.map((p) => p.id)) : Promise.resolve({ data: [] as any[] }),
+      bandIds.length ? supabase.from('band').select('id, name, avatar_url').in('id', bandIds) : Promise.resolve({ data: [] as any[] })
+    ]);
+    const songData = songRes.data;
+    const perfUsers = perfUserRes.data;
+    const bandData = bandRes.data;
     const bandsById: Record<number, any> = Object.fromEntries((bandData ?? []).map((b: any) => [b.id, b]));
     const performerUserIds = [...new Set((perfUsers ?? []).map((p) => p.user_id))];
     const allUserIds = [...new Set([...userIds, ...performerUserIds])];
     const { data: userData } = allUserIds.length ? await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds) : { data: [] as any[] };
-    const { data: instrumentData } = await supabase.from('instrument').select('id, name');
-    instrumentsById = Object.fromEntries((instrumentData ?? []).map((i: any) => [i.id, i.name]));
     songs = songData ?? [];
     users = userData ?? [];
     usersLoaded = true;
@@ -725,45 +733,59 @@
     unsubscribeUser = user.subscribe(u => {
       currentUserId = u?.id ?? null;
     });
-    const id = page.params.id;
+    const pid = Number(page.params.id);
+    // This page used to make FOURTEEN sequential round trips (~2.9s measured), each
+    // one ~175ms of pure latency waiting on the last. Most of them never depended
+    // on each other. Batched into dependency waves below.
+    //
+    // Wave 1: everything that needs only the party id. `instrument` is a static
+    // lookup; the party/admin rows gate the rest.
     // maybeSingle: a toque hidden by RLS is "not found", not a 406 whose raw
     // English message would land in front of the user.
-    const { data, error: err } = await supabase.from('party').select('*').eq('id', Number(id)).maybeSingle();
+    const [partyRes, adminRes, instrRes] = await Promise.all([
+      supabase.from('party').select('*').eq('id', pid).maybeSingle(),
+      supabase.from('party_admin').select('user_id, display_order, hidden').eq('party_id', pid),
+      supabase.from('instrument').select('id, name')
+    ]);
+    const { data, error: err } = partyRes;
+    const adminData = adminRes.data;
     party = data;
-    // Fetch party admins
-    const { data: adminData } = await supabase.from('party_admin').select('user_id, display_order, hidden').eq('party_id', Number(id));
-    partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
+    partyAdmins = adminData ? adminData.map((a: any) => a.user_id) : [];
     coOrganizers = adminData ?? [];
+    instrumentsById = Object.fromEntries((instrRes.data ?? []).map((i: any) => [i.id, i.name]));
+
     if (err) {
       error = 'No se pudo cargar el toque. Revisa tu conexión e intenta de nuevo.';
     } else if (!data) {
       error = 'No encontramos este toque, o no tienes acceso. ¿Iniciaste sesión?';
     } else {
       party = data;
-      if (party?.venue) {
-        const { data: venueData, error: venueErr } = await supabase.from('venue').select('id, name, address, requires_approval, created_by').eq('id', party.venue).single();
-        if (!venueErr) {
-          venue = venueData;
-        }
-        // Load the venue's admins so we can offer approve/decline to them.
-        const { data: vAdminData } = await supabase.from('venue_admin').select('user_id').eq('venue_id', party.venue);
-        venueAdmins = vAdminData ? vAdminData.map(a => a.user_id) : [];
-      }
-      // Load the setlist (extracted into loadSetlist so Realtime can reload it).
-      await loadSetlist(Number(id));
-      // Applause (#38) tallies. Whether THIS viewer may clap is re-checked
-      // whenever the toque's status changes — see refreshCanApplaud below.
-      await loadApplause(Number(id));
+      // Wave 2: the venue pair, the setlist, applause, RSVP and the viewer's own
+      // instruments all in flight together — none of them needs another's result.
+      // loadSetlist internally does its own two waves.
+      await Promise.all([
+        party?.venue
+          ? Promise.all([
+              supabase.from('venue').select('id, name, address, requires_approval, created_by').eq('id', party.venue).maybeSingle(),
+              supabase.from('venue_admin').select('user_id').eq('venue_id', party.venue)
+            ]).then(([venueRes, vAdminRes]) => {
+              if (!venueRes.error) venue = venueRes.data;
+              venueAdmins = (vAdminRes.data ?? []).map((a: any) => a.user_id);
+            })
+          : Promise.resolve(),
+        loadSetlist(pid),
+        loadApplause(pid),
+        loadRsvp(),
+        // The viewer's own instruments (#32) — powers the personalized gap alert
+        // + the "you could play here" highlight on open slots.
+        currentUserId
+          ? supabase.from('profile_instrument').select('instrument_id').eq('profile_id', currentUserId)
+              .then(({ data: pi }) => { myInstrumentIds = (pi ?? []).map((r: any) => r.instrument_id); })
+          : Promise.resolve()
+      ]);
       loadingPerformances = false;
-      subscribeSetlist(Number(id));
+      subscribeSetlist(pid);
     }
-    // The viewer's own instruments (#32) — powers the personalized gap alert +
-    // the "you could play here" highlight on open slots.
-    if (currentUserId) {
-      const { data: pi } = await supabase.from('profile_instrument').select('instrument_id').eq('profile_id', currentUserId);
-      myInstrumentIds = (pi ?? []).map((r: any) => r.instrument_id);
-    }
-    await loadRsvp();
     loading = false;
   });
 
