@@ -726,14 +726,18 @@
       currentUserId = u?.id ?? null;
     });
     const id = page.params.id;
-    const { data, error: err } = await supabase.from('party').select('*').eq('id', Number(id)).single();
+    // maybeSingle: a toque hidden by RLS is "not found", not a 406 whose raw
+    // English message would land in front of the user.
+    const { data, error: err } = await supabase.from('party').select('*').eq('id', Number(id)).maybeSingle();
     party = data;
     // Fetch party admins
     const { data: adminData } = await supabase.from('party_admin').select('user_id, display_order, hidden').eq('party_id', Number(id));
     partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
     coOrganizers = adminData ?? [];
     if (err) {
-      error = err.message;
+      error = 'No se pudo cargar el toque. Revisa tu conexión e intenta de nuevo.';
+    } else if (!data) {
+      error = 'No encontramos este toque, o no tienes acceso. ¿Iniciaste sesión?';
     } else {
       party = data;
       if (party?.venue) {

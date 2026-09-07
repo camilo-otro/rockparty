@@ -49,8 +49,13 @@
   function nicknameOf(id: string) { return usersById[id]?.nickname ?? 'Anónimo'; }
 
   async function load() {
-    const { data: p, error: pe } = await supabase.from('party').select('*').eq('id', partyId).single();
-    if (pe || !p) { error = pe?.message ?? 'No se encontró el toque.'; loading = false; return; }
+    // maybeSingle, not single: a toque you cannot see (RLS) returns zero rows,
+    // and .single() turns that into a 406 whose message is raw English
+    // PostgREST — "Cannot coerce the result to a single JSON object" — which is
+    // what a logged-out organiser opening a console link actually saw.
+    const { data: p, error: pe } = await supabase.from('party').select('*').eq('id', partyId).maybeSingle();
+    if (pe) { error = 'No se pudo cargar el toque. Revisa tu conexión e intenta de nuevo.'; loading = false; return; }
+    if (!p) { error = 'No encontramos este toque, o no tienes acceso. ¿Iniciaste sesión?'; loading = false; return; }
     party = p;
     const { data: admins } = await supabase.from('party_admin').select('user_id').eq('party_id', partyId);
     partyAdmins = (admins ?? []).map((a: any) => a.user_id);
