@@ -20,7 +20,6 @@
     let added: any[] = [];
     // Sign up as a band (#73): '' = open jam; otherwise a band id. Set ONCE, applies
     // to every song added this session (#77) — the win for a band's setlist.
-    let myBands: { id: number; name: string }[] = [];
     let signupChoice = '';
     let bandsLoaded = false;
     let partyIsTest = false;
@@ -67,18 +66,25 @@
       return n;
     })();
 
-    async function loadMyBands(uid: string) {
+    // Raw rows, filtered reactively. The FETCH never needed partyIsTest — only the
+    // filter did — so waiting for the party row before asking for bands put a
+    // needless round trip in series (#87, see #84).
+    let myBandRows: any[] = [];
+    async function loadMyBandRows(uid: string) {
       const { data } = await supabase
         .from('band_member')
         .select('role, band ( id, name, who_can_sign_up, is_test )')
         .eq('user_id', uid);
-      myBands = (data ?? [])
-        .filter((r: any) => r.band && (r.band.who_can_sign_up === 'members' || r.role === 'manager'))
-        // A test band can't play a real event (RLS/RPC enforce it too) — hide the option (#76).
-        .filter((r: any) => partyIsTest || !r.band.is_test)
-        .map((r: any) => ({ id: r.band.id, name: r.band.name }));
+      myBandRows = data ?? [];
     }
-    $: if (userId && partyLoaded && !bandsLoaded) { bandsLoaded = true; loadMyBands(userId); }
+    $: myBands = myBandRows
+      .filter((r: any) => r.band && (r.band.who_can_sign_up === 'members' || r.role === 'manager'))
+      // A test band can't play a real event (RLS/RPC enforce it too) — hide the option (#76).
+      .filter((r: any) => partyIsTest || !r.band.is_test)
+      .map((r: any) => ({ id: r.band.id, name: r.band.name }));
+    // No longer gated on partyLoaded: this now races the party fetch instead of
+    // queueing behind it.
+    $: if (userId && !bandsLoaded) { bandsLoaded = true; loadMyBandRows(userId); }
 
     onMount(async () => {
       unsubscribeUser = user.subscribe(u => {
@@ -87,9 +93,12 @@
       });
       partyId = page.url.searchParams.get('partyId') ?? null;
       if (partyId) {
-        const { data } = await supabase.from('party').select('is_test').eq('id', Number(partyId)).maybeSingle();
-        partyIsTest = data?.is_test ?? false;
-        await loadExisting(partyId);
+        // Independent of each other: one wave, not two.
+        const [partyRes] = await Promise.all([
+          supabase.from('party').select('is_test').eq('id', Number(partyId)).maybeSingle(),
+          loadExisting(partyId)
+        ]);
+        partyIsTest = partyRes.data?.is_test ?? false;
       }
       partyLoaded = true;
     });
