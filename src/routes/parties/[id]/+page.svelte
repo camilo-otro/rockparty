@@ -138,6 +138,20 @@
     openLineups = next;
   }
 
+  // The window opens when the show starts — which happens over Realtime while
+  // attendees already have this page open. Checking once on mount left them with
+  // a Now Playing banner and no clap control until they reloaded, on exactly the
+  // night the feature exists for. Re-check whenever the status moves.
+  let applauseCheckedFor: string | null = null;
+  async function refreshCanApplaud(pid: number) {
+    const { data } = await supabase.rpc('can_applaud', { p_party: pid });
+    canApplaud = !!data;
+  }
+  $: if (party?.id && party.status && party.status !== applauseCheckedFor) {
+    applauseCheckedFor = party.status;
+    refreshCanApplaud(party.id);
+  }
+
   // Toggle: a clap is inserted or deleted, never edited. The unique indexes make
   // re-clapping clean, and RLS re-checks the window and target server-side.
   async function toggleClap(key: string, mine: number | null, row: Record<string, any>) {
@@ -733,11 +747,9 @@
       }
       // Load the setlist (extracted into loadSetlist so Realtime can reload it).
       await loadSetlist(Number(id));
-      // Applause (#38): tallies, plus whether THIS viewer may clap. RLS is the
-      // real gate; this only decides whether to offer the control.
+      // Applause (#38) tallies. Whether THIS viewer may clap is re-checked
+      // whenever the toque's status changes — see refreshCanApplaud below.
       await loadApplause(Number(id));
-      const { data: mayClap } = await supabase.rpc('can_applaud', { p_party: Number(id) });
-      canApplaud = !!mayClap;
       loadingPerformances = false;
       subscribeSetlist(Number(id));
     }
