@@ -30,14 +30,16 @@
             isAuthenticated = !!u?.id;
             userId = u?.id ?? null;
         });
-        // Fetch venue types + equipment lookup
+        // Two independent lookup tables — one wave, not two (#91, see #84).
         const { supabase } = await import('$lib/supabaseClient');
-        const { data: typesData, error: typesError } = await supabase.from('venue_type').select('id, name');
+        const [{ data: typesData, error: typesError }, { data: equipData }] = await Promise.all([
+            supabase.from('venue_type').select('id, name'),
+            supabase.from('equipment').select('id, name, category').order('id')
+        ]);
         if (!typesError && typesData) {
             venueTypes = typesData;
             if (venueTypes.length > 0) selectedVenueType = venueTypes[0].id;
         }
-        const { data: equipData } = await supabase.from('equipment').select('id, name, category').order('id');
         equipmentOptions = equipData ?? [];
     });
 

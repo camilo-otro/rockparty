@@ -60,19 +60,23 @@
   let filteredOptions: any[] = [];
 
   onMount(async () => {
-    // Fetch all users for autocomplete
-    const { data: users } = await supabase.from('profile').select('id, nickname');
+    // Neither of these needs the other — one wave (#91, see #84). This form
+    // mounts on every party create/edit page, so the chain was paid four times
+    // over.
+    const [{ data: users }, { data: sched }] = await Promise.all([
+      // Everyone, for the admin autocomplete.
+      supabase.from('profile').select('id, nickname'),
+      // Upcoming toques that occupy a venue, for the conflict warning (#54).
+      supabase.from('party')
+        .select('id, venue, date')
+        .in('status', ['confirmed', 'pending_venue', 'live'])
+        .gte('date', todayStr)
+    ]);
     userOptions = users ?? [];
     // Pre-fill admins if editing
     if (initialAdmins && initialAdmins.length > 0) {
       admins = userOptions.filter(u => initialAdmins.includes(u.id));
     }
-    // Upcoming toques that occupy a venue, for the conflict warning (#54).
-    const { data: sched } = await supabase
-      .from('party')
-      .select('id, venue, date')
-      .in('status', ['confirmed', 'pending_venue', 'live'])
-      .gte('date', todayStr);
     scheduled = sched ?? [];
   });
 

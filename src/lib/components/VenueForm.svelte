@@ -90,19 +90,21 @@
   let notesSuggestions: Record<number, string[]> = {};
 
   onMount(async () => {
-    // Fetch all users for autocomplete
-    const { data: users } = await supabase.from('profile').select('id, nickname');
+    // The user list didn't need to go before the suggestion pool — fold it into
+    // the same wave (#91, see #84).
+    const [{ data: users }, { data: notesData }, { data: sugData }] = await Promise.all([
+      // Everyone, for the admin autocomplete.
+      supabase.from('profile').select('id, nickname'),
+      // The description-suggestion pool per equipment: real usage ranked by
+      // frequency first, then the curated catalog (#49) fills the rest.
+      supabase.from('venue_equipment').select('equipment_id, notes').not('notes', 'is', null),
+      supabase.from('equipment_suggestion').select('equipment_id, label')
+    ]);
     userOptions = users ?? [];
     // Pre-fill admins if editing
     if (initialAdmins && initialAdmins.length > 0) {
       admins = userOptions.filter(u => initialAdmins.includes(u.id));
     }
-    // Build the description-suggestion pool per equipment: real usage ranked by
-    // frequency first, then the curated catalog (#49) fills the rest.
-    const [{ data: notesData }, { data: sugData }] = await Promise.all([
-      supabase.from('venue_equipment').select('equipment_id, notes').not('notes', 'is', null),
-      supabase.from('equipment_suggestion').select('equipment_id, label')
-    ]);
     const counts: Record<number, Record<string, number>> = {};
     for (const r of notesData ?? []) {
       const n = (r.notes ?? '').trim();

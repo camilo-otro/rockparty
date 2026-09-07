@@ -105,9 +105,11 @@ onMount(async () => {
 
   const [{ data: partyData }, { data: venueData, error: venueErr }, { data: adminData }] =
     await Promise.all([
-      supabase.from('party').select('*').eq('id', Number(id)).single(),
+      // Both created_by and party_admin.user_id have FKs to public.profile, so
+      // the names/avatars ride along instead of costing a second hop (#91, #84).
+      supabase.from('party').select('*, creator:created_by ( id, nickname, avatarUrl:avatar_url )').eq('id', Number(id)).single(),
       supabase.from('venue').select('id, name'),
-      supabase.from('party_admin').select('user_id, display_order, hidden').eq('party_id', Number(id))
+      supabase.from('party_admin').select('user_id, display_order, hidden, profile:user_id ( id, nickname, avatarUrl:avatar_url )').eq('party_id', Number(id))
     ]);
   venues = venueData ?? [];
   if (venueErr) errorVenues = venueErr.message;
@@ -118,12 +120,12 @@ onMount(async () => {
     .filter((a: any) => a.user_id !== partyData?.created_by)
     .sort((a: any, b: any) => (a.display_order ?? 9999) - (b.display_order ?? 9999)) as Organizer[];
   // Names/avatars for the organizer list — the creator plus every co-organizer.
-  const ids = [...new Set([partyData?.created_by, ...partyAdmins].filter(Boolean))] as string[];
-  if (ids.length) {
-    const { data: profileData } = await supabase
-      .from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', ids);
-    profiles = profileData ?? [];
-  }
+  // Deduped through a map because the creator usually ALSO has a party_admin row.
+  const byId = new Map<string, any>();
+  for (const a of (adminData ?? []) as any[]) if (a.profile) byId.set(a.profile.id, a.profile);
+  const creator = (partyData as any)?.creator;
+  if (creator) byId.set(creator.id, creator);
+  profiles = [...byId.values()];
   loadingVenues = false;
   party = partyData; // set last so the gate sees user + admins already resolved
 });
