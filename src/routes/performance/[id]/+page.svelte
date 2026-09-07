@@ -282,7 +282,7 @@
 <div class="mt-8">
   <div class="mb-4">
     <div class="flex flex-row items-center justify-between">
-      <a href="/parties/{performance?.party}" class="text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> VOLVER</a>
+      <a href="/parties/{performance?.party}#setlist" class="text-cold-light flex flex-row gap-2 mx-4 m-2"><ArrowLeft/> VOLVER</a>
       <button class="ml-auto flex items-center gap-1 bg-cold-base hover:bg-cold-light text-white rounded-lg px-3 py-1 mx-4" on:click={handleShare} title="Compartir">
         <Share2 size={18} /> Compartir
       </button>

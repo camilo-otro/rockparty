@@ -787,7 +787,26 @@
       subscribeSetlist(pid);
     }
     loading = false;
+    await scrollToSetlistIfRequested();
   });
+
+  // Coming back from "agregar canciones" or a song's own page, land on the
+  // SETLIST rather than the top of the toque — the next thing you want is to
+  // sign up for another song, and the header + description can be a full screen
+  // of scrolling in the way. Opt-in via #setlist so a normal visit still opens
+  // at the top.
+  let setlistEl: HTMLElement;
+  async function scrollToSetlistIfRequested() {
+    if (typeof window === 'undefined' || window.location.hash !== '#setlist') return;
+    // The setlist only exists in the DOM once `loading` is false.
+    await tick();
+    if (!setlistEl) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setlistEl.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    // Drop the hash so a later refresh doesn't re-jump — same housekeeping the
+    // flyer does with ?rsvp=1.
+    history.replaceState({}, '', window.location.pathname + window.location.search);
+  }
 
   onDestroy(() => {
     if (unsubscribeUser) unsubscribeUser();
@@ -980,7 +999,7 @@
         <Share2 class="w-5 h-5" />
       </button>
     </div>
-    <div class="flex items-center justify-between mt-4 mb-2">
+    <div bind:this={setlistEl} class="flex items-center justify-between mt-4 mb-2 scroll-mt-4">
       <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
       <!-- Edit mode covers removing a song as well as reordering, so it must be
            reachable with a single song too (reordering just has nothing to do),

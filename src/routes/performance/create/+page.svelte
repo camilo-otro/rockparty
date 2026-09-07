@@ -193,14 +193,14 @@
       added = added.filter((a) => a.perfId !== item.perfId);
     }
 
-    function done() { goto(`/parties/${partyId}`); }
+    function done() { goto(`/parties/${partyId}#setlist`); }
 
     function loginWithGoogle() {
       supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
     }
 </script>
 
-<a href={partyId ? `/parties/${partyId}` : '/parties'} class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
+<a href={partyId ? `/parties/${partyId}#setlist` : '/parties'} class="text-bold text-cold-light flex flex-row px-4"><ChevronLeft />VOLVER</a>
 <h2 class="text-yellow text-2xl px-5 py-2">AGREGA CANCIONES AL SETLIST</h2>
 
 {#if !isAuthenticated}
