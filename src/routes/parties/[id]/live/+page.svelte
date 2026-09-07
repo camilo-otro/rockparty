@@ -29,6 +29,10 @@
   // on a phone, on stage. Two-step rather than a modal — the console is
   // one-thumb by design.
   let confirmingEnd = false;
+  // Jumping is a detour, not a cursor move: the song plays now, the ones
+  // before it stay queued, and the next Siguiente goes back to the earliest
+  // pending one. That surprises people, so confirm and say so.
+  let pendingJump: number | null = null;
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
   $: ordered = [...perfs].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.id - b.id);
@@ -118,7 +122,10 @@
   const skip        = () => exec(() => supabase.rpc('skip_song', { p_party: partyId }), 'Marcada como no tocada.');
   const takeABreak  = () => exec(() => supabase.rpc('end_current_song', { p_party: partyId }), 'Pausa — nada sonando.');
   const undo        = () => exec(() => supabase.rpc('undo_last_move', { p_party: partyId }), 'Listo, volvimos atrás.');
-  const jumpTo      = (id: number) => exec(() => supabase.rpc('jump_to_song', { p_party: partyId, p_performance: id }));
+  const jumpTo      = async (id: number) => {
+    await exec(() => supabase.rpc('jump_to_song', { p_party: partyId, p_performance: id }));
+    pendingJump = null;
+  };
   const endShow     = async () => { await exec(() => supabase.rpc('end_show', { p_party: partyId }), 'Show terminado.'); confirmingEnd = false; };
 
   // Nothing has finished yet => nothing to undo. Keeps the button honest rather
@@ -244,22 +251,41 @@
 
         <div class="flex flex-col gap-2">
           <span class="text-xs uppercase tracking-widest text-cold-light">
-            {upcoming.length ? 'Faltan ' + upcoming.length + ' · toca una para saltar ahí' : 'No queda nada por tocar'}
+            {upcoming.length ? 'Faltan ' + upcoming.length + ' · toca una para adelantarla' : 'No queda nada por tocar'}
           </span>
           {#if upcoming.length}
             <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
               {#each upcoming as p, i (p.id)}
                 <li class="bg-base-900">
-                  <button type="button" on:click={() => jumpTo(p.id)} disabled={busy}
-                          class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-base-950 transition disabled:opacity-60">
-                    <span class="text-gray-400 text-xl w-6 shrink-0">{i + 1}</span>
-                    <div class="min-w-0 flex-1">
-                      <div class="text-yellow truncate">{songTitle(p)}</div>
-                      <div class="text-sm text-cold-light truncate">
-                        {songArtist(p)}{#if bandName(p)} · {bandName(p)}{/if}
+                  {#if pendingJump === p.id}
+                    <div class="px-4 py-3 flex flex-col gap-2">
+                      <div>
+                        <div class="text-yellow truncate">¿Adelantar "{songTitle(p)}"?</div>
+                        <p class="text-cold-light text-xs leading-snug mt-1">
+                          Sonará ahora. Después, Siguiente retoma por la primera pendiente — no se salta ninguna.
+                        </p>
+                      </div>
+                      <div class="flex items-center gap-3">
+                        <button type="button" on:click={() => jumpTo(p.id)} disabled={busy}
+                                class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-4 py-2.5 text-sm transition disabled:opacity-50">
+                          {busy ? 'Adelantando…' : 'Adelantar'}
+                        </button>
+                        <button type="button" on:click={() => (pendingJump = null)}
+                                class="text-cold-light hover:text-white text-sm px-3 py-2.5 transition">Volver</button>
                       </div>
                     </div>
-                  </button>
+                  {:else}
+                    <button type="button" on:click={() => (pendingJump = p.id)} disabled={busy}
+                            class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-base-950 transition disabled:opacity-60">
+                      <span class="text-gray-400 text-xl w-6 shrink-0">{i + 1}</span>
+                      <div class="min-w-0 flex-1">
+                        <div class="text-yellow truncate">{songTitle(p)}</div>
+                        <div class="text-sm text-cold-light truncate">
+                          {songArtist(p)}{#if bandName(p)} · {bandName(p)}{/if}
+                        </div>
+                      </div>
+                    </button>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -273,7 +299,23 @@
             <ul class="mt-2 flex flex-col gap-1">
               {#each donePerfs as p (p.id)}
                 <li>
-                  <button type="button" on:click={() => jumpTo(p.id)} disabled={busy}
+                  {#if pendingJump === p.id}
+                    <div class="flex flex-col gap-2 py-2">
+                      <div class="text-yellow text-sm truncate">¿Repetir "{songTitle(p)}"?</div>
+                      <p class="text-cold-light text-xs leading-snug">
+                        Sonará ahora. Después, Siguiente retoma por la primera pendiente.
+                      </p>
+                      <div class="flex items-center gap-3">
+                        <button type="button" on:click={() => jumpTo(p.id)} disabled={busy}
+                                class="flex-1 bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50">
+                          {busy ? 'Repitiendo…' : 'Repetir'}
+                        </button>
+                        <button type="button" on:click={() => (pendingJump = null)}
+                                class="text-cold-light hover:text-white text-sm px-3 py-2 transition">Volver</button>
+                      </div>
+                    </div>
+                  {:else}
+                  <button type="button" on:click={() => (pendingJump = p.id)} disabled={busy}
                           class="w-full text-left text-sm flex items-center gap-2 py-1 hover:text-white transition disabled:opacity-40 {p.live_state === 'skipped' ? 'text-cold-light/40' : 'text-cold-light/70'}">
                     {#if p.live_state === 'skipped'}
                       <Ban size={14} class="shrink-0" />
@@ -283,6 +325,7 @@
                     <span class="truncate">{songTitle(p)}</span>
                     {#if p.live_state === 'skipped'}<span class="text-xs shrink-0">no se tocó</span>{/if}
                   </button>
+                  {/if}
                 </li>
               {/each}
             </ul>
