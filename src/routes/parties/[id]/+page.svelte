@@ -2,7 +2,7 @@
   // Imports
   import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
+  import { goto, pushState } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy, Users, Radio } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
@@ -10,6 +10,7 @@
   import ShareModal from '$lib/components/ShareModal.svelte';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import ApplauseButton from '$lib/components/ApplauseButton.svelte';
+  import PerformanceDetail from '$lib/components/PerformanceDetail.svelte';
   import SongLineupApplause from '$lib/components/SongLineupApplause.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
   import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
@@ -790,6 +791,55 @@
     await scrollToSetlistIfRequested();
   });
 
+  // Shallow routing (#94). Opening a song used to navigate, which UNMOUNTED this
+  // page — so coming back re-ran onMount and refetched everything: 16 requests,
+  // ~1s, on every single signup. It was never a document reload (navigation is
+  // client-side already); it was a remount.
+  //
+  // pushState puts the song's URL in the address bar and renders the detail as an
+  // overlay instead, so this page stays mounted. Two things fall out of that:
+  // its state survives, and so does the realtime channel — which means a signup
+  // made in the overlay flows back into the setlist through the subscription that
+  // was already there, with no refetch on close at all.
+  //
+  // The <a href> is kept and only its plain-left-click is intercepted, so
+  // cmd/ctrl/middle-click still open a real tab and the URL stays shareable.
+  function openSong(e: MouseEvent, perfId: number) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    pushState(`/performance/${perfId}`, { perfId });
+  }
+
+  // Close = go back, so the history entry pushState created is consumed and the
+  // browser's own back button behaves identically to this button.
+  function closeSong() {
+    history.back();
+  }
+
+  // Lock the page behind the overlay so a scroll gesture doesn't run the setlist
+  // underneath it, and release it on close.
+  //
+  // This is an ACTION, not a `$:` statement, and that's deliberate. `page` comes
+  // from $app/state and is never reassigned — only its internal rune state
+  // changes — so in this legacy-mode component a `$:` reading `page.state` runs
+  // once at init and never again. (The template's {#if page.state.perfId} does
+  // work, because template expressions track rune reads; `$:` tracks variable
+  // NAMES.) Tying it to the overlay element's own lifecycle sidesteps the whole
+  // question and correctly releases on browser-back too, which no close handler
+  // of ours would see.
+  function lockScroll(_node: HTMLElement) {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return { destroy() { document.body.style.overflow = previous; } };
+  }
+
+  // Escape closes it, as any dialog should.
+  // <svelte:window> has to be top-level, so this is always bound and checks for
+  // itself whether the overlay is actually up.
+  function overlayKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && page.state.perfId) closeSong();
+  }
+
   // Coming back from "agregar canciones" or a song's own page, land on the
   // SETLIST rather than the top of the toque — the next thing you want is to
   // sign up for another song, and the header + description can be a full screen
@@ -1152,7 +1202,7 @@
               {:else}
                 {@const tally = songTally[perf.id]}
                 <div class="flex items-center gap-2">
-                  <a href={`/performance/${perf.id}`} class="block flex-1 min-w-0">
+                  <a href={`/performance/${perf.id}`} on:click={(e) => openSong(e, perf.id)} class="block flex-1 min-w-0">
                     <div class="flex items-center gap-2">
                       <span class="text-gray-400 text-3xl font-medium mr-2">{(perf.order ?? index) + 1}</span>
                       <div class="flex-1">
@@ -1311,3 +1361,22 @@
     </div>
   {/if}
 </div>
+
+<!-- Song detail as an overlay (#94). Rendered over this page rather than
+     replacing it, so the page underneath keeps its state and its realtime
+     subscription. `page.state.perfId` is set by pushState and cleared by the
+     browser going back, which is why the close button just calls history.back()
+     — one code path for both the button and the hardware/gesture back.
+     Keyed on the id so opening a different song mounts a fresh component
+     instead of reusing one whose onMount already ran. -->
+<svelte:window on:keydown={overlayKeydown} />
+
+{#if page.state.perfId}
+  <div use:lockScroll class="fixed inset-0 z-40 bg-base-950 overflow-y-auto overscroll-contain" role="dialog" aria-modal="true" aria-label="Detalle de la canción">
+    <div class="max-w-2xl mx-auto w-full" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 3rem)">
+      {#key page.state.perfId}
+        <PerformanceDetail performanceId={page.state.perfId} onClose={closeSong} />
+      {/key}
+    </div>
+  </div>
+{/if}

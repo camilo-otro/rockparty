@@ -8,7 +8,11 @@ declare global {
 			supabase?: any;
 		}
 		// interface PageData {}
-		// interface PageState {}
+		// Shallow-routing state (#94). `perfId` is set by pushState on the party
+		// detail page to render a song as an overlay without unmounting the page.
+		interface PageState {
+			perfId?: number;
+		}
 		// interface Platform {}
 	}
 }
