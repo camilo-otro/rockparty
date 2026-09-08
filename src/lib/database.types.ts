@@ -196,6 +196,7 @@ export type Database = {
       band_pending_member: {
         Row: {
           band_id: number
+          claim_token: string
           created_at: string
           display_name: string
           id: number
@@ -203,6 +204,7 @@ export type Database = {
         }
         Insert: {
           band_id: number
+          claim_token?: string
           created_at?: string
           display_name: string
           id?: number
@@ -210,6 +212,7 @@ export type Database = {
         }
         Update: {
           band_id?: number
+          claim_token?: string
           created_at?: string
           display_name?: string
           id?: number
@@ -918,10 +921,12 @@ export type Database = {
     }
     Functions: {
       advance_show: { Args: { p_party: number }; Returns: number }
+      band_claim_link: { Args: { p_pending_id: number }; Returns: string }
       can_applaud: { Args: { p_party: number }; Returns: boolean }
       can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
+      claim_band_member: { Args: { p_token: string }; Returns: number }
       end_current_song: { Args: { p_party: number }; Returns: undefined }
       end_show: { Args: { p_party: number }; Returns: undefined }
       is_band_manager: { Args: { bid: number }; Returns: boolean }
@@ -932,6 +937,17 @@ export type Database = {
         Returns: number
       }
       notify_upcoming_toques: { Args: never; Returns: undefined }
+      peek_band_claim: {
+        Args: { p_token: string }
+        Returns: {
+          band_id: number
+          band_name: string
+          display_name: string
+          instruments: string[]
+        }[]
+      }
+      purge_stale_test_parties: { Args: never; Returns: number }
+      regenerate_band_claim: { Args: { p_pending_id: number }; Returns: string }
       search_songs: {
         Args: { lim?: number; q: string }
         Returns: {

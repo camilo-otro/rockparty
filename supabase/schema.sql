@@ -365,9 +365,14 @@ create table if not exists public.band_pending_member (
   band_id        bigint not null references public.band (id) on delete cascade,
   display_name   text not null,
   instrument_ids bigint[] not null default '{}',
-  created_at     timestamptz not null default now()
+  created_at     timestamptz not null default now(),
+  -- Claim link (#79): whoever holds this uuid can sign up and become the real
+  -- member. NOT client-readable — see the column grants below.
+  claim_token    uuid not null default gen_random_uuid()
 );
 create index if not exists idx_band_pending_member_band on public.band_pending_member (band_id);
+create unique index if not exists band_pending_member_claim_token_key
+  on public.band_pending_member (claim_token);
 -- Band links onto the setlist (band table now exists — see reverted columns above).
 alter table public.performance      add column if not exists band_id bigint references public.band (id);
 alter table public.performance_user add column if not exists band_id bigint references public.band (id);
@@ -677,6 +682,120 @@ $$;
 create trigger party_status_changed
   before update on public.party
   for each row execute function public.set_status_changed_at();
+
+-- ---- band claim link (#79) --------------------------------------------------
+-- Turns a band_pending_member placeholder into a real member. The link IS the
+-- credential and the consent: no email stored, nothing sent by us. Anyone
+-- holding it joins as that placeholder — bounded by 122 bits of entropy, single
+-- use, revocable, and it grants exactly one membership as 'member'.
+--
+-- NOTE ON GRANTS, and it refines the gotcha recorded for purge_stale_test_parties:
+-- `revoke ... from public` alone is NOT enough here. Supabase ships default
+-- privileges (pg_default_acl, schema public, functions) that grant EXECUTE to
+-- anon and authenticated BY NAME, so `create function` produces both a PUBLIC
+-- grant and named ones. Revoke from all three, then grant back precisely.
+
+-- Manager reads a placeholder's token (they cannot select the column).
+create or replace function public.band_claim_link(p_pending_id bigint)
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare v_band bigint; v_token uuid;
+begin
+  select band_id, claim_token into v_band, v_token
+    from public.band_pending_member where id = p_pending_id;
+  if v_band is null then raise exception 'no such placeholder'; end if;
+  if not public.is_band_manager(v_band) then
+    raise exception 'only a band manager can read a claim link';
+  end if;
+  return v_token;
+end; $$;
+
+-- Invalidate a link that went to the wrong person.
+create or replace function public.regenerate_band_claim(p_pending_id bigint)
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare v_band bigint; v_token uuid;
+begin
+  select band_id into v_band from public.band_pending_member where id = p_pending_id;
+  if v_band is null then raise exception 'no such placeholder'; end if;
+  if not public.is_band_manager(v_band) then
+    raise exception 'only a band manager can regenerate a claim link';
+  end if;
+  update public.band_pending_member set claim_token = gen_random_uuid()
+   where id = p_pending_id returning claim_token into v_token;
+  return v_token;
+end; $$;
+
+-- Preview, so the claim page can say what the link is for BEFORE anything is
+-- written — and while signed out, so people know what they're signing up for.
+-- Returns no rows for unknown AND already-claimed tokens alike.
+create or replace function public.peek_band_claim(p_token uuid)
+returns table (band_id bigint, band_name text, display_name text, instruments text[])
+language sql stable security definer set search_path = '' as $$
+  select b.id, b.name, p.display_name,
+         coalesce(array_agg(i.name order by i.name) filter (where i.name is not null), '{}')
+  from public.band_pending_member p
+  join public.band b on b.id = p.band_id
+  left join public.instrument i on i.id = any (p.instrument_ids)
+  where p.claim_token = p_token
+  group by b.id, b.name, p.display_name;
+$$;
+
+-- The claim. `delete ... returning` IS the claim step: single-use enforced by the
+-- database, so two people racing one link yield exactly one winner, and any later
+-- failure rolls the whole thing back leaving the placeholder intact.
+create or replace function public.claim_band_member(p_token uuid)
+returns bigint language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_pending public.band_pending_member;
+  v_is_test boolean;
+begin
+  if v_uid is null then raise exception 'must be signed in to claim'; end if;
+
+  delete from public.band_pending_member where claim_token = p_token
+  returning * into v_pending;
+  if v_pending.id is null then raise exception 'this claim link is no longer valid'; end if;
+
+  -- SECURITY DEFINER bypasses RLS, so can_see_band() is NOT running here: without
+  -- this check the test-data boundary would leak through the claim path (#67/#76).
+  select is_test into v_is_test from public.band where id = v_pending.band_id;
+  if v_is_test and not public.is_dev() then
+    raise exception 'this claim link is no longer valid';
+  end if;
+
+  -- Already a member: merge instruments rather than fail.
+  insert into public.band_member (band_id, user_id, role)
+  values (v_pending.band_id, v_uid, 'member')
+  on conflict (band_id, user_id) do nothing;
+
+  insert into public.band_member_instrument (band_id, user_id, instrument_id)
+  select v_pending.band_id, v_uid, unnest(v_pending.instrument_ids)
+  on conflict do nothing;
+
+  insert into public.notification (recipient, type, payload)
+  select bm.user_id, 'band_member_claimed',
+         jsonb_build_object('band_id', v_pending.band_id, 'band_name', b.name,
+                            'display_name', v_pending.display_name, 'nickname', p.nickname)
+  from public.band_member bm
+  join public.band b on b.id = bm.band_id
+  left join public.profile p on p.id = v_uid
+  where bm.band_id = v_pending.band_id and bm.role = 'manager' and bm.user_id <> v_uid;
+
+  return v_pending.band_id;
+end; $$;
+
+revoke all on function public.band_claim_link(bigint)       from public, anon, authenticated;
+revoke all on function public.regenerate_band_claim(bigint) from public, anon, authenticated;
+revoke all on function public.peek_band_claim(uuid)         from public, anon, authenticated;
+revoke all on function public.claim_band_member(uuid)       from public, anon, authenticated;
+grant execute on function public.band_claim_link(bigint)       to authenticated;
+grant execute on function public.regenerate_band_claim(bigint) to authenticated;
+grant execute on function public.peek_band_claim(uuid)         to anon, authenticated;  -- preview works signed-out
+grant execute on function public.claim_band_member(uuid)       to authenticated;
+
+-- The daily reminder job is pg_cron's alone: it INSERTs notifications and was
+-- anon-callable over REST via the same default privileges (#79 audit).
+revoke all on function public.notify_upcoming_toques() from public, anon, authenticated;
+
 
 -- (public.auto_add_admin also exists: a trigger that auto-adds a party's
 --  creator as a party_admin on insert.)
@@ -1253,6 +1372,16 @@ create policy "band_pending select visible" on public.band_pending_member for se
 create policy "band_pending manager insert" on public.band_pending_member for insert to authenticated with check (public.is_band_manager(band_id));
 create policy "band_pending manager update" on public.band_pending_member for update to authenticated using (public.is_band_manager(band_id));
 create policy "band_pending manager delete" on public.band_pending_member for delete to authenticated using (public.is_band_manager(band_id));
+
+-- Claim token privacy (#79). Rows are world-readable per the policy above, so
+-- the token has to be hidden at the COLUMN level or every visitor could read
+-- every claim link. A plain `revoke select (claim_token)` is a no-op — Supabase's
+-- table-level grant covers every column — so table SELECT is dropped and
+-- re-granted per column, exactly as profile.email does.
+-- Consequence: `select=*` on this table 403s (42501); reads must name columns.
+revoke select on public.band_pending_member from anon, authenticated;
+grant select (id, band_id, display_name, instrument_ids, created_at)
+  on public.band_pending_member to anon, authenticated;
 
 -- ---- band avatars (storage, #75) --------------------------------------------
 -- Bucket 'band-avatars' (public read; file_size_limit 256 KB, image/webp only —
