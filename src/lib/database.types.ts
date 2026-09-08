@@ -445,6 +445,101 @@ export type Database = {
           },
         ]
       }
+      party_requirement: {
+        Row: {
+          assigned_label: string | null
+          assigned_user: string | null
+          checked_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          equipment_id: number | null
+          id: number
+          kind: Database["public"]["Enums"]["requirement_kind"]
+          notes: string | null
+          party_id: number
+          quantity: number | null
+          role_id: number | null
+          source: Database["public"]["Enums"]["requirement_source"]
+        }
+        Insert: {
+          assigned_label?: string | null
+          assigned_user?: string | null
+          checked_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          equipment_id?: number | null
+          id?: number
+          kind: Database["public"]["Enums"]["requirement_kind"]
+          notes?: string | null
+          party_id: number
+          quantity?: number | null
+          role_id?: number | null
+          source?: Database["public"]["Enums"]["requirement_source"]
+        }
+        Update: {
+          assigned_label?: string | null
+          assigned_user?: string | null
+          checked_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          equipment_id?: number | null
+          id?: number
+          kind?: Database["public"]["Enums"]["requirement_kind"]
+          notes?: string | null
+          party_id?: number
+          quantity?: number | null
+          role_id?: number | null
+          source?: Database["public"]["Enums"]["requirement_source"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_requirement_assigned_user_fkey"
+            columns: ["assigned_user"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_requirement_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_requirement_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_requirement_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "party_role"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      party_role: {
+        Row: {
+          created_at: string
+          id: number
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
       party_rsvp: {
         Row: {
           created_at: string
@@ -1004,6 +1099,13 @@ export type Database = {
         | "cancelled"
       performance_live_state: "queued" | "playing" | "played" | "skipped"
       performer_approval: "auto" | "organizer" | "proponent" | "invite_only"
+      requirement_kind: "equipment" | "role"
+      requirement_source:
+        | "unassigned"
+        | "venue"
+        | "organizer"
+        | "performer"
+        | "external"
       signup_status: "pending" | "approved" | "declined"
     }
     CompositeTypes: {
@@ -1153,6 +1255,14 @@ export const Constants = {
       ],
       performance_live_state: ["queued", "playing", "played", "skipped"],
       performer_approval: ["auto", "organizer", "proponent", "invite_only"],
+      requirement_kind: ["equipment", "role"],
+      requirement_source: [
+        "unassigned",
+        "venue",
+        "organizer",
+        "performer",
+        "external",
+      ],
       signup_status: ["pending", "approved", "declined"],
     },
   },

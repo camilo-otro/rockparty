@@ -11,6 +11,7 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import ApplauseButton from '$lib/components/ApplauseButton.svelte';
   import PerformanceDetail from '$lib/components/PerformanceDetail.svelte';
+  import PartyLogistics from '$lib/components/PartyLogistics.svelte';
   import SongLineupApplause from '$lib/components/SongLineupApplause.svelte';
   import type { Database, TablesUpdate } from '$lib/database.types';
   import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
@@ -1282,6 +1283,11 @@
         <a href={`/performance/create?partyId=${party.id}`} class="w-full bg-cold-base text-white p-3 inline-block text-center">Sugerir una canción <Plus class="inline-block" /></a>
       {/if}
     </div>
+    <!-- Event logistics (#95). Renders nothing for non-admins, and fetches
+         nothing either — the common case pays zero for it. Sits after the
+         setlist because you plan gear once you know what you're playing. -->
+    <PartyLogistics partyId={party.id} venueId={party.venue} canAdmin={canAdmin} />
+
     <h3 class="text-3xl text-white font-medium pt-4 mt-2">MÚSICOS</h3>
     <div class="bg-base-950 rounded-lg overflow-hidden mt-2">
       <ul class="space-y-[1px]">
