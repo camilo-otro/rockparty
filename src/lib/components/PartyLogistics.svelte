@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
-  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus } from 'lucide-svelte';
+  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare } from 'lucide-svelte';
   import { reportError, toastSuccess } from '$lib/stores/toasts';
 
   // Event logistics (#95). Stage 1: what this toque needs and where each piece
@@ -15,6 +15,10 @@
   // in rather than fetched: the page has them, and a global user search would
   // mean the unbounded profile query #92 is trying to remove.
   export let people: { id: string; nickname: string }[] = [];
+  // 'full'      — the planning surface on the party page: add, source, assign.
+  // 'checklist' — the day-of load-in list on the live console: names and ticks,
+  //               nothing to edit while you are running a show one-thumbed.
+  export let mode: 'full' | 'checklist' = 'full';
 
   type Requirement = {
     id: number;
@@ -27,10 +31,11 @@
     assigned_label: string | null;
     notes: string | null;
     confirmed_at: string | null;
+    checked_at: string | null;
   };
 
   const COLS =
-    'id, kind, equipment_id, role_id, quantity, source, assigned_user, assigned_label, notes, confirmed_at';
+    'id, kind, equipment_id, role_id, quantity, source, assigned_user, assigned_label, notes, confirmed_at, checked_at';
 
   let requirements: Requirement[] = [];
   let loaded = false;
@@ -109,6 +114,12 @@
   // Mine and not yet answered — the only thing a non-admin sees.
   $: mine = requirements.filter((r) => currentUserId && r.assigned_user === currentUserId);
   $: mineUnconfirmed = mine.filter((r) => !r.confirmed_at);
+
+  // Day-of progress (#95 Stage 3). Only resolved rows count: something nobody is
+  // bringing cannot be "here", and letting it be ticked would turn the checklist
+  // into a way to make the gap disappear rather than close it.
+  $: checkable = requirements.filter((r) => r.source !== 'unassigned');
+  $: checkedCount = checkable.filter((r) => r.checked_at).length;
 
   $: alreadyListed = new Set(requirements.filter((r) => r.equipment_id).map((r) => r.equipment_id));
   $: seedable = venueEquipment.filter((ve) => !alreadyListed.has(ve.equipment_id));
@@ -209,6 +220,14 @@
     }
   }
 
+  async function toggleChecked(r: Requirement) {
+    if (r.source === 'unassigned') return;   // nothing to tick off yet
+    const checked_at = r.checked_at ? null : new Date().toISOString();
+    const { error } = await supabase.from('party_requirement').update({ checked_at }).eq('id', r.id);
+    if (error) { reportError(error); return; }
+    patch(r.id, { checked_at });
+  }
+
   async function remove(r: Requirement) {
     const { error } = await supabase.from('party_requirement').delete().eq('id', r.id);
     if (error) { reportError(error); return; }
@@ -260,9 +279,15 @@
 
     {#if canAdmin}
       <div class="flex items-center justify-between mb-2">
-        <h3 class="text-3xl text-white font-medium tracking-widest">LOGÍSTICA</h3>
+        <h3 class="{mode === 'checklist' ? 'text-lg text-white uppercase tracking-widest' : 'text-3xl text-white font-medium tracking-widest'}">
+          {mode === 'checklist' ? 'Checklist del día' : 'LOGÍSTICA'}
+        </h3>
         {#if loaded && requirements.length}
-          {#if gaps}
+          {#if mode === 'checklist' && checkable.length}
+            <span class="text-xs uppercase tracking-wide px-2 py-1 rounded-full {checkedCount === checkable.length ? 'border border-green-500 text-green-500' : 'border border-cold-light/40 text-cold-light'}">
+              {checkedCount} de {checkable.length} listos
+            </span>
+          {:else if gaps}
             <span class="inline-flex items-center gap-1 text-xs uppercase tracking-wide px-2 py-1 rounded-full bg-warm-base text-white">
               <AlertTriangle size={13} /> {gaps} sin resolver
             </span>
@@ -293,8 +318,22 @@
                 {#each group.items as r (r.id)}
                   <li class="bg-base-900 px-3 py-2 flex flex-col gap-2">
                     <div class="flex items-start gap-2">
+                      <!-- The tick. Absent on an unresolved row: you cannot mark
+                           something present when nobody is bringing it, and
+                           allowing it would let the gap be dismissed instead of
+                           closed. -->
+                      {#if r.source !== 'unassigned'}
+                        <button type="button" on:click={() => toggleChecked(r)}
+                          aria-pressed={!!r.checked_at}
+                          aria-label="{r.checked_at ? 'Desmarcar' : 'Marcar como listo'} {label(r)}"
+                          class="p-1 shrink-0 {r.checked_at ? 'text-green-500' : 'text-cold-light/50 hover:text-cold-light'}">
+                          {#if r.checked_at}<CheckSquare size={20} />{:else}<Square size={20} />{/if}
+                        </button>
+                      {:else}
+                        <span class="w-7 shrink-0" aria-hidden="true"></span>
+                      {/if}
                       <div class="grow min-w-0">
-                        <div class="text-white">
+                        <div class="{r.checked_at ? 'text-cold-light line-through' : 'text-white'}">
                           {label(r)}
                           {#if r.kind === 'role'}
                             <span class="text-[0.6rem] uppercase tracking-wide px-1.5 py-0.5 ml-1 rounded-full border border-cold-light/40 text-cold-light">Rol</span>
@@ -305,12 +344,18 @@
                             </span>
                           {/if}
                         </div>
+                        {#if r.assigned_label && mode === 'checklist'}
+                          <div class="text-xs text-cold-light">{r.assigned_label}</div>
+                        {/if}
                         {#if r.notes}<div class="text-xs text-cold-light">{r.notes}</div>{/if}
                       </div>
+                      {#if mode === 'full'}
                       <button type="button" on:click={() => remove(r)} aria-label="Quitar {label(r)}"
                         class="text-warm-base hover:text-red-400 p-1 shrink-0"><Trash2 size={16} /></button>
+                      {/if}
                     </div>
 
+                    {#if mode === 'full'}
                     <div class="flex items-center gap-2 flex-wrap">
                       <select
                         value={r.source}
@@ -346,6 +391,7 @@
                         {/if}
                       {/if}
                     </div>
+                    {/if}
                   </li>
                 {/each}
               </ul>
@@ -353,6 +399,7 @@
           {/each}
         </ul>
 
+        {#if mode === 'full'}
         <div class="flex flex-wrap gap-2 mt-3">
           {#if !adding}
             <button type="button" on:click={openAdd}
@@ -367,6 +414,7 @@
             </button>
           {/if}
         </div>
+        {/if}
 
         {#if adding}
           <div class="mt-3 p-3 bg-base-900 rounded-lg flex flex-col gap-2">

@@ -10,6 +10,7 @@
   import { user } from '$lib/stores/user';
   import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
   import { ChevronLeft, Play, SkipForward, Square, Users, Check, Undo2, Pause, Ban } from 'lucide-svelte';
+  import PartyLogistics from '$lib/components/PartyLogistics.svelte';
 
   let partyId = 0;
   let party: any = null;
@@ -205,6 +206,13 @@
                   class="bg-cold-base hover:bg-cold-light hover:text-black text-white rounded-lg px-6 py-4 text-lg inline-flex items-center justify-center gap-2 transition disabled:opacity-50">
             <Play size={22} /> {busy ? 'Empezando…' : 'Empezar el show'}
           </button>
+
+          <!-- Load-in checklist (#95 Stage 3). Before the first song is the
+               moment this is worth anything — it renders nothing when the toque
+               has no logistics recorded, so it costs nothing for organizers who
+               do not use the feature. -->
+          <PartyLogistics {partyId} venueId={party?.venue ?? null} canAdmin={canAdmin}
+            currentUserId={currentUserId} mode="checklist" />
         </div>
       {:else}
         <div class="rounded-lg overflow-clip border border-warm-base/40">
