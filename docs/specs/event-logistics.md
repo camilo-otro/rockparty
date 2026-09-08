@@ -2,7 +2,8 @@
 
 **Status:** captured, not started · **Milestone:** Phase 3 — Showtime
 **Builds on:** #30 (venue equipment), #49 (equipment description autocomplete),
-#63 (notifications + realtime), #37 (live mode)
+#63 (notifications + realtime), #37 (live mode), the band roster pattern
+(`band_pending_member`) and its claim link (#79)
 
 ## The problem
 
@@ -24,23 +25,40 @@ The valuable output is not the inventory. It is the **gap list** — the items
 with no source — surfaced early enough to fix, and a checklist on the day so
 nothing confirmed months ago is quietly forgotten.
 
+And then, once a few toques have run, a **record**: who brought what, who
+engineered, who hosted. That record is worth two things beyond nostalgia — it
+answers "who brought the amp last time?" when planning the next one, and it
+identifies the engineers and MCs working this scene, who are exactly the people
+for whom this app is a source of gigs.
+
 ## Principles this has to respect
 
 - **Augment the humans** (CLAUDE.md). The app must not decide the logistics. It
-  can *suggest* (the venue says it has a PA; the setlist implies a bass amp) but
-  every requirement is the organizer's to accept, edit or delete. No
-  auto-assignment of gear to people.
+  can *suggest* (the venue says it has a PA; Pancho brought the amp last time)
+  but every requirement and every assignment is the organizer's call.
 - **English code, Spanish UI.** `party_requirement`, `party_role`, `source`;
   labels like "LOGÍSTICA", "¿Quién lo trae?", "Checklist del día".
-- **Free-tier-first.** No file uploads, no external services. This is rows and a
-  couple of views.
+- **Free-tier-first.** No file uploads, no outbound email, no external services.
+  This is rows and a couple of views.
+
+## Decided
+
+- **Roles are assigned, never volunteered.** An organizer is accountable for
+  having a sound engineer; a signup queue would diffuse that. (This is the
+  opposite call from instrument signups, deliberately — a musician volunteering
+  for a song costs the organizer nothing if it falls through, while a no-show
+  engineer ends the toque.)
+- **Assignment mirrors the band roster**: autocomplete over existing users, but a
+  plain name is always allowed for someone who is not on the app.
+- **The record is a goal, not a byproduct.** Rows persist after the toque and are
+  meant to be read back.
 
 ## Model
 
 One table for both equipment and roles. They differ in *what* they name but share
-the entire lifecycle — needed → sourced → confirmed → present on the day — and
-the same UI, the same gap counter, the same checklist row. Splitting them would
-duplicate all of that to save one nullable column.
+the entire lifecycle — needed → sourced → confirmed → present on the day → part
+of the record — and the same UI, the same gap counter, the same checklist row.
+Splitting them would duplicate all of that to save one nullable column.
 
 ```sql
 create type requirement_kind   as enum ('equipment', 'role');
@@ -55,11 +73,12 @@ create table public.party_requirement (
   role_id        bigint references public.party_role (id),
   quantity       integer,                 -- equipment only; null = unspecified
   source         requirement_source not null default 'unassigned',
-  -- who is bringing / doing it, when they are an app user
+
+  -- WHO. `assigned_user` is set when they have an account; `assigned_label` is
+  -- ALWAYS set once assigned — see "Naming a person" below.
   assigned_user  uuid references public.profile (id) on delete set null,
-  -- ...or a free-text stand-in when they are not: a rental company, a friend
-  -- who has no account. Keeps the row useful without forcing an invite.
   assigned_label text,
+
   notes          text,
   confirmed_at   timestamptz,             -- the source said yes
   checked_at     timestamptz,             -- ticked off on the day
@@ -75,6 +94,9 @@ create table public.party_requirement (
 
 create index on public.party_requirement (party_id);
 create index on public.party_requirement (assigned_user) where assigned_user is not null;
+-- for the record queries in Stage 4
+create index on public.party_requirement (equipment_id) where equipment_id is not null;
+create index on public.party_requirement (role_id) where role_id is not null;
 ```
 
 **Deliberately NOT unique on `(party_id, equipment_id)`.** Two guitar amps from
@@ -83,8 +105,36 @@ source. (And a unique index over the nullable `equipment_id`/`role_id` pair woul
 not dedupe anyway — Postgres treats NULLs as distinct. That trap has bitten this
 repo before; see the applause migrations.)
 
-`assigned_user` references `profile`, which is the pattern `party_admin` and
-`party.created_by` already use — both FK to `public.profile`, not `auth.users`.
+### Naming a person
+
+The band roster already solves this and the shape should match, because
+organizers will expect it to: `band_member` holds real users
+(`user_id` NOT NULL) and `band_pending_member` holds a `display_name` for
+everyone else, with #79 adding a claim link that promotes a placeholder into a
+real member.
+
+**Here it can be ONE row instead of two tables**, and it is worth being explicit
+about why, so this doesn't look like an inconsistency:
+
+- `band_member`'s primary key *is* `(band_id, user_id)`, and
+  `band_member_instrument` is keyed on that composite. A nullable `user_id`
+  breaks both, which is what forced the separate placeholder table.
+- `party_requirement` has a surrogate `id` and nothing keyed on the assignee, so
+  a nullable `assigned_user` costs nothing.
+
+**`assigned_label` is always populated**, even when `assigned_user` is set — a
+snapshot of the person's display name at assignment time. Two reasons, both
+about the record:
+
+1. It survives the person deleting their account (`on delete set null` clears
+   `assigned_user` and the row would otherwise become "somebody").
+2. The checklist and the record render with no join at all, which matters after
+   the request-waterfall work (#84) — this page should not add a `profile`
+   lookup per row.
+
+Render the live `profile.nickname` when `assigned_user` is set, and fall back to
+`assigned_label`. So the snapshot is a fallback, not the primary display, and a
+nickname change is reflected on upcoming toques.
 
 ### The role catalogue
 
@@ -137,6 +187,12 @@ The security boundary, as always in this app.
   is a no-op. This exact mistake shipped once already — see
   `20260907_purge_revoke_from_public.sql`.
 
+- **Privacy check for the record (Stage 4):** requirement rows are readable by
+  anyone who can see the party, which means "Pancho brought the amp" is as public
+  as the toque is. That is the same exposure as a setlist signup, so it is
+  consistent — but it does mean a person's gig history is public by construction.
+  Worth a conscious nod before Stage 4 ships, not a surprise afterwards.
+
 ## Stages
 
 ### Stage 1 — the organizer's list
@@ -160,11 +216,16 @@ admin-only.
 
 ### Stage 2 — assigning it to people
 
-- `assigned_user` (pick from the party's musicians and admins) or
-  `assigned_label` for someone outside the app.
-- **Notify the assignee** on assignment, via the existing `notification` table
-  and realtime bell (#63). An assignment nobody is told about is worse than no
-  assignment — it reads as done and isn't.
+- Assign via autocomplete over existing users, **or type a name**. The picker is
+  the same interaction as the band roster and the party-admin field; note that
+  #92 wants that autocomplete bounded server-side, so build on whatever it
+  lands as rather than copying today's fetch-everything version.
+- Set `assigned_label` on every assignment (see **Naming a person**).
+- **Notify the assignee** when they are an app user, via the existing
+  `notification` table and realtime bell (#63). An assignment nobody is told
+  about is worse than none — it reads as done and isn't. A typed-in name has
+  nobody to notify, which is a real difference the UI should show: an unclaimed
+  name is a weaker commitment than a confirmed user.
 - `confirm_requirement` RPC + a confirm/decline control wherever a musician sees
   their own assigned items. A decline should clear `assigned_user` and drop the
   row back to `unassigned`, so it re-enters the gap count rather than sitting
@@ -183,6 +244,43 @@ admin-only.
   the app should not let the gap disappear just because the organizer scrolled
   past it.
 
+### Stage 4 — the record
+
+Nothing new in the schema; this is entirely queries over rows Stage 2 already
+wrote. Two payoffs:
+
+- **"Who brought this last time?"** When an organizer adds a requirement, surface
+  prior rows for the same `equipment_id` / `role_id` across toques they organise:
+  *"La última vez lo trajo Pancho"*, one tap to assign the same person again.
+  This is the feature that makes the record worth keeping, and it is a single
+  indexed query.
+- **Credits.** A profile can show what someone has actually done — *"Ingeniero de
+  sonido en 5 toques"* — alongside the instruments they play (#28). For a working
+  engineer or MC that is a portfolio, and it is the honest kind: it comes from
+  organizers naming them, not from self-declaration.
+
+### Stage 5 — engineers and MCs as a gig pool (exploratory)
+
+The reason to track role-holders at all: they are people for whom this app is a
+source of work, and right now the app has no place for them. Two halves,
+in order:
+
+- **Claim links for named role-holders**, reusing #79's mechanism. An engineer
+  typed in as a plain name on four toques gets a link, signs up, and their
+  history is already there. That inverts the usual empty-account onboarding —
+  they arrive to *"te acreditaron en 4 toques"* rather than a blank profile,
+  which is a far better pitch to exactly the people worth attracting.
+- **Opt-in availability.** A `profile_role` table (owner-managed, mirroring
+  `profile_instrument` from #28) where someone declares "I work as a sound
+  engineer and I'm open to gigs", plus a way for organizers to find them. This is
+  the actual marketplace step and the point at which this stops being an
+  organizer tool — worth its own spec when it comes up, since it raises
+  discovery, contact, and possibly money.
+
+Note the ordering: the record (Stage 4) has to exist before the claim link is
+worth anything, and the claim link should exist before a directory, or the
+directory is empty.
+
 ## Deliberately out of scope for now
 
 - **Deriving requirements from the setlist.** A setlist with a bass signup
@@ -194,17 +292,17 @@ admin-only.
   mean something firmer than "the venue's profile says so". It needs a
   venue-side surface, so it is its own piece of work.
 - **Cost splitting.** Who paid for the rental is a different feature and drags in
-  money.
+  money. So does Stage 5's second half.
 
 ## Open questions for the product call
 
-1. **Should roles be volunteer-able rather than only assigned?** A guest putting
-   themselves forward as MC mirrors how instrument signups already work, and fits
-   the app's self-organising grain. It is also a materially different UI. Assign
-   only, for Stage 2?
+1. ~~Should roles be volunteer-able?~~ **Decided: no.** Admins assign; see
+   **Decided** above.
 2. **Does an unresolved gap block anything?** Today a toque can be `confirmed`
    with no PA and no sound engineer. Should the gap count be purely advisory, or
    should confirming a toque warn?
-3. **Should the checklist survive as a record** after the toque, for the Memories
-   work (#42)? If so, `checked_at` history is already enough; if not, nothing to
-   do.
+3. ~~Should the checklist survive as a record?~~ **Decided: yes** — it is Stage 4,
+   and it is the foundation for Stage 5. Feeds the Memories work (#42) too.
+4. **New: is a public gig history acceptable?** See the privacy note under RLS.
+   Requirement rows are as visible as the toque, so being credited is public. Fine
+   for a portfolio, worth confirming before Stage 4 rather than after.
