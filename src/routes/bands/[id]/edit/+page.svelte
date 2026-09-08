@@ -7,7 +7,7 @@
   import { ChevronLeft } from 'lucide-svelte';
   import BandForm from '$lib/components/BandForm.svelte';
   import { uploadBandAvatar, deleteBandAvatarByUrl } from '$lib/bandAvatar';
-  import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
+  import { reportError, toastError, toastSuccess, toastInfo } from '$lib/stores/toasts';
 
   const bandId = Number(page.params.id);
   let currentUserId: string | null = null;
@@ -51,6 +51,45 @@
     loading = false;
   });
   onDestroy(() => unsub?.());
+
+  // Claim links (#79). The token is deliberately not selectable from the client
+  // — column-level grants keep it out of every read — so even the manager has to
+  // go through an RPC to see it.
+  let bandForm: any;
+
+  function claimUrl(token: string) {
+    return `${window.location.origin}/bands/claim/${token}`;
+  }
+
+  async function copyClaimLink(e: CustomEvent) {
+    const pendingId = e.detail.pendingId as number;
+    const { data, error } = await supabase.rpc('band_claim_link', { p_pending_id: pendingId });
+    if (error) { reportError(error); return; }
+    try {
+      await navigator.clipboard.writeText(claimUrl(data as unknown as string));
+      bandForm?.claimLinkCopied(pendingId);
+      toastSuccess('Enlace copiado. Compártelo por WhatsApp.');
+    } catch {
+      // Clipboard can be blocked (permissions, insecure context). Don't strand
+      // the manager with a token they cannot get at.
+      toastInfo(claimUrl(data as unknown as string));
+    }
+  }
+
+  async function regenerateClaim(e: CustomEvent) {
+    const { pendingId, name } = e.detail as { pendingId: number; name: string };
+    // Destructive to anyone holding the old link, so make them say so.
+    if (!confirm(`¿Generar un enlace nuevo para ${name}? El anterior dejará de funcionar.`)) return;
+    const { data, error } = await supabase.rpc('regenerate_band_claim', { p_pending_id: pendingId });
+    if (error) { reportError(error); return; }
+    try {
+      await navigator.clipboard.writeText(claimUrl(data as unknown as string));
+      bandForm?.claimLinkCopied(pendingId);
+      toastSuccess('Enlace nuevo copiado. El anterior ya no sirve.');
+    } catch {
+      toastInfo(claimUrl(data as unknown as string));
+    }
+  }
 
   async function saveBand(e: CustomEvent) {
     const { name, bio, whoCanSignUp, isTest, avatarBlob, removeAvatar, members, pendingMembers } = e.detail;
@@ -164,6 +203,7 @@
   <div class="mt-8 mx-4 p-6 text-red-500">Solo un manager de la banda puede editarla.</div>
 {:else}
   <BandForm
+    bind:this={bandForm}
     {instruments}
     {userOptions}
     {currentUserId}
@@ -177,6 +217,8 @@
     {submitting}
     submitLabel="Guardar cambios"
     on:submit={saveBand}
+    on:claimlink={copyClaimLink}
+    on:regenerateclaim={regenerateClaim}
     on:error={(e) => toastError(e.detail)}
   />
 {/if}

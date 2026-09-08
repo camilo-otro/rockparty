@@ -36,7 +36,13 @@ export const load = async ({ depends, url }) => {
       };
       userStore.set(userRecord);
       if (!/^\/performers\/[^/]+\/edit$/.test(url.pathname)) {
-        throw redirect(302, '/performers/' + userRecord.id + '/edit');
+        // Carry where they were going through the profile detour. Without this a
+        // deep link is simply lost — which broke claim links (#79) for exactly
+        // the people they exist for: someone with no account yet, who cannot be
+        // added to a band at all until a profile row exists (band_member.user_id
+        // FKs to profile).
+        const next = url.pathname + url.search;
+        throw redirect(302, '/performers/' + userRecord.id + '/edit?next=' + encodeURIComponent(next));
       }
     } else {
       userRecord = {

@@ -6,6 +6,20 @@ import PerformerForm from '$lib/components/PerformerForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
 import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 import { normalizeText } from '$lib/sanitize';
+import { page } from '$app/state';
+
+// Where to go once the profile is saved. The root layout sends profile-less
+// users here with ?next=<where they were headed>, so a deep link survives the
+// detour instead of dumping them on their own profile (#79).
+//
+// Only same-origin relative paths are honoured — a value starting with `//` or
+// a scheme would be an open redirect, and this value rides in a URL anyone can
+// hand you.
+function afterSaveTarget(uid: string) {
+  const next = page.url.searchParams.get('next');
+  if (next && next.startsWith('/') && !next.startsWith('//')) return next;
+  return `/performers/${uid}`;
+}
 
 // 'loading' until auth is definitively known, so we never flash the
 // logged-out gate during the session-restore race.
@@ -110,7 +124,7 @@ onMount(async () => {
               await supabase.from('profile_instrument').insert(toAdd.map((i) => ({ profile_id: uid, instrument_id: i })));
             }
             toastSuccess('¡Perfil actualizado!');
-            setTimeout(() => goto(`/performers/${uid}`), 500);
+            setTimeout(() => goto(afterSaveTarget(uid)), 500);
           }
         }
       } catch (e) {

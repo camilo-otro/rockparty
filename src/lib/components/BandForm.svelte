@@ -2,7 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { normalizeText } from '$lib/sanitize';
   import { isDev } from '$lib/stores/dev';
-  import { X, Crown, Trash2 } from 'lucide-svelte';
+  import { X, Crown, Trash2, Link2, RefreshCw, Check } from 'lucide-svelte';
   import AvatarCropper from '$lib/components/AvatarCropper.svelte';
 
   export let instruments: any[] = [];        // { id, name }
@@ -21,6 +21,15 @@
   export let submitLabel = 'Crear banda';
 
   const dispatch = createEventDispatcher();
+
+  // Claim links (#79). Only for placeholders that have actually been SAVED —
+  // a row added in this session has no id yet, and therefore no token. The
+  // parent owns the RPC calls; this component only asks.
+  let copiedFor: number | null = null;
+  export function claimLinkCopied(pendingId: number) {
+    copiedFor = pendingId;
+    setTimeout(() => { if (copiedFor === pendingId) copiedFor = null; }, 2000);
+  }
 
   let name = initialName;
   let bio = initialBio;
@@ -160,6 +169,17 @@
                   class="text-xs uppercase tracking-wide px-2 py-1 rounded-full inline-flex items-center gap-1 transition {m.role === 'manager' ? 'bg-cold-base text-white' : 'border border-cold-light/40 text-cold-light hover:border-cold-light'}">
                   <Crown size={12} /> {m.role === 'manager' ? 'Manager' : 'Miembro'}
                 </button>
+              {/if}
+              {#if m.isPending && m.pending_id}
+                <!-- Saved placeholders only: an unsaved row has no token yet. -->
+                <button type="button" on:click={() => dispatch('claimlink', { pendingId: m.pending_id })}
+                  class="text-cold-light hover:text-white p-1 inline-flex items-center gap-1 text-xs"
+                  aria-label="Copiar enlace de invitación para {m.display_name}">
+                  {#if copiedFor === m.pending_id}<Check size={15} class="text-green-500" />{:else}<Link2 size={15} />{/if}
+                </button>
+                <button type="button" on:click={() => dispatch('regenerateclaim', { pendingId: m.pending_id, name: m.display_name })}
+                  class="text-cold-light/70 hover:text-white p-1"
+                  aria-label="Regenerar enlace de {m.display_name}"><RefreshCw size={14} /></button>
               {/if}
               {#if m.user_id !== currentUserId}
                 <button type="button" on:click={() => removeMember(m.key)} class="text-red-400 hover:text-red-300 p-1" aria-label="Quitar"><Trash2 size={15} /></button>
