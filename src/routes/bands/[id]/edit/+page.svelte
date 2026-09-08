@@ -95,12 +95,51 @@
           .upsert(rows, { onConflict: 'band_id,user_id,instrument_id', ignoreDuplicates: true });
         if (error) { reportError(error); return; }
       }
-      // Placeholder members (#78): wholesale replace (small set).
-      await supabase.from('band_pending_member').delete().eq('band_id', bandId);
-      if (pendingMembers?.length) {
-        const { error } = await supabase.from('band_pending_member')
-          .insert(pendingMembers.map((p: any) => ({ band_id: bandId, display_name: p.display_name, instrument_ids: p.instruments })));
-        if (error) { reportError(error); return; }
+      // Placeholder members (#78): DIFF by id, never wholesale replace.
+      //
+      // This used to delete every row for the band and re-insert. That was
+      // invisible while nothing referenced a placeholder's id — but #79 puts a
+      // claim_token on these rows, and re-inserting mints a new token, so every
+      // save would silently kill every outstanding claim link. Someone edits the
+      // bio and yesterday's invitations are dead, with no error to notice.
+      //
+      // BandForm already carries `pending_id` through, so rows that survive an
+      // edit keep their identity: no id means new, a missing id means removed.
+      const incoming: any[] = pendingMembers ?? [];
+      const keptIds = new Set(incoming.map((p) => p.id).filter(Boolean));
+      const removedIds = initialPendingMembers.map((p) => p.id).filter((id) => !keptIds.has(id));
+      const before = new Map(initialPendingMembers.map((p) => [p.id, p]));
+      const sameInstruments = (a: number[] = [], b: number[] = []) =>
+        a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
+      // Only touch rows whose content actually changed — an untouched placeholder
+      // should not be written at all.
+      const changed = incoming.filter((p) => {
+        if (!p.id) return false;
+        const b = before.get(p.id);
+        return !b || b.display_name !== p.display_name || !sameInstruments(b.instruments, p.instruments);
+      });
+      const added = incoming.filter((p) => !p.id);
+
+      const pendingWrites: any[] = [
+        ...changed.map((p) =>
+          supabase.from('band_pending_member')
+            .update({ display_name: p.display_name, instrument_ids: p.instruments }).eq('id', p.id)
+        )
+      ];
+      if (removedIds.length) {
+        pendingWrites.push(supabase.from('band_pending_member').delete().in('id', removedIds));
+      }
+      if (added.length) {
+        pendingWrites.push(
+          supabase.from('band_pending_member')
+            .insert(added.map((p) => ({ band_id: bandId, display_name: p.display_name, instrument_ids: p.instruments })))
+        );
+      }
+      if (pendingWrites.length) {
+        // Independent of each other — one wave, not a staircase (#84).
+        const results = await Promise.all(pendingWrites);
+        const failed = results.find((r: any) => r?.error);
+        if (failed) { reportError(failed.error); return; }
       }
       toastSuccess('Banda actualizada.');
       goto(`/bands/${bandId}`);
