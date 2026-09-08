@@ -29,8 +29,15 @@
     const p = (n.payload ?? {}) as any;
     const title = p.party_title || 'un toque';
     const song = p.song_title || 'una canción';
-    // Signup notifications point at the song; party ones at the toque.
-    const href = p.performance_id ? `/performance/${p.performance_id}` : (p.party_id ? `/parties/${p.party_id}` : null);
+    // Signup notifications point at the song; party ones at the toque; band ones
+    // at the band. Most specific first.
+    const href = p.performance_id
+      ? `/performance/${p.performance_id}`
+      : p.party_id
+        ? `/parties/${p.party_id}`
+        : p.band_id
+          ? `/bands/${p.band_id}`
+          : null;
     switch (n.type) {
       case 'party_approved':
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Tu toque «${title}» fue aprobado por el local.`, reason: null, href };
@@ -52,6 +59,9 @@
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Tu banda «${p.band_name ?? 'una banda'}» tocará «${song}» en «${title}».`, reason: null, href };
       case 'band_signup_declined':
         return { icon: XCircle, cls: 'text-warm-base', text: `Tu banda «${p.band_name ?? 'una banda'}» no fue elegida para «${song}» en «${title}».`, reason: null, href };
+      case 'band_member_claimed':
+        // #79: someone with a claim link signed up and took a placeholder's spot.
+        return { icon: UserPlus, cls: 'text-green-500', text: `${p.nickname ?? 'Alguien'} reclamó el lugar de «${p.display_name ?? 'un invitado'}» en «${p.band_name ?? 'tu banda'}».`, reason: null, href };
       case 'signup_approved':
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Te aprobaron para tocar «${song}» en «${title}».`, reason: null, href };
       case 'signup_declined':
