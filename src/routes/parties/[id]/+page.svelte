@@ -50,6 +50,11 @@
   // attached to this toque. Derived from data the page has, so the picker costs
   // no query — and scoping it here is why this never needs the unbounded
   // all-profiles fetch that #92 exists to remove.
+  // `users` is named explicitly even though getUserNickname() reads it
+  // internally: legacy mode tracks `$:` dependencies BY NAME, so without it this
+  // would not recompute when profiles land and every name would read "Anónimo".
+  // It happens to work today only because `users` is assigned a few lines before
+  // partyPerformers — coupling too fragile to rely on.
   $: logisticsPeople = [
     ...new Map(
       [
@@ -58,7 +63,7 @@
         ...partyAdmins
       ]
         .filter(Boolean)
-        .map((id: string) => [id, { id, nickname: getUserNickname(id) }])
+        .map((id: string) => [id, { id, nickname: users.length ? getUserNickname(id) : 'Anónimo' }])
     ).values()
   ];
 

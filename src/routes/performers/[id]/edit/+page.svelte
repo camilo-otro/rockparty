@@ -12,12 +12,26 @@ import { page } from '$app/state';
 // users here with ?next=<where they were headed>, so a deep link survives the
 // detour instead of dumping them on their own profile (#79).
 //
-// Only same-origin relative paths are honoured — a value starting with `//` or
-// a scheme would be an open redirect, and this value rides in a URL anyone can
-// hand you.
+// Only same-origin destinations are honoured — this value rides in a URL anyone
+// can hand you, so it is an open-redirect vector.
+//
+// Do NOT string-match for this. A `startsWith('/') && !startsWith('//')` guard
+// looks right and is not: the URL spec treats a backslash as a path separator
+// for http(s), so `/\evil.com` passes that test and resolves to
+// `http://evil.com/`. Verified in a browser. Let the URL parser normalise it and
+// compare origins, which is the only thing that actually decides the question.
 function afterSaveTarget(uid: string) {
   const next = page.url.searchParams.get('next');
-  if (next && next.startsWith('/') && !next.startsWith('//')) return next;
+  if (next) {
+    try {
+      const resolved = new URL(next, window.location.origin);
+      if (resolved.origin === window.location.origin) {
+        return resolved.pathname + resolved.search + resolved.hash;
+      }
+    } catch {
+      /* unparseable — fall through to the profile */
+    }
+  }
   return `/performers/${uid}`;
 }
 

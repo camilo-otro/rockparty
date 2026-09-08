@@ -234,11 +234,14 @@
   }
 </script>
 
-{#if canAdmin || mineUnconfirmed.length}
+{#if canAdmin || (loaded && mineUnconfirmed.length)}
   <div class="mt-6">
     <!-- What YOU were put down for. Shown to admins and non-admins alike; for a
          non-admin this is the only part of logistics they ever see. -->
-    {#if mineUnconfirmed.length}
+    <!-- Gated on `loaded`: `requirements` is assigned before the catalogue is
+         fetched, so without this the block renders one frame with label() at
+         "…" before the names arrive. -->
+    {#if loaded && mineUnconfirmed.length}
       <div class="mb-4 p-3 bg-base-900 rounded-lg border border-yellow/40 flex flex-col gap-2">
         <div class="text-yellow text-sm uppercase tracking-widest">Te toca</div>
         {#each mineUnconfirmed as r (r.id)}
