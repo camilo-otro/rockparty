@@ -47,8 +47,15 @@ create unique index if not exists band_pending_member_claim_token_key
 --
 -- Safe for the app: every existing read uses an explicit column list
 -- (`select('id, display_name, instrument_ids')` in bands/[id] and
--- bands/[id]/edit), so there is no `select('*')` to break. After this,
--- `select=*` returns every column but the token and `select=claim_token` 403s.
+-- bands/[id]/edit), so there is no `select('*')` to break.
+--
+-- CORRECTED AFTER APPLYING: `select=*` does not degrade to the readable columns,
+-- it fails outright with 42501 "permission denied for table", because PostgREST
+-- expands * to every column including the revoked one. profile behaves exactly
+-- the same way (`profile?select=*` also 42501), so the note in
+-- 20260821_profile_email_privacy.sql overstates it too. Same security outcome —
+-- arguably stronger — but explicit column lists are now REQUIRED, not merely
+-- what we happen to do.
 revoke select on public.band_pending_member from anon, authenticated;
 
 grant select (id, band_id, display_name, instrument_ids, created_at)
