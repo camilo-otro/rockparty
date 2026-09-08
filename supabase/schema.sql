@@ -758,6 +758,86 @@ create policy "party_requirement admin update" on public.party_requirement
 create policy "party_requirement admin delete" on public.party_requirement
   for delete to authenticated using (public.is_party_admin(party_id));
 
+-- ---- event logistics Stage 2: assignment + confirmation (#95) ---------------
+-- `notification` has no INSERT policy at all (clients cannot create them), so
+-- the assignment notice comes from a TRIGGER — meaning an assignment always
+-- notifies, however the row was written. Postgres does not check EXECUTE when
+-- firing a trigger, so the function is revoked from every role.
+create or replace function public.notify_requirement_assigned()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_actor uuid := (select auth.uid()); v_title text; v_item text;
+begin
+  -- Only a real, CHANGED assignee. Clearing the field (a decline, or reassigning
+  -- away) notifies nobody, and assigning yourself is not news.
+  if new.assigned_user is null then return new; end if;
+  if tg_op = 'UPDATE' and old.assigned_user is not distinct from new.assigned_user then return new; end if;
+  if new.assigned_user = v_actor then return new; end if;
+
+  select p.title into v_title from public.party p where p.id = new.party_id;
+  select coalesce(e.name, r.name) into v_item from (select 1) _
+    left join public.equipment e on e.id = new.equipment_id
+    left join public.party_role r on r.id = new.role_id;
+
+  insert into public.notification (recipient, type, payload)
+  values (new.assigned_user, 'requirement_assigned',
+          jsonb_build_object('party_id', new.party_id, 'party_title', v_title,
+                             'requirement_id', new.id, 'item', v_item, 'kind', new.kind::text));
+  return new;
+end; $$;
+
+create trigger requirement_assigned
+  after insert or update of assigned_user on public.party_requirement
+  for each row execute function public.notify_requirement_assigned();
+
+-- The assignee answers. An RPC, NOT a widened UPDATE policy: RLS cannot restrict
+-- which COLUMNS an update touches, so a policy scoped to assigned_user would let
+-- an assignee rewrite quantity/notes or reassign the row. Confirm touches only
+-- confirmed_at; decline hands the row back to the gap list and tells the other
+-- organizers, because a silent decline is worse than no assignment.
+create or replace function public.confirm_requirement(p_id bigint, p_confirmed boolean)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_req public.party_requirement; v_title text; v_item text; v_who text;
+begin
+  if v_uid is null then raise exception 'must be signed in'; end if;
+  select * into v_req from public.party_requirement where id = p_id;
+  -- Same message for "not yours" and "does not exist": no probing.
+  if v_req.id is null or v_req.assigned_user is distinct from v_uid then
+    raise exception 'not your assignment';
+  end if;
+
+  if p_confirmed then
+    update public.party_requirement set confirmed_at = now() where id = p_id;
+    return;
+  end if;
+
+  select p.title into v_title from public.party p where p.id = v_req.party_id;
+  select coalesce(e.name, r.name) into v_item from (select 1) _
+    left join public.equipment e on e.id = v_req.equipment_id
+    left join public.party_role r on r.id = v_req.role_id;
+  select nickname into v_who from public.profile where id = v_uid;
+
+  update public.party_requirement
+     set assigned_user = null, assigned_label = null, confirmed_at = null, source = 'unassigned'
+   where id = p_id;
+
+  insert into public.notification (recipient, type, payload)
+  select pa.uid, 'requirement_declined',
+         jsonb_build_object('party_id', v_req.party_id, 'party_title', v_title,
+                            'requirement_id', v_req.id, 'item', v_item, 'nickname', v_who)
+  from (
+    select p.created_by as uid from public.party p where p.id = v_req.party_id and p.created_by is not null
+    union
+    select a.user_id from public.party_admin a where a.party_id = v_req.party_id
+  ) pa
+  where pa.uid <> v_uid;
+end; $$;
+
+revoke all on function public.confirm_requirement(bigint, boolean) from public, anon, authenticated;
+grant execute on function public.confirm_requirement(bigint, boolean) to authenticated;
+revoke all on function public.notify_requirement_assigned() from public, anon, authenticated;
+
 -- ---- band claim link (#79) --------------------------------------------------
 -- Turns a band_pending_member placeholder into a real member. The link IS the
 -- credential and the consent: no email stored, nothing sent by us. Anyone

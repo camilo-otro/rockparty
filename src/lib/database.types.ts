@@ -1022,6 +1022,10 @@ export type Database = {
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
       claim_band_member: { Args: { p_token: string }; Returns: number }
+      confirm_requirement: {
+        Args: { p_confirmed: boolean; p_id: number }
+        Returns: undefined
+      }
       end_current_song: { Args: { p_party: number }; Returns: undefined }
       end_show: { Args: { p_party: number }; Returns: undefined }
       is_band_manager: { Args: { bid: number }; Returns: boolean }

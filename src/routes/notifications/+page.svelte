@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
   import { goto } from '$app/navigation';
-  import { ChevronLeft, Bell, CheckCircle2, XCircle, Clock, Zap, CalendarClock, UserPlus } from 'lucide-svelte';
+  import { ChevronLeft, Bell, CheckCircle2, XCircle, Clock, Zap, CalendarClock, UserPlus, PackageCheck, AlertTriangle } from 'lucide-svelte';
   import { reportError } from '$lib/stores/toasts';
   import { refreshUnread } from '$lib/stores/notifications';
   import dayjs from 'dayjs';
@@ -59,6 +59,11 @@
         return { icon: CheckCircle2, cls: 'text-green-500', text: `Tu banda «${p.band_name ?? 'una banda'}» tocará «${song}» en «${title}».`, reason: null, href };
       case 'band_signup_declined':
         return { icon: XCircle, cls: 'text-warm-base', text: `Tu banda «${p.band_name ?? 'una banda'}» no fue elegida para «${song}» en «${title}».`, reason: null, href };
+      case 'requirement_assigned':
+        // #95 Stage 2: an organizer put you down for a piece of gear or a role.
+        return { icon: PackageCheck, cls: 'text-yellow', text: `Te toca llevar «${p.item ?? 'algo'}» para «${title}».`, reason: null, href };
+      case 'requirement_declined':
+        return { icon: AlertTriangle, cls: 'text-warm-base', text: `${p.nickname ?? 'Alguien'} no puede con «${p.item ?? 'algo'}» en «${title}».`, reason: null, href };
       case 'band_member_claimed':
         // #79: someone with a claim link signed up and took a placeholder's spot.
         return { icon: UserPlus, cls: 'text-green-500', text: `${p.nickname ?? 'Alguien'} reclamó el lugar de «${p.display_name ?? 'un invitado'}» en «${p.band_name ?? 'tu banda'}».`, reason: null, href };

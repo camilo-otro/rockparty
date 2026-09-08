@@ -46,6 +46,22 @@
   // permission list above. The creator is pinned first and isn't in this table,
   // so nothing here can reorder or hide them.
   let coOrganizers: { user_id: string; display_order: number | null; hidden: boolean }[] = [];
+  // Who a requirement can be assigned to (#95 Stage 2): the people already
+  // attached to this toque. Derived from data the page has, so the picker costs
+  // no query — and scoping it here is why this never needs the unbounded
+  // all-profiles fetch that #92 exists to remove.
+  $: logisticsPeople = [
+    ...new Map(
+      [
+        ...partyPerformers.map((p: any) => p.user_id),
+        ...(party?.created_by ? [party.created_by] : []),
+        ...partyAdmins
+      ]
+        .filter(Boolean)
+        .map((id: string) => [id, { id, nickname: getUserNickname(id) }])
+    ).values()
+  ];
+
   $: shownOrganizers = party
     ? [
         party.created_by,
@@ -1286,7 +1302,8 @@
     <!-- Event logistics (#95). Renders nothing for non-admins, and fetches
          nothing either — the common case pays zero for it. Sits after the
          setlist because you plan gear once you know what you're playing. -->
-    <PartyLogistics partyId={party.id} venueId={party.venue} canAdmin={canAdmin} />
+    <PartyLogistics partyId={party.id} venueId={party.venue} canAdmin={canAdmin}
+      currentUserId={currentUserId} people={logisticsPeople} />
 
     <h3 class="text-3xl text-white font-medium pt-4 mt-2">MÚSICOS</h3>
     <div class="bg-base-950 rounded-lg overflow-hidden mt-2">
