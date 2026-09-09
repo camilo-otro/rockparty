@@ -9,6 +9,11 @@
 
   let performer: any = null;
   let instruments: string[] = [];
+  // Credits (#95 Stage 4): roles this person has actually been trusted with on
+  // toques that have already happened. No new schema — a read of the record
+  // Stage 2 writes. Honest by construction: it comes from ORGANIZERS naming
+  // them, not from self-declaration.
+  let credits: { name: string; count: number }[] = [];
   let bands: { id: number; name: string; avatar_url: string | null }[] = []; // #72
   let loading = true;
   let error: string | null = null;
@@ -19,6 +24,10 @@
   let nightClaps = 0;
   let songClaps = 0;
 
+  // Local date parts, not toISOString() — that is UTC and can shift the day.
+  const _now = new Date();
+  const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+
   onMount(async () => {
     const id = get(page).params.id;
     user.subscribe(u => { currentUserId = u?.id ?? null; })();
@@ -28,7 +37,7 @@
       error = err.message;
     } else {
       performer = data;
-      const [{ data: instrData }, { data: bandRows }, nightRes, songRes] = await Promise.all([
+      const [{ data: instrData }, { data: bandRows }, nightRes, songRes, creditRes] = await Promise.all([
         supabase.from('profile_instrument').select('instrument(name)').eq('profile_id', id),
         // RLS hides test bands from non-devs, so this shows only the viewer-visible ones.
         supabase.from('band_member').select('band ( id, name, avatar_url )').eq('user_id', id),
@@ -36,12 +45,29 @@
         supabase.from('applause').select('id', { count: 'exact', head: true })
           .eq('performer_id', id).eq('target_type', 'performer'),
         supabase.from('applause').select('id', { count: 'exact', head: true })
-          .eq('performer_id', id).eq('target_type', 'song_performer')
+          .eq('performer_id', id).eq('target_type', 'song_performer'),
+        // Past toques only: an upcoming assignment is not something they have
+        // DONE. `!inner` so the date filter restricts rows rather than nulling
+        // the embed. RLS scopes this to toques the viewer can see, so a test
+        // toque never shows up as a credit.
+        supabase.from('party_requirement')
+          .select('role:role_id ( name ), party!inner(date)')
+          .eq('assigned_user', id)
+          .eq('kind', 'role')
+          .lt('party.date', todayStr)
       ]);
       nightClaps = nightRes.count ?? 0;
       songClaps = songRes.count ?? 0;
       instruments = (instrData ?? []).map((r: any) => r.instrument?.name).filter(Boolean);
       bands = (bandRows ?? []).map((r: any) => r.band).filter(Boolean);
+      const tally: Record<string, number> = {};
+      for (const row of (creditRes.data ?? []) as any[]) {
+        const name = row.role?.name;
+        if (name) tally[name] = (tally[name] ?? 0) + 1;
+      }
+      credits = Object.entries(tally)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
     }
     loading = false;
   });
@@ -95,6 +121,19 @@
           </div>
         {/if}
       </section>
+
+      {#if credits.length}
+        <section class="mt-6">
+          <h3 class="text-lg text-white mb-2">Ha trabajado como</h3>
+          <div class="flex flex-row flex-wrap gap-2">
+            {#each credits as c}
+              <span class="px-3 py-1 rounded-full text-sm border border-yellow/50 text-yellow">
+                {c.name} · {c.count} {c.count === 1 ? 'toque' : 'toques'}
+              </span>
+            {/each}
+          </div>
+        </section>
+      {/if}
 
       {#if bands.length}
         <section class="mt-6">

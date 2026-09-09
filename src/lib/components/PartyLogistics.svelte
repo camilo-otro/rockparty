@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
-  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare } from 'lucide-svelte';
+  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare, History } from 'lucide-svelte';
   import { reportError, toastSuccess } from '$lib/stores/toasts';
 
   // Event logistics (#95). Stage 1: what this toque needs and where each piece
@@ -56,6 +56,13 @@
   // Which row is showing its "someone not on the app" text field.
   let namingFor: number | null = null;
   let typedName = '';
+
+  // "Who brought this last time?" (#95 Stage 4). The record Stage 2 has been
+  // writing, read back at the one moment it is useful: while you are adding the
+  // thing. No schema — one indexed lookup over rows that already exist.
+  let lastTime: { assigned_user: string | null; assigned_label: string } | null = null;
+  let lastTimeSeq = 0;
+  let useLastTime = false;
 
   const SOURCE_LABEL: Record<Requirement['source'], string> = {
     unassigned: 'Sin resolver',
@@ -135,7 +142,31 @@
   }
 
   async function openAdd() { adding = true; await loadCatalogue(); }
-  function resetForm() { formItemId = ''; formQuantity = ''; formSource = 'unassigned'; formNotes = ''; }
+
+  // Look up who last brought this item, on a toque THIS organizer created.
+  // Scoped to their own history on purpose: someone else's arrangements are not
+  // a useful suggestion, and it keeps the query to one indexed filter.
+  //
+  // `!inner` so the party filter actually restricts rows rather than just
+  // nulling the embed. Latest-wins guard because the select fires per change.
+  async function lookupLastTime(kind: 'equipment' | 'role', itemId: string) {
+    const seq = ++lastTimeSeq;
+    lastTime = null;
+    if (!itemId || !currentUserId) return;
+    const { data } = await supabase
+      .from('party_requirement')
+      .select('assigned_user, assigned_label, party!inner(created_by)')
+      .eq(kind === 'equipment' ? 'equipment_id' : 'role_id', Number(itemId))
+      .eq('party.created_by', currentUserId)
+      .neq('party_id', partyId)
+      .not('assigned_label', 'is', null)
+      .order('id', { ascending: false })
+      .limit(1);
+    if (seq !== lastTimeSeq) return;          // a newer selection superseded this
+    const row: any = (data ?? [])[0];
+    lastTime = row ? { assigned_user: row.assigned_user, assigned_label: row.assigned_label } : null;
+  }
+  function resetForm() { formItemId = ''; formQuantity = ''; formSource = 'unassigned'; formNotes = ''; lastTime = null; }
 
   async function addRequirement() {
     if (!formItemId || busy) return;
@@ -154,7 +185,15 @@
       .select(COLS);
     busy = false;
     if (error) { reportError(error); return; }
-    requirements = [...requirements, ...((data ?? []) as unknown as Requirement[])];
+    const created = (data ?? []) as unknown as Requirement[];
+    requirements = [...requirements, ...created];
+    // One tap: if they took the suggestion, the new row goes out already assigned
+    // (and the Stage 2 trigger notifies that person, exactly as a manual assign
+    // would).
+    if (useLastTime && lastTime && created[0]) {
+      await assign(created[0], lastTime.assigned_user, lastTime.assigned_label);
+    }
+    useLastTime = false;
     resetForm();
     adding = false;
   }
@@ -188,8 +227,11 @@
   function onAssignSelect(r: Requirement, value: string) {
     if (value === '__other') { namingFor = r.id; typedName = r.assigned_label ?? ''; return; }
     if (value === '') { assign(r, null, null); return; }
+    // Re-selecting the already-assigned person keeps their snapshot name: they
+    // may not be on this toque's roster, so `people` cannot supply it.
     const person = people.find((p) => p.id === value);
-    assign(r, value, person?.nickname ?? null);
+    const name = person?.nickname ?? (value === r.assigned_user ? r.assigned_label : null);
+    assign(r, value, name ?? null);
   }
 
   async function saveTypedName(r: Requirement) {
@@ -384,6 +426,14 @@
                         >
                           <option value="">Sin asignar</option>
                           {#each people as p}<option value={p.id}>{p.nickname}</option>{/each}
+                          {#if r.assigned_user && !people.some((p) => p.id === r.assigned_user)}
+                            <!-- Assigned from a PAST toque (the Stage 4 suggestion)
+                                 and not on this one's roster. Without this option
+                                 the select renders with nothing selected, and the
+                                 next touch would silently reassign away from a
+                                 person the organizer never saw. -->
+                            <option value={r.assigned_user}>{r.assigned_label ?? 'Alguien'}</option>
+                          {/if}
                           <option value="__other">{r.assigned_label && !r.assigned_user ? r.assigned_label : 'Otra persona…'}</option>
                         </select>
                         {#if !r.assigned_label}
@@ -424,11 +474,12 @@
                 class="text-cold-light hover:text-white p-1"><X size={16} /></button>
             </div>
             <div class="flex gap-2">
-              <select bind:value={formKind} on:change={() => (formItemId = '')} aria-label="Tipo" class="p-2 rounded-lg text-sm">
+              <select bind:value={formKind} on:change={() => { formItemId = ''; lastTime = null; useLastTime = false; }} aria-label="Tipo" class="p-2 rounded-lg text-sm">
                 <option value="equipment">Equipo</option>
                 <option value="role">Rol</option>
               </select>
-              <select bind:value={formItemId} aria-label="Qué" class="p-2 rounded-lg text-sm grow min-w-0">
+              <select bind:value={formItemId} on:change={() => lookupLastTime(formKind, formItemId)}
+                aria-label="Qué" class="p-2 rounded-lg text-sm grow min-w-0">
                 <option value="">Selecciona…</option>
                 {#if formKind === 'equipment'}
                   {#each Object.entries(equipmentByCategory) as [category, items]}
@@ -450,6 +501,19 @@
             </select>
             <input type="text" bind:value={formNotes} maxlength="200" placeholder="Nota (opcional)"
               aria-label="Nota" class="p-2 rounded-lg text-sm" />
+
+            {#if lastTime}
+              <!-- The record, read back where it is actually useful (#95 Stage 4).
+                   A suggestion, never an automatic assignment: the organizer is
+                   the one who knows whether it holds this time. -->
+              <label class="flex items-start gap-2 text-sm text-cold-light cursor-pointer">
+                <input type="checkbox" bind:checked={useLastTime} class="mt-0.5" />
+                <span class="inline-flex items-center gap-1.5">
+                  <History size={14} class="shrink-0" />
+                  La última vez lo trajo <span class="text-white">{lastTime.assigned_label}</span>. ¿Otra vez?
+                </span>
+              </label>
+            {/if}
             <button type="button" on:click={addRequirement} disabled={!formItemId || busy}
               class="bg-cold-base text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">Agregar</button>
           </div>
