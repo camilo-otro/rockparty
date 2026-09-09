@@ -18,6 +18,8 @@
   let loading = true;
   let error: string | null = null;
   let currentUserId: string | null = null;
+  // 'loading' until auth is known, so the gate never flashes during session restore.
+  let authState: 'loading' | 'in' | 'out' = 'loading';
   // Applause received (#38). Kept SEPARATE per target type rather than summed:
   // "great all night" and "great on that song" are different endorsements, and
   // merging them would also quietly reward whoever played the most songs.
@@ -31,6 +33,19 @@
   onMount(async () => {
     const id = get(page).params.id;
     user.subscribe(u => { currentUserId = u?.id ?? null; })();
+
+    // Profiles are behind a login wall. Bail BEFORE any query, so a signed-out
+    // visitor does not even issue the request.
+    //
+    // Honest about what this is: a UI gate, not a security boundary. `profile`
+    // stays world-readable in RLS, so this data remains reachable with the public
+    // key — it stops casual browsing of people, not scraping. Deliberate call: a
+    // nickname, an avatar and which toques someone played are low-sensitivity,
+    // and restricting RLS would blank out the names on the party and band pages
+    // that shared flyers funnel strangers into.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) { authState = 'out'; loading = false; return; }
+    authState = 'in';
 
     const { data, error: err } = await supabase.from('profile').select('id, nickname, avatar_url').eq('id', id).single();
     if (err) {
@@ -71,13 +86,21 @@
     }
     loading = false;
   });
+
+  function loginWithGoogle() {
+    supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
+  }
 </script>
 
 <div class="mt-8">
   <div class="mb-4 mx-4">
     <a href="/performers" class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
   </div>
-  {#if loading}
+  {#if authState === 'out'}
+    <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
+      Debes <button type="button" class="text-cold-light underline" on:click={loginWithGoogle}>iniciar sesión</button> para ver el perfil de un músico.
+    </div>
+  {:else if loading}
     <div class="text-white p-6">Cargando...</div>
   {:else if error}
     <div class="text-red-500 p-6">Error: {error}</div>

@@ -6,8 +6,21 @@
     let performers: any[] = [];
     let loading = true;
     let error: string | null = null;
+    // Profiles are behind a login wall. 'loading' until auth is known so the gate
+    // never flashes during session restore.
+    //
+    // Honest about what this is: a UI gate, not a security boundary. `profile`
+    // stays world-readable in RLS, so the data is still reachable with the public
+    // key — this stops casual browsing of people, not scraping. Deliberate call:
+    // a nickname, an avatar and which toques someone played are low-sensitivity,
+    // and restricting RLS would blank out the names on the party and band pages
+    // that shared flyers funnel strangers into.
+    let authState: 'loading' | 'in' | 'out' = 'loading';
 
     onMount(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) { authState = 'out'; loading = false; return; }
+        authState = 'in';
         const { data, error: err } = await supabase.from('profile').select('id, nickname, avatar_url');
         if (err) {
             error = err.message;
@@ -16,6 +29,10 @@
         }
         loading = false;
     });
+
+  function loginWithGoogle() {
+    supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
+  }
 </script>
 <div class="flex flex-col items-left">
     <div class="flex flex-row items-center">
@@ -23,6 +40,12 @@
     </div>
     <section>
         <h2 class="text-3xl text-white m-4 mb-4">INTÉRPRETES</h2>
+
+    {#if authState === 'out'}
+      <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
+        Debes <button type="button" class="text-cold-light underline" on:click={loginWithGoogle}>iniciar sesión</button> para ver los perfiles de los músicos.
+      </div>
+    {:else}
         <div class="m-4 rounded-lg overflow-clip flex flex-col">
             {#if loading}
                 <div class="text-white p-4">Cargando...</div>
@@ -47,8 +70,11 @@
                 </ul>
             {/if}
         </div>
+    {/if}
     </section>
-    <div class="flex justify-center p-4">
+    {#if authState !== 'out'}
+      <div class="flex justify-center p-4">
         <a class="text-center bg-cold-base text-white w-2/3 p-4 rounded-lg" href="/performers/create">Agregar un intérprete</a>
-    </div>
+      </div>
+    {/if}
 </div>
