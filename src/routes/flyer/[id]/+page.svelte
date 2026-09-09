@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
+  import { replaceState } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
   import { MapPin, Music, Users, PartyPopper, Share2, Copy, Check, ArrowRight } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
@@ -45,7 +46,11 @@
     const params = new URLSearchParams(location.search);
     if (params.get('rsvp') === '1') {
       if (!iAmGoing) await doRsvp(true);
-      history.replaceState({}, '', location.pathname);
+      // SvelteKit's replaceState, not the native one: passing {} to the native
+      // API wipes the entry's sveltekit:* bookkeeping. Harmless here today (no
+      // shallow routing on the flyer) but it is the same trap that broke the
+      // song overlay's back button, so don't leave the pattern lying around.
+      replaceState(location.pathname, {});
     }
   });
 

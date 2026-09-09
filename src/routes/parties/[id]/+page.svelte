@@ -2,7 +2,7 @@
   // Imports
   import { onMount, onDestroy, tick } from 'svelte';
   import { page } from '$app/state';
-  import { goto, pushState } from '$app/navigation';
+  import { goto, pushState, replaceState } from '$app/navigation';
   import { supabase } from '$lib/supabaseClient';
   import { ChevronLeft, ChevronUp, ChevronDown, Check, X, Share2, Edit, MapPin, Plus, Trash2, AlertTriangle, Copy, Users, Radio } from 'lucide-svelte';
   import PerformanceListItem from '../../../lib/components/PerformanceListItem.svelte';
@@ -886,9 +886,16 @@
     if (!setlistEl) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setlistEl.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-    // Drop the hash so a later refresh doesn't re-jump — same housekeeping the
-    // flyer does with ?rsvp=1.
-    history.replaceState({}, '', window.location.pathname + window.location.search);
+    // Drop the hash so a later refresh doesn't re-jump.
+    //
+    // MUST be SvelteKit's replaceState, not the native one. `history
+    // .replaceState({}, ...)` overwrites the entry's state object, wiping the
+    // sveltekit:history / sveltekit:states bookkeeping — and shallow routing
+    // (#94) reads exactly that to restore page.state on popstate. With it gone,
+    // closing the song overlay consumed a history entry WITHOUT clearing
+    // page.state.perfId, so the first back appeared to do nothing and the second
+    // jumped somewhere unexpected. Reported from a phone; reproduced locally.
+    replaceState(window.location.pathname + window.location.search, {});
   }
 
   onDestroy(() => {
