@@ -41,7 +41,7 @@
   let loaded = false;
   let busy = false;
 
-  let equipment: { id: number; name: string; category: string | null }[] = [];
+  let equipment: { id: number; name: string; category: string | null; default_quantity: number | null }[] = [];
   let roles: { id: number; name: string }[] = [];
   let catalogueLoaded = false;
   let venueEquipment: { equipment_id: number; quantity: number | null; notes: string | null }[] = [];
@@ -93,7 +93,7 @@
   async function loadCatalogue() {
     if (catalogueLoaded) return;
     const [eqRes, roleRes] = await Promise.all([
-      supabase.from('equipment').select('id, name, category').order('id'),
+      supabase.from('equipment').select('id, name, category, default_quantity').order('id'),
       supabase.from('party_role').select('id, name').order('id')
     ]);
     equipment = eqRes.data ?? [];
@@ -152,6 +152,15 @@
   async function lookupLastTime(kind: 'equipment' | 'role', itemId: string) {
     const seq = ++lastTimeSeq;
     lastTime = null;
+    // Never leave the quantity blank once an item is chosen. Uses the
+    // catalogue's default_quantity (#97), which is 1 for everything except
+    // Micrófonos — so "defaults to 1" holds, with the one item where a typical
+    // toque needs more already right.
+    if (kind === 'equipment' && itemId) {
+      formQuantity = String(equipment.find((e) => e.id === Number(itemId))?.default_quantity ?? 1);
+    } else {
+      formQuantity = '';
+    }
     if (!itemId || !currentUserId) return;
     const { data } = await supabase
       .from('party_requirement')
@@ -200,9 +209,16 @@
 
   async function setSource(r: Requirement, source: Requirement['source']) {
     const confirmed_at = source === 'venue' ? new Date().toISOString() : r.confirmed_at;
-    const { error } = await supabase.from('party_requirement').update({ source, confirmed_at }).eq('id', r.id);
+    // The venue supplying something is not a person bringing it, so an assignee
+    // makes no sense — clear it rather than leaving a stale name attached to a
+    // row whose picker is now hidden.
+    const clearsAssignee = source === 'venue' && (r.assigned_user || r.assigned_label);
+    const fields: Partial<Requirement> = clearsAssignee
+      ? { source, confirmed_at, assigned_user: null, assigned_label: null }
+      : { source, confirmed_at };
+    const { error } = await supabase.from('party_requirement').update(fields).eq('id', r.id);
     if (error) { reportError(error); return; }
-    patch(r.id, { source, confirmed_at });
+    patch(r.id, fields);
   }
 
   // Assigning someone. `assigned_label` is set even for app users — a snapshot of
@@ -399,16 +415,24 @@
 
                     {#if mode === 'full'}
                     <div class="flex items-center gap-2 flex-wrap">
+                      <!-- Once it is ticked off it is HERE: changing who was
+                           bringing it after the fact only corrupts the record.
+                           Untick to edit — the tick is the escape hatch. -->
                       <select
                         value={r.source}
+                        disabled={!!r.checked_at}
                         on:change={(e) => setSource(r, (e.currentTarget as HTMLSelectElement).value as Requirement['source'])}
                         aria-label="¿De dónde sale {label(r)}?"
-                        class="text-xs p-1 rounded-lg"
+                        class="text-xs p-1 rounded-lg disabled:opacity-50"
                       >
                         {#each SOURCE_ORDER as s}<option value={s}>{SOURCE_LABEL[s]}</option>{/each}
                       </select>
 
-                      {#if namingFor === r.id}
+                      <!-- A venue-provided item has no assignee: the local
+                           supplies it, there is no person to chase. -->
+                      {#if r.source === 'venue'}
+                        <span class="text-xs text-cold-light/60">Lo pone el local</span>
+                      {:else if namingFor === r.id}
                         <!-- Someone with no account. A typed name is a weaker
                              commitment than a confirmed user — there is nobody to
                              notify — so the badge stays "Sin confirmar". -->
@@ -420,9 +444,10 @@
                       {:else}
                         <select
                           value={r.assigned_user ?? (r.assigned_label ? '__other' : '')}
+                          disabled={!!r.checked_at}
                           on:change={(e) => onAssignSelect(r, (e.currentTarget as HTMLSelectElement).value)}
                           aria-label="¿Quién lo trae? {label(r)}"
-                          class="text-xs p-1 rounded-lg max-w-[10rem]"
+                          class="text-xs p-1 rounded-lg max-w-[10rem] disabled:opacity-50"
                         >
                           <option value="">Sin asignar</option>
                           {#each people as p}<option value={p.id}>{p.nickname}</option>{/each}
