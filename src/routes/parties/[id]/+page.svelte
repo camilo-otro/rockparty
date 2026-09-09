@@ -55,6 +55,17 @@
   // would not recompute when profiles land and every name would read "Anónimo".
   // It happens to work today only because `users` is assigned a few lines before
   // partyPerformers — coupling too fragile to rely on.
+  // Organizers only (creator + party_admin), for the "Organizador" auto-assign.
+  // Same `users` caveat as below: named explicitly because getUserNickname reads
+  // it and legacy mode tracks `$:` deps by NAME.
+  $: logisticsOrganizers = [
+    ...new Map(
+      [...(party?.created_by ? [party.created_by] : []), ...partyAdmins]
+        .filter(Boolean)
+        .map((id: string) => [id, { id, nickname: users.length ? getUserNickname(id) : 'Anónimo' }])
+    ).values()
+  ];
+
   $: logisticsPeople = [
     ...new Map(
       [
@@ -1308,7 +1319,7 @@
          nothing either — the common case pays zero for it. Sits after the
          setlist because you plan gear once you know what you're playing. -->
     <PartyLogistics partyId={party.id} venueId={party.venue} canAdmin={canAdmin}
-      currentUserId={currentUserId} people={logisticsPeople} />
+      currentUserId={currentUserId} people={logisticsPeople} organizers={logisticsOrganizers} />
 
     <h3 class="text-3xl text-white font-medium pt-4 mt-2">MÚSICOS</h3>
     <div class="bg-base-950 rounded-lg overflow-hidden mt-2">

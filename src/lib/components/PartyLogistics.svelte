@@ -15,6 +15,10 @@
   // in rather than fetched: the page has them, and a global user search would
   // mean the unbounded profile query #92 is trying to remove.
   export let people: { id: string; nickname: string }[] = [];
+  // The toque's organizers specifically (creator + party_admin), a subset of
+  // `people`. Needed because "Organizador" only names a specific person when
+  // there is exactly one — see setSource.
+  export let organizers: { id: string; nickname: string }[] = [];
   // 'full'      — the planning surface on the party page: add, source, assign.
   // 'checklist' — the day-of load-in list on the live console: names and ticks,
   //               nothing to edit while you are running a show one-thumbed.
@@ -67,7 +71,7 @@
   const SOURCE_LABEL: Record<Requirement['source'], string> = {
     unassigned: 'Sin resolver',
     venue: 'Del local',
-    organizer: 'Lo llevas tú',
+    organizer: 'Organizador',
     performer: 'Lo trae un músico',
     external: 'Alquilado o externo'
   };
@@ -186,6 +190,10 @@
         party_id: partyId,
         kind: formKind,
         source: formSource,
+        // Same rule setSource uses: the venue's own profile already declares its
+        // gear, so a row added as "Del local" arrives confirmed. Without this,
+        // adding one that way and switching one to it produced different rows.
+        confirmed_at: formSource === 'venue' ? new Date().toISOString() : null,
         notes: formNotes.trim() || null,
         equipment_id: formKind === 'equipment' ? Number(formItemId) : null,
         role_id: formKind === 'role' ? Number(formItemId) : null,
@@ -213,9 +221,17 @@
     // makes no sense — clear it rather than leaving a stale name attached to a
     // row whose picker is now hidden.
     const clearsAssignee = source === 'venue' && (r.assigned_user || r.assigned_label);
-    const fields: Partial<Requirement> = clearsAssignee
+    let fields: Partial<Requirement> = clearsAssignee
       ? { source, confirmed_at, assigned_user: null, assigned_label: null }
       : { source, confirmed_at };
+
+    // "Organizador" names a specific person only when there IS one. With a
+    // single organizer that is unambiguous, so fill it in; with several it would
+    // be a guess, and an unnamed row here is the "everyone assumed someone else
+    // would bring it" failure — the picker stays for them to say who.
+    if (source === 'organizer' && organizers.length === 1 && !r.assigned_user && !r.assigned_label) {
+      fields = { ...fields, assigned_user: organizers[0].id, assigned_label: organizers[0].nickname };
+    }
     const { error } = await supabase.from('party_requirement').update(fields).eq('id', r.id);
     if (error) { reportError(error); return; }
     patch(r.id, fields);
