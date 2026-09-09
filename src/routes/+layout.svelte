@@ -9,6 +9,7 @@
   import { unreadCount, refreshUnread, subscribeUnread, unsubscribeUnread } from '$lib/stores/notifications';
   import { isDev, refreshDev } from '$lib/stores/dev';
   import { showTest } from '$lib/stores/showTest';
+  import { managesVenue, refreshManagesVenue } from '$lib/stores/venueAdmin';
   export let data
 
   $: ({ supabase, session } = data)
@@ -64,6 +65,7 @@
       lastUid = uid;
       invalidate('supabase:auth')
       refreshDev(uid);
+      refreshManagesVenue(uid);
       if (uid) { refreshUnread(); subscribeUnread(); }
       else unsubscribeUnread();
     })
@@ -73,6 +75,7 @@
     refreshUnread();
     subscribeUnread();
     refreshDev();
+    refreshManagesVenue(session?.user?.id ?? null);
     return () => {
       data.subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
@@ -103,6 +106,11 @@
             <a href="/parties/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis toques</a>
             <a href="/rehearsal" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Lista de ensayo</a>
             <a href="/bands" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis bandas</a>
+            {#if $managesVenue}
+              <!-- Only for people who actually manage a venue: most users are
+                   musicians and would never use it. -->
+              <a href="/venues/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis locales</a>
+            {/if}
             <a href={`/performers/${session.user.id}`} on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Ver mi perfil</a>
             {#if $isDev}
               <!-- Dev-only: RLS already keeps test rows away from everyone else,
