@@ -336,7 +336,7 @@ create table if not exists public.dev_user (
   created_at timestamptz not null default now()
 );
 
--- song_moderator — who may delete user-added catalogue entries (#99). Same
+-- song_moderator — who may delete user-added catalogue entries (#100). Same
 -- grant-only shape as dev_user (self-read, no write policy), but deliberately a
 -- SEPARATE list: dev_user grants test-data visibility, which is far cheaper to
 -- hand out than a delete that cascades through set lists. Not profile.role
@@ -411,7 +411,7 @@ create index if not exists idx_profile_instrument_instrument on public.profile_i
 create index if not exists idx_venue_equipment_equipment on public.venue_equipment (equipment_id);
 create index if not exists idx_profile_role                on public.profile (role);
 create index if not exists idx_song_added_by               on public.song (added_by);
--- Read by the song DELETE policy once per candidate row (#99); the FK alone
+-- Read by the song DELETE policy once per candidate row (#100); the FK alone
 -- does not create it.
 create index if not exists idx_performance_song            on public.performance (song);
 create index if not exists idx_venue_created_by            on public.venue (created_by);
@@ -456,7 +456,7 @@ returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.dev_user d where d.user_id = (select auth.uid()));
 $$;
 
--- is_song_moderator: may delete user-added songs (#99). Mirrors is_dev().
+-- is_song_moderator: may delete user-added songs (#100). Mirrors is_dev().
 create or replace function public.is_song_moderator()
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.song_moderator m where m.user_id = (select auth.uid()));
@@ -464,7 +464,7 @@ $$;
 revoke all on function public.is_song_moderator() from public, anon, authenticated;
 grant execute on function public.is_song_moderator() to authenticated;
 
--- song_on_real_setlist: is this song on the set list of a NON-test party (#99)?
+-- song_on_real_setlist: is this song on the set list of a NON-test party (#100)?
 -- SECURITY DEFINER is load-bearing, not incidental. Inlining this lookup in the
 -- delete policy would re-enter RLS on performance/party, hiding another
 -- organizer's draft / pending_venue / cancelled toque from the guard and letting
@@ -482,7 +482,7 @@ grant execute on function public.song_on_real_setlist(bigint) to authenticated;
 
 -- songs_for_moderation: the review list, with the same privileged view of usage
 -- the delete policy has, so the screen and the policy agree. Gated internally on
--- is_song_moderator(); a non-moderator gets an empty set. #99.
+-- is_song_moderator(); a non-moderator gets an empty set. #100.
 create or replace function public.songs_for_moderation()
 returns table (
   id bigint, title varchar, artist varchar, ref_link text, created_at timestamptz,
@@ -1279,7 +1279,7 @@ create policy "allow insert to authenticated users" on public.song
 -- Deleting a song CASCADES to performance -> performance_user + applause, past
 -- those tables' own RLS, so this predicate is the only thing standing between a
 -- moderator and a real set list. The guard MUST stay a SECURITY DEFINER call --
--- an inline subquery here would be filtered by RLS and would under-block. #99.
+-- an inline subquery here would be filtered by RLS and would under-block. #100.
 create policy "moderators may delete unused songs" on public.song
   for delete to authenticated using (
     public.is_song_moderator()
@@ -1587,7 +1587,7 @@ create policy "rsvp delete self" on public.party_rsvp
 create policy "dev_user self read" on public.dev_user
   for select to authenticated using (user_id = (select auth.uid()));
 
--- ---- song_moderator (#99) ----------------------------------------------------
+-- ---- song_moderator (#100) ----------------------------------------------------
 -- Self-read only, granted out-of-band exactly like dev_user.
 create policy "song_moderator self read" on public.song_moderator
   for select to authenticated using (user_id = (select auth.uid()));

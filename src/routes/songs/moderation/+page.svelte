@@ -4,7 +4,7 @@
   import { ChevronLeft, Trash2, Lock, AlertTriangle, ExternalLink } from 'lucide-svelte';
   import { reportError, toastSuccess, toastError } from '$lib/stores/toasts';
 
-  // Song moderation (#99). #98 made adding a song to the shared catalogue a
+  // Song moderation (#100). #98 made adding a song to the shared catalogue a
   // one-tap action from the setlist page, so the catalogue now needs a cleanup
   // path for typos, wrong versions and joke entries.
   //

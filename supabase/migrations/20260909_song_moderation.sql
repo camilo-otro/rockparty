@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: song moderation — a delete path for user-added catalogue entries
+-- Migration: song moderation — a delete path for user-added catalogue entries (#100)
 -- Date: 2026-09-09
 -- =============================================================================
 -- The catalogue is shared: anyone signed in can insert a song, and #98 (inline
@@ -44,8 +44,8 @@ begin;
 -- stays true after the row changes) and `authenticated` holds UPDATE on the
 -- `role` column. Any signed-in user can promote themselves with a single REST
 -- call. profile.role is a display/preference field, not a privilege, and must
--- never gate anything. (Tightening it is filed separately — it is a distinct
--- change with its own blast radius, and this feature must not depend on it.)
+-- never gate anything. (Tightening it is #99 — a distinct change with its own
+-- blast radius, and this feature must not depend on it.)
 --
 -- NOT is_dev() either: dev_user currently holds four people (Cami, Yorch,
 -- Capibear, fuyumehanamura) because it grants TEST-DATA VISIBILITY, which is a
