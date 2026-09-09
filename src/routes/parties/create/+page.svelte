@@ -94,7 +94,12 @@
           }
           toastSuccess('Borrador creado — revísalo y publícalo.');
           setTimeout(() => {
-            goto(newId ? `/parties/${newId}` : '/parties');
+            // Straight into the logistics quick-start (#97) rather than the
+            // party page: the list #95 built starts empty, and this is the one
+            // moment the organizer is already thinking about the toque. The
+            // step is skippable and the toque is already saved, so it can never
+            // cost anything.
+            goto(newId ? `/parties/${newId}/setup` : '/parties');
           }, 1000);
         }
       } catch (e) {

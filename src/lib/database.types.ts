@@ -247,19 +247,25 @@ export type Database = {
         Row: {
           category: string | null
           created_at: string
+          default_quantity: number | null
           id: number
+          is_basic: boolean
           name: string
         }
         Insert: {
           category?: string | null
           created_at?: string
+          default_quantity?: number | null
           id?: number
+          is_basic?: boolean
           name: string
         }
         Update: {
           category?: string | null
           created_at?: string
+          default_quantity?: number | null
           id?: number
+          is_basic?: boolean
           name?: string
         }
         Relationships: []
@@ -526,16 +532,19 @@ export type Database = {
         Row: {
           created_at: string
           id: number
+          is_basic: boolean
           name: string
         }
         Insert: {
           created_at?: string
           id?: number
+          is_basic?: boolean
           name: string
         }
         Update: {
           created_at?: string
           id?: number
+          is_basic?: boolean
           name?: string
         }
         Relationships: []
