@@ -36,6 +36,10 @@
   let denied = false;
 
   onMount(async () => {
+    // A non-numeric id makes partyId NaN, which PostgREST answers with 400s.
+    // The page still degrades to `denied`, but bail first so three failed
+    // requests do not sit in the console masking real errors later.
+    if (!Number.isFinite(partyId)) { denied = true; loading = false; return; }
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) { denied = true; loading = false; return; }
 
