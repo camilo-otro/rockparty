@@ -100,10 +100,11 @@ Two actions: **"Listo"** (writes and goes to the party page) and **"Saltar"**
 (goes straight there). Skip must be as prominent as Listo — an organizer in a
 hurry should not feel trapped.
 
-Copy should frame the result as a to-do, not a scolding. Landing on the party
-page with "6 sin resolver" in warm-base right after creating a toque reads as
-failure unless the step has already said what it is: *"Marcamos lo que falta
-conseguir — lo puedes resolver después."*
+Copy frames the result as a to-do, not a scolding — but it should not apologise
+for a long gap list either. Per decision 2 the gaps are the deliverable: landing
+on "6 sin resolver" is the step having done its job, so say what it is rather
+than softening it: *"Marcamos lo que falta conseguir — lo puedes resolver
+después."*
 
 ## Writing it
 
@@ -132,18 +133,21 @@ legitimately two rows (see the #95 spec).
   already listed.
 - **Editing the catalogue from the UI.** `is_basic` is tuned in the SQL editor,
   like every other lookup in this app.
+- **Backfilling existing toques.** Settled in decision 3: there is nothing worth
+  backfilling, so no bulk action on the party page.
 
-## Worth deciding before building
+## Decided
 
-1. **Should the standard set default ON or OFF?** This spec says **on** — a rock
-   gig genuinely needs a PA, mics, drums and amps, and defaulting off makes the
-   step a no-op for anyone who just taps Listo. The cost is that a venue with no
-   recorded equipment produces six gaps immediately. Mitigated by copy, but it is
-   a real first-impression risk and the opposite default is defensible.
-2. **Should the step appear for a toque with no venue-recorded equipment?** It is
-   most useful exactly then — but it is also six switches with nothing
-   pre-answered, which is more work than value for some organizers.
-3. **Does it belong on edit too?** A toque created before this shipped has no
-   logistics and no way to bulk-add. The party page's add-one-at-a-time still
-   works, but a "empezar con lo básico" button there would close that gap for
-   every existing toque, including the 19 Sep one.
+1. **The standard set defaults ON**, and every row can be switched off. A rock
+   gig needs a PA, mics, drums and amps; defaulting off would make the step a
+   no-op for anyone who just taps Listo.
+2. **The step shows even when the venue has no recorded equipment** — in fact
+   that is a case it exists for. Two reasons, the second better than the first:
+   the organizer needs to know what they have to figure out, and a toque that
+   lands on six unresolved gaps is *visible pressure on the venue to fill in its
+   profile*. The empty state does work rather than being a shortfall, so the copy
+   should not apologise for it.
+3. **No bulk "empezar con lo básico" on the party page.** Toques created before
+   this ships are few and all belong to one person, so there is nothing to
+   backfill. Only future toques need handling, which keeps this to a single
+   surface.
