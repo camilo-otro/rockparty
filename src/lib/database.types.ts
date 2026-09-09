@@ -836,6 +836,29 @@ export type Database = {
           },
         ]
       }
+      song_moderator: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "song_moderator_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue: {
         Row: {
           address: string | null
@@ -1039,6 +1062,7 @@ export type Database = {
       end_show: { Args: { p_party: number }; Returns: undefined }
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
+      is_song_moderator: { Args: never; Returns: boolean }
       is_party_admin: { Args: { pid: number }; Returns: boolean }
       jump_to_song: {
         Args: { p_party: number; p_performance: number }
@@ -1089,6 +1113,21 @@ export type Database = {
         Returns: undefined
       }
       skip_song: { Args: { p_party: number }; Returns: number }
+      song_on_real_setlist: { Args: { p_song: number }; Returns: boolean }
+      songs_for_moderation: {
+        Args: never
+        Returns: {
+          added_by_nickname: string
+          artist: string
+          created_at: string
+          id: number
+          real_parties: Json
+          real_uses: number
+          ref_link: string
+          test_uses: number
+          title: string
+        }[]
+      }
       start_show: { Args: { p_party: number }; Returns: number }
       undo_last_move: { Args: { p_party: number }; Returns: number }
     }

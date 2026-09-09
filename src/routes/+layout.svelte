@@ -10,6 +10,7 @@
   import { isDev, refreshDev } from '$lib/stores/dev';
   import { showTest } from '$lib/stores/showTest';
   import { managesVenue, refreshManagesVenue } from '$lib/stores/venueAdmin';
+  import { isSongModerator, refreshSongModerator } from '$lib/stores/songModerator';
   export let data
 
   $: ({ supabase, session } = data)
@@ -66,6 +67,7 @@
       invalidate('supabase:auth')
       refreshDev(uid);
       refreshManagesVenue(uid);
+      refreshSongModerator(uid);
       if (uid) { refreshUnread(); subscribeUnread(); }
       else unsubscribeUnread();
     })
@@ -76,6 +78,7 @@
     subscribeUnread();
     refreshDev();
     refreshManagesVenue(session?.user?.id ?? null);
+    refreshSongModerator(session?.user?.id ?? null);
     return () => {
       data.subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
@@ -112,6 +115,11 @@
               <a href="/venues/mine" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Mis locales</a>
             {/if}
             <a href={`/performers/${session.user.id}`} on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Ver mi perfil</a>
+            {#if $isSongModerator}
+              <!-- Catalogue moderation (#99). A separate list from dev_user: this
+                   one grants a delete that cascades through set lists. -->
+              <a href="/songs/moderation" on:click={() => (showMenu = false)} class="block w-full text-left px-4 py-2 text-white font-medium hover:bg-base-950">Moderar canciones</a>
+            {/if}
             {#if $isDev}
               <!-- Dev-only: RLS already keeps test rows away from everyone else,
                    so this switch is purely about a dev's own signal-to-noise. -->
