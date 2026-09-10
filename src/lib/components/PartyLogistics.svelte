@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
-  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare, History } from 'lucide-svelte';
+  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare, History, ChevronDown, ChevronRight } from 'lucide-svelte';
   import { reportError, toastSuccess } from '$lib/stores/toasts';
 
   // Event logistics (#95). Stage 1: what this toque needs and where each piece
@@ -56,6 +56,21 @@
   let formQuantity = '';
   let formSource: Requirement['source'] = 'unassigned';
   let formNotes = '';
+
+  // Rows whose editors are open (#107). A RESOLVED row hides its two selects by
+  // default: they offer to change a decision already made, and they are two
+  // thirds of the row's height. Unresolved rows always show them — the source
+  // picker is the whole point of the screen — so this set only ever concerns
+  // resolved ones.
+  //
+  // Session-only, and a Set that must be REASSIGNED, never mutated: legacy mode
+  // tracks `expanded` by name, and an in-place .add() changes nothing it can see.
+  let expanded = new Set<number>();
+  function toggleExpanded(id: number) {
+    const next = new Set(expanded);
+    next.has(id) ? next.delete(id) : next.add(id);
+    expanded = next;
+  }
 
   // Which row is showing its "someone not on the app" text field.
   let namingFor: number | null = null;
@@ -114,6 +129,13 @@
     (acc[e.category ?? 'otros'] ??= []).push(e);
     return acc;
   }, {});
+
+  // Editors visible: always for a gap, on request for anything resolved. Derived
+  // rather than a helper called from the template — a function reading
+  // `expanded` internally would leave the markup stale when it changes.
+  $: editing = new Set(
+    requirements.filter((r) => r.source === 'unassigned' || expanded.has(r.id)).map((r) => r.id)
+  );
 
   $: gaps = requirements.filter((r) => r.source === 'unassigned').length;
   $: grouped = SOURCE_ORDER.map((source) => ({
@@ -235,6 +257,10 @@
     const { error } = await supabase.from('party_requirement').update(fields).eq('id', r.id);
     if (error) { reportError(error); return; }
     patch(r.id, fields);
+    // Picking a source is usually step one of two — assigning a person is step
+    // two. Letting the row collapse the instant it stops being a gap would take
+    // the assignee picker away mid-task, so keep it open until it is dismissed.
+    if (!expanded.has(r.id)) expanded = new Set(expanded).add(r.id);
   }
 
   // Assigning someone. `assigned_label` is set even for app users — a snapshot of
@@ -418,18 +444,36 @@
                             </span>
                           {/if}
                         </div>
-                        {#if r.assigned_label && mode === 'checklist'}
+                        <!-- In full mode the assignee normally lives inside the
+                             select, so a collapsed row would say nothing about
+                             who has it. Seeing that at a glance IS the list's
+                             job, and one line of small text is not the clutter
+                             being removed — two dropdowns are. -->
+                        {#if r.assigned_label && (mode === 'checklist' || !editing.has(r.id))}
                           <div class="text-xs text-cold-light">{r.assigned_label}</div>
                         {/if}
                         {#if r.notes}<div class="text-xs text-cold-light">{r.notes}</div>{/if}
                       </div>
                       {#if mode === 'full'}
-                      <button type="button" on:click={() => remove(r)} aria-label="Quitar {label(r)}"
-                        class="text-warm-base hover:text-red-400 p-1 shrink-0"><Trash2 size={16} /></button>
+                        {#if r.source !== 'unassigned'}
+                          <button type="button" on:click={() => toggleExpanded(r.id)}
+                            aria-expanded={editing.has(r.id)}
+                            aria-label="{editing.has(r.id) ? 'Ocultar' : 'Editar'} de dónde sale {label(r)}"
+                            class="text-cold-light/60 hover:text-cold-light p-1 shrink-0">
+                            {#if editing.has(r.id)}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
+                          </button>
+                        {/if}
+                        <!-- Only while the editors are open: removing something
+                             is destructive and does not belong on a row whose
+                             whole purpose is to be quiet. -->
+                        {#if editing.has(r.id)}
+                          <button type="button" on:click={() => remove(r)} aria-label="Quitar {label(r)}"
+                            class="text-warm-base hover:text-red-400 p-1 shrink-0"><Trash2 size={16} /></button>
+                        {/if}
                       {/if}
                     </div>
 
-                    {#if mode === 'full'}
+                    {#if mode === 'full' && editing.has(r.id)}
                     <div class="flex items-center gap-2 flex-wrap">
                       <!-- Once it is ticked off it is HERE: changing who was
                            bringing it after the fact only corrupts the record.
