@@ -470,6 +470,38 @@ $$;
 revoke all on function public.is_song_moderator() from public, anon, authenticated;
 grant execute on function public.is_song_moderator() to authenticated;
 
+-- my_user_flags: the three per-user booleans the profile menu reads, in ONE
+-- round trip (#101). Replaces five requests per cold load. SECURITY DEFINER so
+-- the answer does not depend on the SELECT policies of four different tables --
+-- notably `venue`, which is filtered by (is_test = false or is_dev()). Exposes
+-- nothing new: every output is a boolean about auth.uid()'s own rows.
+--
+-- A DISPLAY convenience, not an authorization boundary. RLS still decides every
+-- read and write; the single-purpose is_dev() / is_song_moderator() helpers stay
+-- because policies call those.
+create or replace function public.my_user_flags()
+returns table (is_dev boolean, manages_venue boolean, is_song_moderator boolean)
+language sql stable security definer set search_path = '' as $$
+  with d as (
+    select (select auth.uid()) as uid,
+           exists (select 1 from public.dev_user dv where dv.user_id = (select auth.uid())) as dev
+  )
+  select
+    d.dev,
+    -- Two halves: venues have no creator-auto-add trigger, so ownership and
+    -- admin membership are separate questions. Both check is_test so the flag
+    -- cannot light up a menu entry whose page (read under RLS) would be empty.
+    exists (select 1 from public.venue v
+             where v.created_by = d.uid and (v.is_test = false or d.dev))
+    or exists (select 1 from public.venue_admin va
+                join public.venue v on v.id = va.venue_id
+               where va.user_id = d.uid and (v.is_test = false or d.dev)),
+    exists (select 1 from public.song_moderator m where m.user_id = d.uid)
+  from d;
+$$;
+revoke all on function public.my_user_flags() from public, anon, authenticated;
+grant execute on function public.my_user_flags() to authenticated;
+
 -- song_on_real_setlist: is this song on the set list of a NON-test party (#100)?
 -- SECURITY DEFINER is load-bearing, not incidental. Inlining this lookup in the
 -- delete policy would re-enter RLS on performance/party, hiding another

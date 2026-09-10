@@ -3,7 +3,7 @@
   import { supabase } from '$lib/supabaseClient';
   import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
   import { normalizeText } from '$lib/sanitize';
-  import { isDev } from '$lib/stores/dev';
+  import { isDev } from '$lib/stores/userFlags';
   export let submitting = false;
   export let initialName = '';
   export let initialAddress = '';

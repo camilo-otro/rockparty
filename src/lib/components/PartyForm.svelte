@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { normalizeText } from '$lib/sanitize';
   import { supabase } from '$lib/supabaseClient';
-  import { isDev } from '$lib/stores/dev';
+  import { isDev } from '$lib/stores/userFlags';
   export let venues: any[] = [];
   export let loadingVenues: boolean = false;
   export let errorVenues: string | null = null;

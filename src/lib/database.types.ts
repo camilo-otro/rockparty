@@ -1081,6 +1081,14 @@ export type Database = {
         Args: { p_party: number; p_performance: number }
         Returns: number
       }
+      my_user_flags: {
+        Args: never
+        Returns: {
+          is_dev: boolean
+          is_song_moderator: boolean
+          manages_venue: boolean
+        }[]
+      }
       notify_upcoming_toques: { Args: never; Returns: undefined }
       peek_band_claim: {
         Args: { p_token: string }

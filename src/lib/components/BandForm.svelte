@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { normalizeText } from '$lib/sanitize';
-  import { isDev } from '$lib/stores/dev';
+  import { isDev } from '$lib/stores/userFlags';
   import { X, Crown, Trash2, Link2, RefreshCw, Check } from 'lucide-svelte';
   import AvatarCropper from '$lib/components/AvatarCropper.svelte';
 

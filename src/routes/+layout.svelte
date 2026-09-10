@@ -7,10 +7,8 @@
   import logo from '$lib/assets/images/Logo.png';
   import Toasts from '$lib/components/Toasts.svelte';
   import { unreadCount, refreshUnread, subscribeUnread, unsubscribeUnread } from '$lib/stores/notifications';
-  import { isDev, refreshDev } from '$lib/stores/dev';
+  import { isDev, managesVenue, isSongModerator, refreshUserFlags } from '$lib/stores/userFlags';
   import { showTest } from '$lib/stores/showTest';
-  import { managesVenue, refreshManagesVenue } from '$lib/stores/venueAdmin';
-  import { isSongModerator, refreshSongModerator } from '$lib/stores/songModerator';
   export let data
 
   $: ({ supabase, session } = data)
@@ -54,10 +52,12 @@
   onMount(() => {
     // Supabase re-emits SIGNED_IN on its own (token refresh, tab focus, and after
     // any auth call) — measured firing on an idle page every few seconds. Acting
-    // on every one meant 5 wasted requests a pop, forever, and refreshDev()'s
-    // getUser() call from in here triggered the NEXT SIGNED_IN: a self-sustaining
-    // loop. Two fixes: only react when the signed-in user actually CHANGES, and
-    // take the uid from the session instead of asking the auth client for it.
+    // on every one meant a burst of wasted requests a pop, forever, and the old
+    // refreshDev()'s getUser() call from in here triggered the NEXT SIGNED_IN: a
+    // self-sustaining loop. Two fixes: only react when the signed-in user
+    // actually CHANGES, and take the uid from the session rather than asking the
+    // auth client for it. refreshUserFlags now REQUIRES the uid, so the trap
+    // cannot be walked back into (#101).
     let lastUid: string | null = session?.user?.id ?? null;
     const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') return;
@@ -65,9 +65,7 @@
       if (uid === lastUid) return;   // same user as before: nothing to redo
       lastUid = uid;
       invalidate('supabase:auth')
-      refreshDev(uid);
-      refreshManagesVenue(uid);
-      refreshSongModerator(uid);
+      refreshUserFlags(uid);
       if (uid) { refreshUnread(); subscribeUnread(); }
       else unsubscribeUnread();
     })
@@ -76,9 +74,9 @@
     document.addEventListener('visibilitychange', onVisible);
     refreshUnread();
     subscribeUnread();
-    refreshDev();
-    refreshManagesVenue(session?.user?.id ?? null);
-    refreshSongModerator(session?.user?.id ?? null);
+    // The uid from the session we already hold — never getUser(), which is both
+    // a wasted round trip and the auth-loop trap (#101).
+    refreshUserFlags(session?.user?.id ?? null);
     return () => {
       data.subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
