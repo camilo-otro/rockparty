@@ -54,7 +54,7 @@ The temptation is to add hi-hat, crash, ride, snare and pedal as five new basic
 items. That would be wrong, and #97's spec already says why: *"every switch on
 that screen is friction"* — which is exactly why Monitores, Cajas DI, Tarima and
 Iluminación were deliberately kept off the standard set. Five drum switches
-would take the quick-start from six controls to eleven and undo that decision.
+would take the quick-start from seven controls to twelve and undo that decision.
 
 The operational split that matters is **shells vs cymbals vs hi-hat**. A drummer
 who brings crashes and rides brings them in one bag, so those stay together —
@@ -67,7 +67,7 @@ venue can easily have the stand but not the cymbals, or neither.
 ### Tier 1 — the standard set (`is_basic = true`)
 
 Replace one row with three. Net effect on the quick-start: **two extra
-switches**, six controls to eight.
+switches**, seven controls to nine.
 
 | Name | Notes |
 |---|---|
@@ -75,7 +75,7 @@ switches**, six controls to eight.
 | `Platillos` | New — crashes and rides, the bag a drummer carries. `default_quantity = 1`: a set, not a count. |
 | `Hi-hat` | New. Separate because it needs a stand and pedal, not just a boom arm. |
 
-Eight controls is more than #97 wanted, and that is the accepted cost: all three
+Nine controls is more than #97 wanted, and that is the accepted cost: all three
 sit in the same `batería` category, adjacent and reading as one group, and they
 default on so a single "Listo" still works. The alternative is continuing to
 give a confidently wrong answer.

@@ -42,6 +42,13 @@ alter table public.party_role
 -- Matched on NAME rather than id: ids are identity-generated and a re-seed could
 -- renumber them, whereas these names are the catalogue's stable identity (the
 -- same reasoning as youtubeTermFor in the performance page).
+--
+-- SUPERSEDED, 2026-09-10 (#106): names are NOT the stable identity, and this
+-- comment was wrong. 20260910_equipment_codes_and_drums.sql adds a `code`
+-- column to equipment and party_role and renames 'Batería' to
+-- 'Batería (sin platillos)', so the match below no longer finds that row.
+-- Harmless to re-run — the codes migration sets is_basic itself — but DO NOT
+-- copy this pattern. Match on `code`.
 update public.equipment set is_basic = true, default_quantity = 1
  where name in ('Sistema de sonido (PA)',
                 'Consola de mezcla',

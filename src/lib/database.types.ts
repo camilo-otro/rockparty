@@ -246,6 +246,7 @@ export type Database = {
       equipment: {
         Row: {
           category: string | null
+          code: string
           created_at: string
           default_quantity: number | null
           id: number
@@ -254,6 +255,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          code: string
           created_at?: string
           default_quantity?: number | null
           id?: number
@@ -262,6 +264,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          code?: string
           created_at?: string
           default_quantity?: number | null
           id?: number
@@ -530,18 +533,21 @@ export type Database = {
       }
       party_role: {
         Row: {
+          code: string
           created_at: string
           id: number
           is_basic: boolean
           name: string
         }
         Insert: {
+          code: string
           created_at?: string
           id?: number
           is_basic?: boolean
           name: string
         }
         Update: {
+          code?: string
           created_at?: string
           id?: number
           is_basic?: boolean
