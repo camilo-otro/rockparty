@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
-  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare, History, ChevronDown, ChevronRight } from 'lucide-svelte';
+  import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare, History, ChevronDown, ChevronUp } from 'lucide-svelte';
   import { reportError, toastSuccess } from '$lib/stores/toasts';
 
   // Event logistics (#95). Stage 1: what this toque needs and where each piece
@@ -66,10 +66,17 @@
   // Session-only, and a Set that must be REASSIGNED, never mutated: legacy mode
   // tracks `expanded` by name, and an in-place .add() changes nothing it can see.
   let expanded = new Set<number>();
+  // Which row is asking "¿Quitar?". Removal is a plain DELETE with no undo — the
+  // toast store has no action support — so it gets a second tap. Same inline
+  // Check/X idiom this component already uses for the typed-name flow.
+  let confirmingRemove: number | null = null;
+
   function toggleExpanded(id: number) {
     const next = new Set(expanded);
     next.has(id) ? next.delete(id) : next.add(id);
     expanded = next;
+    // Collapsing must not leave a half-armed delete behind for next time.
+    if (confirmingRemove === id) confirmingRemove = null;
   }
 
   // Which row is showing its "someone not on the app" text field.
@@ -331,6 +338,7 @@
   async function remove(r: Requirement) {
     const { error } = await supabase.from('party_requirement').delete().eq('id', r.id);
     if (error) { reportError(error); return; }
+    confirmingRemove = null;
     requirements = requirements.filter((x) => x.id !== r.id);
   }
 
@@ -454,22 +462,21 @@
                         {/if}
                         {#if r.notes}<div class="text-xs text-cold-light">{r.notes}</div>{/if}
                       </div>
-                      {#if mode === 'full'}
-                        {#if r.source !== 'unassigned'}
-                          <button type="button" on:click={() => toggleExpanded(r.id)}
-                            aria-expanded={editing.has(r.id)}
-                            aria-label="{editing.has(r.id) ? 'Ocultar' : 'Editar'} de dónde sale {label(r)}"
-                            class="text-cold-light/60 hover:text-cold-light p-1 shrink-0">
-                            {#if editing.has(r.id)}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
-                          </button>
-                        {/if}
-                        <!-- Only while the editors are open: removing something
-                             is destructive and does not belong on a row whose
-                             whole purpose is to be quiet. -->
-                        {#if editing.has(r.id)}
-                          <button type="button" on:click={() => remove(r)} aria-label="Quitar {label(r)}"
-                            class="text-warm-base hover:text-red-400 p-1 shrink-0"><Trash2 size={16} /></button>
-                        {/if}
+                      <!-- Down/Up, never Right. A right chevron is this app's
+                           NAVIGATION affordance (PartyListItem, the bands list),
+                           so reusing it here would read as "go to" rather than
+                           "open". Down = there is more below, the accordion
+                           convention, and unambiguous next to that.
+                           This is the ONLY control on a collapsed row's right
+                           edge, and nothing ever replaces it — see the removal
+                           note in the editors block below. -->
+                      {#if mode === 'full' && r.source !== 'unassigned'}
+                        <button type="button" on:click={() => toggleExpanded(r.id)}
+                          aria-expanded={editing.has(r.id)}
+                          aria-label="{editing.has(r.id) ? 'Ocultar' : 'Editar'} de dónde sale {label(r)}"
+                          class="text-cold-light/60 hover:text-cold-light p-1 shrink-0">
+                          {#if editing.has(r.id)}<ChevronUp size={16} />{:else}<ChevronDown size={16} />{/if}
+                        </button>
                       {/if}
                     </div>
 
@@ -525,6 +532,28 @@
                           <UserPlus size={14} class="text-cold-light/50" />
                         {/if}
                       {/if}
+
+                      <!-- Removal lives HERE, not on the header row. Putting it
+                           beside the chevron meant it appeared at the exact
+                           pixel the chevron had occupied — measured: same x,
+                           same 24px — so a second tap after expanding landed on
+                           an unconfirmed delete. Down here nothing ever takes
+                           the place of something you just pressed. -->
+                      <span class="ml-auto flex items-center gap-1 shrink-0">
+                        {#if confirmingRemove === r.id}
+                          <span class="text-xs text-warm-base">¿Quitar?</span>
+                          <button type="button" on:click={() => remove(r)}
+                            aria-label="Confirmar quitar {label(r)}"
+                            class="text-warm-base hover:text-red-400 p-1"><Check size={16} /></button>
+                          <button type="button" on:click={() => (confirmingRemove = null)}
+                            aria-label="Cancelar"
+                            class="text-cold-light hover:text-white p-1"><X size={16} /></button>
+                        {:else}
+                          <button type="button" on:click={() => (confirmingRemove = r.id)}
+                            aria-label="Quitar {label(r)}"
+                            class="text-warm-base/70 hover:text-warm-base p-1"><Trash2 size={16} /></button>
+                        {/if}
+                      </span>
                     </div>
                     {/if}
                   </li>
