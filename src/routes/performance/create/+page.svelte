@@ -171,6 +171,7 @@
     // that is exactly the "no encuentro mi canción" moment, and it keeps the
     // edge function out of the common case where the ~6.5k-song catalogue hits.
     const SPOTIFY_LIMIT = 5;   // a longer list pushes "Agregadas" off a phone
+    let songSelect: { focus: () => void } | undefined;
     let spotifyResults: any[] = [];
     let spotifySearching = false;
     let spotifyError = '';
@@ -248,16 +249,32 @@
       // Straight into the normal path, so a Spotify pick gets the same duplicate
       // guards, band signup and "Agregadas" entry a local pick does. Resolving by
       // ref_link can return a song that is ALREADY on this setlist.
-      await addSong(song);
+      const ok = await addSong(song);
+      if (!ok) return;   // a real failure — keep the term so it can be retried
+
+      // Parity with a local pick, which SongSelect's multiAdd already clears and
+      // refocuses on select. The Spotify group is rendered out here instead, so
+      // it has to do the same itself. Clearing songSearch cascades: the reactive
+      // block sees a term under 2 chars and drops spotifyResults, spotifyError
+      // and spotifyRequested — the results belong to a term that no longer
+      // exists, and leaving them under an empty box is how a mis-tap happens.
+      songSearch = '';
+      songSelect?.focus();
     }
 
     // Tap a search result → add it right away (incremental, #77).
-    async function addSong(song: any) {
-      if (!partyId || !userId || adding) return;
+    // Returns whether the setlist now reflects the tap, so a Spotify pick knows
+    // whether to clear the search box. A local pick does not need the answer:
+    // SongSelect clears itself on select, before this even runs.
+    async function addSong(song: any): Promise<boolean> {
+      if (!partyId || !userId || adding) return false;
       // Added seconds ago and sitting right below — a second tap is a mis-tap, so
       // block it. A song already on the setlist from BEFORE this session is a
       // different case: it's badged in the results and the tap goes through.
-      if (added.some((a) => a.songId === song.id)) { toastInfo('Ya la agregaste.'); return; }
+      // True, not false: the song IS on the setlist, so the tap's intent is
+      // satisfied and the box should clear. Leaving the term (and the Spotify
+      // result) sitting there would just invite a third tap.
+      if (added.some((a) => a.songId === song.id)) { toastInfo('Ya la agregaste.'); return true; }
       const timesAlready = existing[song.id]?.count ?? 0;
       adding = true;
       try {
@@ -265,7 +282,7 @@
           .from('performance')
           .insert([{ party: Number(partyId), song: Number(song.id), suggested_by: userId }])
           .select('id');
-        if (error) { reportError(error); return; }
+        if (error) { reportError(error); return false; }
         const perfId = data?.[0]?.id;
         let band: any = null;
         if (signupChoice && perfId) {
@@ -273,14 +290,16 @@
           if (rpcErr) {
             reportError(rpcErr);
             await supabase.from('performance').delete().eq('id', perfId); // roll back the orphan
-            return;
+            return false;
           }
           band = myBands.find((b) => b.id === Number(signupChoice)) ?? null;
         }
         added = [{ perfId, songId: song.id, title: song.title, artist: song.artist, band }, ...added];
         if (timesAlready) toastInfo(`Quedó ${timesAlready + 1} veces en el setlist.`);
+        return true;
       } catch {
         toastError('No se pudo conectar con el servidor.');
+        return false;
       } finally {
         adding = false;
       }
@@ -328,7 +347,7 @@
          results. Don't make this sticky — see pinSearchToTop. -->
     <div bind:this={searchWrap} class="flex flex-col gap-1">
       <span class="text-cold-light text-sm">Busca y toca una canción para agregarla</span>
-      <SongSelect {songs} {notes} bind:value={songSearch} multiAdd serverFiltered
+      <SongSelect bind:this={songSelect} {songs} {notes} bind:value={songSearch} multiAdd serverFiltered
         on:select={(e) => addSong(e.detail)}
         on:focus={pinSearchToTop} />
       {#if errorSongs}<div class="text-red-500 text-sm">{errorSongs}</div>{/if}
