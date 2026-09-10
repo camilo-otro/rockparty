@@ -806,6 +806,8 @@ export type Database = {
           duration: number | null
           id: number
           ref_link: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           title: string | null
         }
         Insert: {
@@ -815,6 +817,8 @@ export type Database = {
           duration?: number | null
           id?: number
           ref_link?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           title?: string | null
         }
         Update: {
@@ -824,12 +828,21 @@ export type Database = {
           duration?: number | null
           id?: number
           ref_link?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           title?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "song_added_by_fkey"
             columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "song_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profile"
             referencedColumns: ["id"]
@@ -1089,6 +1102,8 @@ export type Database = {
           duration: number | null
           id: number
           ref_link: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           title: string | null
         }[]
         SetofOptions: {
@@ -1106,6 +1121,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_song_reviewed: {
+        Args: { p_reviewed: boolean; p_song: number }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sign_band_up: {
@@ -1115,7 +1134,7 @@ export type Database = {
       skip_song: { Args: { p_party: number }; Returns: number }
       song_on_real_setlist: { Args: { p_song: number }; Returns: boolean }
       songs_for_moderation: {
-        Args: never
+        Args: { p_reviewed?: boolean }
         Returns: {
           added_by_nickname: string
           artist: string
@@ -1124,6 +1143,8 @@ export type Database = {
           real_parties: Json
           real_uses: number
           ref_link: string
+          reviewed_at: string
+          reviewed_by_nickname: string
           test_uses: number
           title: string
         }[]

@@ -220,6 +220,12 @@ create table if not exists public.song (
   added_by   uuid references public.profile (id),
   duration   real default '3'::real,
   ref_link   text,
+  -- Moderation review state (#100): stamped when a moderator has looked at a
+  -- user-added entry, so the review queue drains instead of growing forever.
+  -- Orthogonal to deletability — a song on a real set list can never be deleted
+  -- but still needs clearing off the list. Written only via set_song_reviewed().
+  reviewed_at timestamptz,
+  reviewed_by uuid references public.profile (id),
   constraint song_ref_link_key unique (ref_link),
   constraint unique_song_artist unique (title, artist)
 );
@@ -482,29 +488,58 @@ grant execute on function public.song_on_real_setlist(bigint) to authenticated;
 
 -- songs_for_moderation: the review list, with the same privileged view of usage
 -- the delete policy has, so the screen and the policy agree. Gated internally on
--- is_song_moderator(); a non-moderator gets an empty set. #100.
-create or replace function public.songs_for_moderation()
+-- is_song_moderator(); a non-moderator gets an empty set. Reviewed entries are
+-- excluded unless asked for, so the queue drains. #100.
+create or replace function public.songs_for_moderation(p_reviewed boolean default false)
 returns table (
   id bigint, title varchar, artist varchar, ref_link text, created_at timestamptz,
-  added_by_nickname varchar, real_uses bigint, test_uses bigint, real_parties jsonb
+  added_by_nickname varchar, real_uses bigint, test_uses bigint, real_parties jsonb,
+  reviewed_at timestamptz, reviewed_by_nickname varchar
 ) language sql stable security definer set search_path = '' as $$
   select s.id, s.title, s.artist, s.ref_link, s.created_at, pr.nickname,
          count(*) filter (where pf.id is not null and coalesce(pt.is_test, false) = false),
          count(*) filter (where pf.id is not null and pt.is_test = true),
          coalesce(jsonb_agg(distinct jsonb_build_object('id', pt.id, 'title', pt.title))
                     filter (where pf.id is not null and coalesce(pt.is_test, false) = false),
-                  '[]'::jsonb)
+                  '[]'::jsonb),
+         s.reviewed_at, rv.nickname
     from public.song s
     left join public.profile pr     on pr.id = s.added_by
+    left join public.profile rv     on rv.id = s.reviewed_by
     left join public.performance pf on pf.song = s.id
     left join public.party pt       on pt.id = pf.party
-   where s.added_by is not null and public.is_song_moderator()
-   group by s.id, s.title, s.artist, s.ref_link, s.created_at, pr.nickname
-   order by s.created_at desc
+   where s.added_by is not null
+     and (s.reviewed_at is not null) = p_reviewed
+     and public.is_song_moderator()
+   group by s.id, s.title, s.artist, s.ref_link, s.created_at, pr.nickname,
+            s.reviewed_at, rv.nickname
+   order by coalesce(s.reviewed_at, s.created_at) desc
    limit 500;
 $$;
-revoke all on function public.songs_for_moderation() from public, anon, authenticated;
-grant execute on function public.songs_for_moderation() to authenticated;
+revoke all on function public.songs_for_moderation(boolean) from public, anon, authenticated;
+grant execute on function public.songs_for_moderation(boolean) to authenticated;
+
+-- set_song_reviewed: mark a user-added song as reviewed (or clear it). An RPC
+-- rather than an UPDATE policy because RLS cannot restrict WHICH COLUMNS an
+-- update touches -- a moderator policy would hand over the whole catalogue row.
+-- `song` therefore still has no UPDATE policy at all. #100.
+create or replace function public.set_song_reviewed(p_song bigint, p_reviewed boolean)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_song_moderator() then
+    raise exception 'not a song moderator' using errcode = '42501';
+  end if;
+  update public.song
+     set reviewed_at = case when p_reviewed then now() else null end,
+         reviewed_by = case when p_reviewed then (select auth.uid()) else null end
+   where id = p_song;
+  if not found then
+    raise exception 'song % not found', p_song using errcode = 'P0002';
+  end if;
+end;
+$$;
+revoke all on function public.set_song_reviewed(bigint, boolean) from public, anon, authenticated;
+grant execute on function public.set_song_reviewed(bigint, boolean) to authenticated;
 
 -- Is the current user an admin of this party (its creator, or a party_admin)?
 -- SECURITY DEFINER so party_admin's own policies can call it without re-entering
