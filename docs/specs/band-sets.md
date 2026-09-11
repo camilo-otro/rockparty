@@ -183,7 +183,38 @@ So:
 ```
 reorder_sets(p_party, p_set_ids bigint[])              -- party admins
 reorder_set_songs(p_set, p_performance_ids bigint[])   -- party admins OR that band
+move_song_to_set(p_performance, p_set, p_position)     -- can_edit_set BOTH ends
 ```
+
+**The third one was missing from this spec's first draft**, and the question that
+found it was *"how does a band move a song between its own two sets?"* — which
+this spec explicitly allows, since a band may play twice in a night. Both reorder
+RPCs write only `"order"`; moving between sets needs `set_id`.
+
+The tempting answer was to make cross-set moves party-admin-only, since admins
+already hold `performance` UPDATE. That is wrong: it sends a band to the
+organizer to rearrange its own material, which is the complaint this ticket
+exists to fix.
+
+The rule is not about who the caller is but about **which two sets they touch**:
+you may move a song when you can edit *both ends*. `can_edit_set()` already
+answers that, and everything falls out with no special cases:
+
+| Move | Source / target | |
+|---|---|---|
+| Pulse set 1 → Pulse set 3 | band / band | allowed |
+| Band → an open block | band / admin-only | refused |
+| Band A → Band B's set | band / other band | refused |
+| Admin moves an open song over a band block | admin / admin | allowed |
+| Admin → into a band's set | admin / admin | allowed |
+
+So **"up/down skips over a band set" is not a separate mechanism** — it is this
+one with both ends open.
+
+Two consequences found while building it: the GC trigger fired only on `DELETE`,
+so an open set emptied by a *move* would have been orphaned (it now fires on
+`update of set_id` too); and `band_id` is synced to the destination set, so a
+song's ownership never disagrees with the block it sits in.
 
 Both SECURITY DEFINER, both writing **only** `"order"`, both validating that
 every id passed belongs to the party/set in question — otherwise the array
