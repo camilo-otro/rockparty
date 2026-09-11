@@ -5,6 +5,7 @@
     import { get } from 'svelte/store';
     import { user } from '$lib/stores/user';
     import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
+    import { refreshUserFlags } from '$lib/stores/userFlags';
     import VenueForm from '$lib/components/VenueForm.svelte';
 
     let submitting = false;
@@ -116,6 +117,15 @@
                 equipment.map((eq: any) => ({ venue_id: newVenueId, equipment_id: eq.equipment_id, quantity: eq.quantity, notes: eq.notes }))
               );
             }
+            // "Mis locales" is gated on managesVenue, which the layout fetches
+            // ONCE per cold load — so without this the menu entry is missing until
+            // the next full reload, and creating your first venue is exactly when
+            // that is most confusing. This is the only client action that can flip
+            // the flag: being added as someone else's admin happens on their
+            // machine, and the dev / song-moderator flags are granted out-of-band.
+            // Guarded: refreshUserFlags(null) CLEARS the flags, which would be a
+            // worse outcome than the staleness it is here to fix.
+            if (userId) await refreshUserFlags(userId);
             toastSuccess('¡Nuevo local creado!');
             setTimeout(() => {
               goto('/venues');

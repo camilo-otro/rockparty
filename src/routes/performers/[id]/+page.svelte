@@ -4,8 +4,22 @@
   import { supabase } from '$lib/supabaseClient';
   import { get } from 'svelte/store';
   import { ChevronLeft, Edit, Users, HandMetal } from 'lucide-svelte';
-  import { goto } from '$app/navigation';
+  import { goto, afterNavigate } from '$app/navigation';
   import { user } from '$lib/stores/user';
+
+  // Where VOLVER goes. A profile is reachable from the profile menu, the home
+  // hero, a band's member list and the performer index, so a hardcoded
+  // /performers sent most visitors somewhere they had never been. `from` is null
+  // on a direct link or a refresh, which is what the fallback is for.
+  let backHref = '/performers';
+  afterNavigate(({ from }) => {
+    const u = from?.url;
+    if (!u) return;
+    // Returning from our own /edit: going "back" there would bounce the user
+    // into the form they just left, so keep whatever we had.
+    if (u.pathname.startsWith(`/performers/${$page.params.id}`)) return;
+    backHref = u.pathname + u.search;
+  });
 
   let performer: any = null;
   let instruments: string[] = [];
@@ -94,7 +108,7 @@
 
 <div class="mt-8">
   <div class="mb-4 mx-4">
-    <a href="/performers" class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
+    <a href={backHref} class="text-bold text-cold-light flex items-center gap-2"><ChevronLeft/>VOLVER</a>
   </div>
   {#if authState === 'out'}
     <div class="mt-8 mx-4 p-6 bg-base-900 text-white rounded-lg text-center">
