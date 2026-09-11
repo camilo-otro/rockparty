@@ -1,6 +1,6 @@
 # Band sets: making a band's block a real thing you can move
 
-**Status:** specced, decisions settled, not started · **Issue:** #110 · **Extends:** #40 (bands) / #37 (live mode)
+**Status:** stage 1 (schema + RPCs) written, awaiting apply · **Issue:** #110 · **Extends:** #40 (bands) / #37 (live mode)
 
 ## The problem
 
@@ -202,10 +202,13 @@ one call, which is the same class of fix as #84's request batching.
 
 ## Live mode has to learn the second level
 
-Four RPCs walk the sequence and order by `"order"`: `start_show`,
-`advance_show`, `skip_song`, `undo_last_move`. Each becomes
-`order by s."order", pf."order"` over a join to `party_set`. `jump_to_song` and
-`end_current_song` do not order and are unaffected.
+**Three**, not four. `start_show`, `advance_show` and `skip_song` share an
+identical `order by "order" nulls last, id limit 1` and each becomes
+`order by s."order", pf."order"` over a left join to `party_set`.
+
+`undo_last_move` was listed here in error: it orders by `ended_at desc`, i.e. by
+what actually happened rather than by the running order, so it is correct as it
+stands. `jump_to_song` and `end_current_song` do not order at all.
 
 Contained, but it is the riskiest part of the change: the running order is what
 the audience sees during a live show, and getting it wrong is visible to a room
@@ -214,17 +217,45 @@ a real one.
 
 ## Migration
 
-Derive sets from the contiguous runs already in the data. Two of the three
-affected toques derive cleanly; **Monster Mash does not** and needs a decision:
+Derive sets from the contiguous runs already in the data.
 
-- Its band's two songs are separated by open songs. Merging them into one set
-  **changes the running order** of a real (if past) toque.
-- Alternatives: two sets for the same band — the schema allows it and the UI must
-  not assume one-set-per-band anyway — or leave it and let the organizer sort it
-  out with the new controls.
+**Correction to this spec's first draft: every toque derives cleanly, and no
+decision is needed.** The claim that Monster Mash's band songs were "separated by
+open songs" was a misreading. Checked against the database:
 
-Recommend **two sets**: it is lossless, it exercises the multi-set-per-band case
-immediately, and it does not rewrite history.
+| Party | Derives to |
+|---|---|
+| 5 Serenata Rock | 1 open set (9) |
+| 9 Happy Birthday Cami | 1 open set (23) |
+| 10 Amistad y Amor | 1 band set (10) |
+| 11 Monster Mash *(test)* | open (14) · band 1 (2) · open (5) |
+| 25 Halloween Fest | band 2 (10) · open (5) |
+| 37 Jojoprueba *(live)* | 1 open set (4) |
+
+Monster Mash's two band songs are **adjacent** (orders 14 and 15); what sits
+either side of them is open songs. That is an ordinary three-block night, not an
+interleaving. Nothing is merged and no running order is rewritten.
+
+One consequence worth noting: because nothing derives into two sets for the same
+band, **the multi-set-per-band case is not exercised by the backfill** — it still
+has to be tested by hand.
+
+### Why the backfill does not renumber `performance."order"`
+
+`"order"` changes meaning — from position-in-the-night to position-in-my-set —
+but the backfill leaves the values alone. Sets are derived from runs that are
+already contiguous, so within a set the existing values already ascend, and sets
+are numbered in the order their songs already appear. Both readings therefore
+agree, and the migration is safe to apply *before* the client deploy:
+
+```
+old client:  order by pf."order"              -> unchanged
+new client:  order by s."order", pf."order"   -> identical, today
+```
+
+Verified as a query across all 82 performances: 0 rows left without a set, 0
+duplicate assignments, and **0 parties whose running order changes**. Renumbering
+to 1..n per set would have broken the live client the instant it ran.
 
 ## Decided
 
