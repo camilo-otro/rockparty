@@ -67,6 +67,68 @@ An **open set** (`band_id is null`) is what makes mixed events work without a
 special case: the five loose songs at Halloween Fest become an open set sitting
 after Pulse's, and the organizer can move either block as a unit.
 
+## How it behaves — three mechanism questions, answered
+
+These were asked of the first draft and they settle three of its open questions.
+The answers are what make the two-level model feel like one list rather than
+like folders.
+
+### Open sets are implicit
+
+Nobody creates, names or manages an open set. It is created when a loose song
+needs somewhere to live and **garbage-collected when its last song leaves**.
+
+That has a consequence worth stating plainly: **a band set is a visible block
+with a header; open songs render as plain rows.** For a pure jam night — which
+is most nights — the screen looks exactly as it does today. The band block is
+the only new visual element.
+
+### Adding: one button, appended to the end
+
+No block picker. One "Agregar canción", the song lands at the **end of the
+night**, and it is reordered from there.
+
+If the last block is an open set it joins it. If the last block is a **band**
+set, a new open set is created after it and the song goes there. That is the
+implicit-set rule doing its job: the user never learns the concept.
+
+*The one case worth a decision:* a band member adding a song almost certainly
+means "add to **our** set", not "add to the end of the night". Options are a
+second `+` inside the band's own block — positionally unambiguous, but a second
+button — or defaulting to their set when the adder is a member of exactly one
+band with a set in this night. Recommend shipping the single button first and
+seeing whether it actually annoys anyone; the reorder path covers it either way.
+
+### Up/down skips over a band set, never into it
+
+With `[Open A] [Pulse] [Open B]`, a song at the bottom of Open A pressing **down**
+lands at the **top of Open B** — after Pulse, not inside it. If no open set
+follows, one is created.
+
+This is the answer to "does moving it down from the bottom of the first set move
+it to the top of the next one?" — yes, but it hops the whole band block in one
+press rather than walking through it.
+
+Two reasons this is the rule rather than a compromise:
+
+- **It is what the permission model wants anyway.** A stranger's song can never
+  slide into a band's set by accident, because the movement that would do it does
+  not exist.
+- **Up/down cannot express a choice.** A single button cannot ask "over or into?".
+  So the common case gets the button, and moving a song *into* a band set is a
+  separate explicit action available to party admins and that band's members.
+
+### A band can play more than once
+
+Deliberately supported: there is **no unique constraint on `(party_id, band_id)`**.
+A headliner playing two sets with an open block between them is a normal shape
+for this kind of night, and it is also why Monster Mash's split block should
+become two sets rather than being merged.
+
+The consequence is in the UI, not the schema: a set cannot be labelled by band
+name alone when a band has two. That is what the optional `title` is for —
+falling back to "Pulse · 2º set" when it is unset.
+
 ## Permissions — the crux, and why policies will not do it
 
 This is the part that decides the shape. The requirement is:
@@ -150,15 +212,14 @@ immediately, and it does not rewrite history.
 3. **What happens when a band drops off the lineup?** Does the set delete with its
    songs, or do the songs fall back into an open set? Deleting is cleaner;
    falling back is kinder to the people who signed up.
-4. **Is the open set implicit or explicit?** Auto-create one per party so there is
-   always somewhere to add a loose song, or make the organizer create it. Implicit
-   is less to explain; explicit makes "this night is bands only" expressible.
-5. **Does a set need its own applause target?** `applause_target` is an enum with
+4. **Does a set need its own applause target?** `applause_target` is an enum with
    four values; adding `set` is possible. Out of scope here, but the shape should
    not preclude it.
-6. **Nested reordering on a phone.** Two levels of up/down buttons is a lot of
+5. **Nested reordering on a phone.** Two levels of up/down buttons is a lot of
    chrome in a list that is already dense. Worth a look at whether sets collapse
    to a single line when not being edited — the same move #107 made for logistics.
+6. **Where does a band member's "add song" go** — end of the night, or end of
+   their own set? See *Adding* above; recommend the simple version first.
 
 ## Out of scope
 
@@ -166,5 +227,6 @@ immediately, and it does not rewrite history.
   feature and drags in soundcheck, changeover and overrun.
 - **Drag-and-drop.** The app reorders with up/down buttons and no drag library;
   nested drag on mobile is its own project.
-- **Cross-set moves.** Moving a song from one band's set to another is a rare,
-  confusing action. Remove and re-add.
+- **Dragging a song from one band's set into another's.** Rare and confusing;
+  remove and re-add. Note this is *not* the same as the skip-over behaviour
+  above, which is ordinary reordering and very much in scope.
