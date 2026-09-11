@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { supabase } from '$lib/supabaseClient';
+  import { page } from '$app/state';
   import { get } from 'svelte/store';
   import { ArrowLeft, Share2, Trash2, Check, X, ExternalLink, Users } from 'lucide-svelte';
   import { user } from '$lib/stores/user';
@@ -51,6 +52,16 @@
   // Band-owned song (#74 follow-up): not an open jam — no self-signup / open slots.
   let bandName: string | null = null;
   $: isBand = !!performance?.band_id;
+
+  // What Share hands out: the public companion page (#111), NOT this one.
+  // /performance/[id] is auth-gated and previews as a 1,491-byte empty shell, so
+  // it arrived in a WhatsApp group as a bare URL with nothing to show for it.
+  //
+  // Built from performanceId rather than read off the address bar, because this
+  // component also renders as an overlay on the party page (#94), where
+  // window.location.href is the PARTY url carrying shallow-routing state — it
+  // shared the wrong link entirely, a bug the old target was too blank to expose.
+  $: inviteUrl = `${page.url.origin}/invite/${performanceId}`;
 
   // How musicians get onto this song (#29). Mirrors the DB trigger so the UI
   // frames the action right; the trigger is the actual enforcement.
@@ -273,11 +284,12 @@
   }
 
   function handleShare() {
-    const url = window.location.href;
     const title = songTitle ? `¡Inscríbete para tocar ${songTitle}!` : '¡Inscríbete para tocar una canción!';
-    const text = songTitle ? `Te invito a tocar ${songTitle} en Rock Party.` : 'Te invito a tocar una canción en Rock Party.';
+    // The text no longer has to carry the explanation on its own — the preview
+    // says the song, the toque and what is still open. Keep it to the ask.
+    const text = songTitle ? `Te invito a tocar ${songTitle} en Rock the House.` : 'Te invito a tocar una canción en Rock the House.';
     if (navigator.share) {
-      navigator.share({ title, text, url });
+      navigator.share({ title, text, url: inviteUrl });
     } else {
       showShareModal = true;
     }
@@ -439,5 +451,5 @@
 
 <!-- Share Modal -->
 {#if showShareModal}
-  <ShareModal url={window.location.href} title={songTitle} on:close={closeShareModal} />
+  <ShareModal url={inviteUrl} title={songTitle} on:close={closeShareModal} />
 {/if}

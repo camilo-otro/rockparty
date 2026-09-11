@@ -27,24 +27,26 @@ const ASSET_PATHS = new Set(ASSETS);
 const SHELL = '/';
 
 // ---------------------------------------------------------------------------
-// The two routes this service worker must keep its hands off.
+// The routes this service worker must keep its hands off.
 //
-// `/flyer/[id]` and `/toque/[id]` are the ONLY server-rendered routes in the app
-// (they set `ssr = true`, overriding the layout). They exist so WhatsApp,
-// Facebook and Google get real per-event Open Graph tags (#68). Serving them
-// from cache would break that in two ways that are both invisible until someone
-// complains:
+// `/flyer/[id]` (#68), `/invite/[id]` (#111) and `/toque/[id]` are the ONLY
+// server-rendered routes in the app — they set `ssr = true`, overriding the
+// layout. They exist so WhatsApp, Facebook and Google get real per-event Open
+// Graph tags. Serving them from cache would break that in two ways that are both
+// invisible until someone complains:
 //
 //   1. The generic app shell has no og:title/og:image, so a shared link would
 //      preview as nothing.
-//   2. A cached flyer would show a stranger a stale event — old date, old
-//      lineup, or one that has since been cancelled.
+//   2. A cached page would show a stranger a stale event — old date, old lineup,
+//      a spot that has since been filled, or a toque that has been cancelled.
+//
+// Any new public, server-rendered, per-event route belongs in this list.
 //
 // Crawlers never run a service worker, so this only affects a human who opens a
 // shared link in an installed app. That is exactly the person who must see the
 // live page. Bypass entirely: no cache read, no cache write.
 // ---------------------------------------------------------------------------
-const ALWAYS_FRESH = /^\/(flyer|toque)\//;
+const ALWAYS_FRESH = /^\/(flyer|invite|toque)\//;
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(
