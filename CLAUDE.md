@@ -1,8 +1,8 @@
 # Rock Party — Project Context
 
-Read this before making changes. It captures everything known about the
-project's state as of August 2026, after ~9 months idle (last commit
-2025-11-05).
+Read this before making changes. Current as of **September 2026** and actively
+developed. Where a fact here disagrees with the database or the code, the
+database and the code win — check, then fix this file.
 
 ## What this is
 
@@ -12,8 +12,17 @@ sessions / gigs among musicians. Spanish-language UI. Core entities:
 - **Parties** ("toques" = gigs) — an event at a venue on a date
 - **Venues** — locations, with admin permissions and contact info (WhatsApp, Instagram)
 - **Performers** — musicians who can be assigned to performances
-- **Songs** — looked up via MusicBrainz integration
-- **Performances** — a performer playing a song (or set) at a party, orderable via drag-and-drop
+- **Songs** — a shared catalogue (~6.5k rows). Metadata comes from **Spotify**
+  via the `spotify-track` edge function (#80/#83); an older note here said
+  MusicBrainz, which is no longer used. Anyone signed in can add one in a single
+  tap from the setlist (#98), which is why `/songs/moderation` exists (#100).
+- **Performances** — a performer playing a song at a party. Ordered by an
+  `order` column, moved with up/down buttons (there is **no** drag-and-drop
+  library; SortableJS was removed).
+- **Bands** — a persistent lineup that can be signed up for a performance (#40),
+  with claim links for members who have no account yet (#79).
+- **Logistics** — what a toque needs and who brings it: `party_requirement`
+  rows sourced from a venue, an organizer, a musician or a rental (#95/#97).
 
 ## Stack
 
@@ -172,7 +181,25 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
   grant only via the SQL editor / service_role, so no self-escalation);
   `is_dev()` gates both visibility and the dev-only "Datos de prueba" toggle on
   the create/edit forms (default on for devs; non-devs always create real data).
-  Songs/profiles stay global. Client dev-state lives in `src/lib/stores/dev.ts`.
+  Songs/profiles stay global. Client flag state lives in
+  `src/lib/stores/userFlags.ts` — `isDev`, `managesVenue`, `isSongModerator`,
+  all filled by ONE `my_user_flags()` RPC call (#101). `dev.ts`, `venueAdmin.ts`
+  and `songModerator.ts` no longer exist. `refreshUserFlags(uid)` REQUIRES the
+  uid: calling `supabase.auth.getUser()` from inside `onAuthStateChange`
+  re-enters the auth client and loops.
+- **SECURITY DEFINER helpers** (the app's real permission vocabulary — prefer
+  these over inlining a subquery, see *Recurring lessons*):
+  `is_dev()`, `is_party_admin(pid)`, `is_band_manager(bid)`, `is_venue_admin(vid)`,
+  `is_song_moderator()`, `can_see_party(pid)`, `can_see_band(bid)`,
+  `can_applaud(pid)`, `can_sign_up_band(bid)`, `song_on_real_setlist(song)`.
+  Narrow-write RPCs: `confirm_requirement`, `set_song_reviewed`, `sign_band_up`,
+  `set_band_signup_status`, `claim_band_member`, and the live-mode controls
+  (`start_show`, `advance_show`, `skip_song`, `jump_to_song`, `end_current_song`,
+  `undo_last_move`, `end_show`). Read helpers: `my_user_flags()`,
+  `songs_for_moderation()`, `search_songs(q, lim)`, `peek_band_claim(token)`.
+- **Privilege is grant-only.** `dev_user` and `song_moderator` are the entire
+  mechanism: no self-insert policy, membership added from the SQL editor. There
+  is deliberately no role column on `profile` (#99) — role is derived from usage.
 - After any Supabase project restore/recreation, also re-check: the Auth **Site
   URL** and Google OAuth redirect URIs (must include `https://rockthehouse.app`),
   and Netlify's environment variables (they're separate from local `.env`).
@@ -208,6 +235,12 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
   project, so they affect every branch immediately):
   - **DB migrations** (`supabase/migrations/*`) — applied by hand in the Supabase
     SQL editor. Reconcile `supabase/schema.sql` + regenerate `database.types.ts`.
+    **Ordering:** additive migrations can go first (the old client ignores what it
+    does not know about). A migration that DROPS or RENAMES something the live
+    client still reads must go AFTER the deploy — #99 drops a column the old
+    `+layout.js` selected, and running it early would have bounced every
+    signed-in user into the profile-creation form. Each migration should say
+    which kind it is.
   - **Edge Functions** (`supabase/functions/*`) — deployed via the Supabase
     dashboard (Edge Functions → Deploy → *Via Editor*, name must match, paste the
     repo file) or the CLI. No dashboard version control → the repo file is the
@@ -240,23 +273,56 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
   inline `{:else if error}` states by design (a toast alone would leave a blank
   content region). The auth-gate "Debes iniciar sesión" notices are still
   light-themed inline blocks — not migrated.
+- **22 hardcoded `VOLVER` links.** Most pages have one entry point so it does not
+  matter; `/performers/[id]` uses `afterNavigate` to remember where it was opened
+  from, because it has four. Copy that pattern if another page grows entry points.
+- **`performance` INSERT is `with check (true)`** — anyone signed in can add a
+  song to any party's setlist. Deliberate today (the jam-night model), but it is
+  what #110 has to tighten to keep non-members out of a band's set.
 
-## History snapshot
+## History
 
-~50 commits, Aug 1 2025 → Nov 5 2025, then idle until this session
-(Aug 2026). One feature branch (`venue_contact`) was merged for
-venue WhatsApp/Instagram contact info. Repo was private, made public
-2026-08-11 to unblock tooling access; consider re-privating once the
-GitHub connector/access situation is sorted, if that matters to you.
+~263 commits, Aug 2025 → Sep 2026, with a ~9-month gap (Nov 2025 → Aug 2026)
+that a lot of older comments still refer to as "this session". The repo was made
+public 2026-08-11 to unblock tooling access; whether to re-privatise is #24.
 
-## Where things stand as of this session
+The backlog lives in **GitHub Issues**:
+https://github.com/camilo-otro/rockparty/issues — organised into milestones
+named for the roadmap phases (Soundcheck, Doors, Warm-up, Showtime, Encore) plus
+two unnumbered buckets that run alongside them, **Housekeeping** and **On Tour**
+(mobile). The older `Epic N:` milestones are closed; `epic-*` survives as a
+cross-cutting label.
 
-1. Confirmed decision: **build on existing codebase, don't rewrite.**
-2. Supabase project found paused, user is restoring it now via dashboard.
-3. GitHub connector (Claude web) was flaky — tool registration didn't sync
-   even after the user confirmed "Connected" status in settings. Not
-   resolved as of this writing. If you (Claude Code) have direct `gh` CLI
-   or git access, that sidesteps the issue entirely.
-4. The backlog now lives in **GitHub Issues**, organized into per-epic
-   milestones: https://github.com/camilo-otro/rockparty/issues (migrated from
-   the old BACKLOG.md, which was removed).
+## Recurring lessons, learned the hard way
+
+Patterns worth knowing before writing anything here — each one cost a real bug.
+
+- **RLS cannot restrict WHICH COLUMNS an update touches.** Widening an UPDATE
+  policy to let someone edit one field hands them the whole row. Every
+  narrow write in this app is therefore a `SECURITY DEFINER` RPC:
+  `confirm_requirement` (#95), `set_song_reviewed` (#100), and the reason
+  `profile.role` was deleted rather than defended (#99).
+- **A table referenced inside an RLS policy is read AS THE CALLING USER**, so
+  its own policies apply again. That is why guards are definer functions
+  (`is_dev`, `is_party_admin`, `is_band_manager`, `is_venue_admin`,
+  `song_on_real_setlist`) and not inline subqueries. Inlining silently
+  UNDER-blocks, and a self-referencing policy raises "infinite recursion".
+- **A definer function used inside a policy that applies `to anon` must be
+  EXECUTABLE by anon.** A policy calling a function the caller cannot execute
+  raises permission-denied rather than evaluating false — revoking anon from
+  `is_venue_admin` would take down the public flyer.
+- **Granting EXECUTE needs both halves.** `create function` grants to PUBLIC and
+  Supabase's `pg_default_acl` grants to anon/authenticated BY NAME. Revoke from
+  `public, anon, authenticated`, then grant back deliberately.
+- **PostgREST answers a refused DELETE with 200/204 and an empty body**, not an
+  error. Check the returned row count (`.select()`), or a refusal reads as
+  success.
+- **Svelte 5 is in LEGACY mode.** `$:` tracks dependencies by NAME, textually. A
+  helper that reads a store internally will not re-run — name the dependency in
+  the statement, or pass it as an argument. Sets must be reassigned, never
+  mutated in place.
+- **Verify over REST, never in the SQL editor.** There you are the table owner,
+  RLS does not apply, and every query succeeds while telling you nothing.
+- **Test as the account that does NOT own the thing.** Most venue/party policies
+  have a `created_by` branch that keeps working, so a pass as the creator proves
+  nothing about the admin branch.
