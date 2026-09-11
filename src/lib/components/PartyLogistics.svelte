@@ -208,6 +208,17 @@
     const row: any = (data ?? [])[0];
     lastTime = row ? { assigned_user: row.assigned_user, assigned_label: row.assigned_label } : null;
   }
+  // A stepper, not <input type="number">. On a phone a number input opens the
+  // numeric keypad over the form for a value that is almost always 1 and has
+  // never plausibly been double digits. Matches the steppers VenueForm and the
+  // #97 quick-start already use — this add form was the last raw number input.
+  //
+  // formQuantity stays a STRING: it is bound into the insert as
+  // `Number(formQuantity)` and is '' while no item is chosen.
+  function stepFormQuantity(delta: number) {
+    formQuantity = String(Math.max(1, (Number(formQuantity) || 1) + delta));
+  }
+
   function resetForm() { formItemId = ''; formQuantity = ''; formSource = 'unassigned'; formNotes = ''; lastTime = null; }
 
   async function addRequirement() {
@@ -605,9 +616,19 @@
                   {#each roles as r}<option value={String(r.id)}>{r.name}</option>{/each}
                 {/if}
               </select>
-              {#if formKind === 'equipment'}
-                <input type="number" min="1" bind:value={formQuantity} placeholder="Cant."
-                  aria-label="Cantidad" class="p-2 rounded-lg text-sm w-20" />
+              <!-- Only once an item is chosen: before that formQuantity is ''
+                   and a stepper reading "1" would claim a quantity nobody set. -->
+              {#if formKind === 'equipment' && formItemId}
+                <div class="inline-flex items-center rounded-lg border border-cold-light/30 overflow-hidden shrink-0">
+                  <button type="button" on:click={() => stepFormQuantity(-1)}
+                    disabled={(Number(formQuantity) || 1) <= 1}
+                    aria-label="Menos cantidad"
+                    class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950 disabled:opacity-40 disabled:hover:bg-transparent">−</button>
+                  <span class="px-2 min-w-[2.5ch] text-center text-white text-sm tabular-nums" aria-live="polite">{Number(formQuantity) || 1}</span>
+                  <button type="button" on:click={() => stepFormQuantity(1)}
+                    aria-label="Más cantidad"
+                    class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950">+</button>
+                </div>
               {/if}
             </div>
             <select bind:value={formSource} aria-label="¿De dónde sale?" class="p-2 rounded-lg text-sm">
