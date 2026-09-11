@@ -86,6 +86,26 @@ carry the deeper detail; this is the at-a-glance map.
   the Spotify Marks + a link back — the add-song UI shows the Spotify logo
   (`static/images/spotify-logo.svg`) + "Metadatos de Spotify" and stores the
   Spotify URL as `song.ref_link`.
+- **Installable (PWA, #103):** `static/manifest.json` + `src/service-worker.js`
+  (SvelteKit registers the latter automatically in production builds; it is inert
+  in `pnpm run dev`). The worker precaches the build output and `static/` and
+  keeps ONE cached document as the offline navigation fallback. Two things about
+  it are load-bearing:
+  - **`/flyer/[id]` and `/toque/[id]` are bypassed entirely** — no cache read, no
+    cache write. They are the only SSR routes, rendered per event so shared links
+    get real Open Graph tags (#68). A cached shell would preview as nothing and a
+    cached flyer would show a stranger a stale event. Anything added to the
+    "public, server-rendered, per-event" family must join `ALWAYS_FRESH`.
+  - **`kit.paths.relative = false` in `svelte.config.js` is required by the
+    worker, not a preference.** SvelteKit otherwise emits asset paths relative to
+    route depth (`/songs` → `./_app/...`, `/parties/25` → `../_app/...`, plus
+    `base: new URL("..", location)`), so one cached shell replayed at a different
+    depth resolves its entry chunks against the wrong directory and never boots.
+    Only safe because the app is served from the domain root with an empty `base`.
+  - Icons are generated, not hand-exported: `node scripts/generate-icons.mjs`
+    (needs a one-off `npm i --no-save @resvg/resvg-js`). Flat white mark on
+    `cold-base` — the favicon's gradient muddies to brown below ~64px. Re-run it
+    only when the mark changes; the PNGs are committed.
 - **Unlinked pages:** `static/roadmap.html` → https://rockthehouse.app/roadmap.html
   (product roadmap for the design collaborator; `noindex`, not in any nav).
 
