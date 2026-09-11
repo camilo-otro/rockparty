@@ -26,7 +26,10 @@ export const load = async ({ depends, url }) => {
     // never displayed and is revoked from client reads (see migration
     // 20260821_profile_email_privacy.sql); the completeness gate below uses
     // nickname, which the profile always gets alongside email at creation.
-    let { data: dbUser } = await supabase.from('profile').select('id, role, nickname').eq('id', session.user.id).single();
+    // `role` is gone (#99): it was never read by any policy, function or
+    // component — it only LOOKED like an admin flag, and it was user-writable.
+    // Selecting it here was the one thing keeping it alive.
+    let { data: dbUser } = await supabase.from('profile').select('id, nickname').eq('id', session.user.id).single();
     // If not found, redirect to performer creation
     if (!dbUser || !dbUser.nickname) {
       userRecord = {
@@ -48,7 +51,6 @@ export const load = async ({ depends, url }) => {
       userRecord = {
         id: dbUser?.id,
         email: session?.user?.email ?? '',
-        role: dbUser?.role,
         nickname: dbUser?.nickname,
       };
     userStore.set(userRecord);

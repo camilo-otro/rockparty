@@ -23,7 +23,6 @@ sessions / gigs among musicians. Spanish-language UI. Core entities:
   only**, no server routes (`+page.server.js/ts`) exist anywhere in the repo.
   Security relies entirely on Supabase Row Level Security (RLS) policies.
 - **Auth:** Google OAuth via Supabase Auth
-- **Drag-and-drop:** SortableJS
 - **Deployment:** Netlify (`netlify.toml` — `pnpm run build`, publish `build/`),
   live at **https://rockthehouse.app** — see **Production & infrastructure** below
 - **Package manager:** pnpm
@@ -140,20 +139,32 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
 - **Schema:** `supabase/schema.sql` is the AUTHORITATIVE schema, captured
   2026-08-11 from the live DB via the SQL Editor (see
   `supabase/dump-authoritative.sql` to refresh it). It includes types, keys,
-  FKs, indexes, and full RLS policies. **14 tables:**
+  FKs, indexes, and full RLS policies. **25 tables** (the count drifted as
+  bands, logistics, applause and RSVPs landed — check `pg_tables` rather than
+  trusting a number here):
   - Core: `party`, `venue`, `song`, `performance`, `profile`
   - Admin/permissions (enforced by RLS): `venue_admin`, `party_admin`
+  - Grant-only privilege lists (no self-insert policy — granted via the SQL
+    editor only): `dev_user` (#67), `song_moderator` (#100). These are the ONLY
+    privilege mechanism; there is deliberately no role column on `profile` (#99).
   - Junction: `performance_user` (performer × instrument × performance),
     `profile_instrument` (performer × instrument they play — owner-managed, #28),
     `venue_equipment` (venue × equipment — venue-admin-managed, #30)
-  - Lookups (publicly readable): `role`, `venue_type`, `instrument`, `equipment`
+  - Lookups (publicly readable): `venue_type`, `instrument`, `equipment`
+    (+ `equipment_suggestion`), `party_role`. `equipment` and `party_role` carry
+    a stable `code` — match on it in migrations, never on the display name (#106).
 - **There is NO `performer` table.** "Performers" are `profile` rows; a
   performer is attached to a set-list slot via `performance_user`.
   `/performers/[id]` is a profile view. Older notes implying a `performer`
   table are wrong.
 - **Admin actions ARE enforced by RLS** (not just UI-hidden): `venue`/`party`
   UPDATE policies check `created_by` or membership in `venue_admin`/`party_admin`.
-  Caveat: `performance` UPDATE is open to any authenticated user (`using true`).
+  `performance` UPDATE is party-admin only (creator or `party_admin`) — an older
+  note here described it as `using true`, which has not been true for a while.
+  `performance` INSERT, however, IS `with check (true)`: anyone signed in can add
+  a song to any party's setlist.
+  Venue-side checks go through `is_venue_admin()` (#102); do not inline a
+  `venue_admin` subquery in a policy, as its SELECT is now restrictive.
 - **Test-data visibility (#67):** `party.is_test` / `venue.is_test` hide dev/test
   rows from real users — the `party`/`venue` SELECT policies add
   `(is_test = false or public.is_dev())`, and performances inherit via

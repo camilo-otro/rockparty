@@ -725,7 +725,6 @@ export type Database = {
           email: string | null
           id: string
           nickname: string | null
-          role: number | null
         }
         Insert: {
           avatar_url?: string | null
@@ -733,7 +732,6 @@ export type Database = {
           email?: string | null
           id: string
           nickname?: string | null
-          role?: number | null
         }
         Update: {
           avatar_url?: string | null
@@ -741,17 +739,8 @@ export type Database = {
           email?: string | null
           id?: string
           nickname?: string | null
-          role?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_role_fkey"
-            columns: ["role"]
-            isOneToOne: false
-            referencedRelation: "role"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profile_instrument: {
         Row: {
@@ -785,24 +774,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      role: {
-        Row: {
-          created_at: string
-          id: number
-          roleName: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          roleName?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          roleName?: string | null
-        }
-        Relationships: []
       }
       song: {
         Row: {
