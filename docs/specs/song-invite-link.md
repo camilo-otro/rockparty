@@ -1,6 +1,6 @@
 # A shareable invitation to play one song
 
-**Status:** specced, not started · **Issue:** #111 · **Extends:** #68 (flyer OG) / #77 (setlist signup)
+**Status:** built (dev, not deployed) · **Issue:** #111 · **Extends:** #68 (flyer OG) / #77 (setlist signup)
 
 ## The problem
 
@@ -132,15 +132,27 @@ to get wrong.
 - **Invitations to a specific person.** This is a link anyone can open, like the
   flyer. A targeted invite with a notification is a different feature.
 
-## Worth deciding before building
+## Decided while building
 
-1. **Does the invite page need its own layout, or reuse the flyer's?** They will
-   look like siblings. Extracting a shared public-page shell is tempting and
-   probably premature at two instances.
-2. **What should it say when the song is already full?** Falling back to "ver el
-   toque" and pointing at the flyer is probably right — the link stays useful
-   instead of becoming a dead end.
-3. **Should `/invite/[id]` 302 to `/performance/[id]` for a signed-in visitor?**
-   It would save a tap for someone who already has an account. It also means the
-   page a sharer sees is not the page their friend sees, which makes it hard to
-   reason about what you just sent.
+1. **Own layout, not a shared shell.** The invite and the flyer look like
+   siblings and duplicate the gradient banner, but extracting a public-page
+   shell at two instances would be guessing at the third. Left duplicated.
+2. **When the song is full, the link points at the flyer** rather than dying —
+   "Ver el toque" instead of "Inscríbete". Same for a band-owned song and for a
+   toque that has already happened.
+3. **No 302 to `/performance/[id]` for signed-in visitors.** It would save a tap,
+   but the page a sharer checks would stop being the page their friend sees,
+   which makes the whole thing hard to reason about.
+
+## What the model turned out to be
+
+The spec assumed a per-song list of required instruments. There is none:
+`instrument` is a fixed six-row lookup and **every** instrument is an open spot
+until an approved signup takes it (`availableInstruments` in
+`PerformanceDetail`). So "what is open" is the six minus the taken, which has a
+consequence for the copy — when nobody has signed up, naming the open spots
+means naming all six. The preview says "Todos los puestos libres" instead, and
+falls back to a count above four.
+
+Pending applicants do **not** take a spot, matching `takenInstrumentIds`. That
+is also what makes the page publishable: it never has to say who applied.
