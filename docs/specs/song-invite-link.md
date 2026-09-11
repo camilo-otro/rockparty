@@ -1,6 +1,6 @@
 # A shareable invitation to play one song
 
-**Status:** specced, not started · **Extends:** #68 (flyer OG) / #77 (setlist signup)
+**Status:** specced, not started · **Issue:** #111 · **Extends:** #68 (flyer OG) / #77 (setlist signup)
 
 ## The problem
 
