@@ -1,6 +1,6 @@
 # Band sets: making a band's block a real thing you can move
 
-**Status:** specced, not started · **Extends:** #40 (bands) / #37 (live mode)
+**Status:** specced, decisions settled, not started · **Extends:** #40 (bands) / #37 (live mode)
 
 ## The problem
 
@@ -83,21 +83,22 @@ with a header; open songs render as plain rows.** For a pure jam night — which
 is most nights — the screen looks exactly as it does today. The band block is
 the only new visual element.
 
-### Adding: one button, appended to the end
+### Adding: position says where, never a picker
 
-No block picker. One "Agregar canción", the song lands at the **end of the
-night**, and it is reordered from there.
+The main "Agregar canción" at the bottom of the night adds an **open** song at
+the end. If the last block is an open set it joins it; if the last block is a
+**band** set, a new open set is created after it. The implicit-set rule does the
+work and the user never learns the concept.
 
-If the last block is an open set it joins it. If the last block is a **band**
-set, a new open set is created after it and the song goes there. That is the
-implicit-set rule doing its job: the user never learns the concept.
+**A band's block carries its own `+`**, which adds to that set. **Decided:**
+positional rather than inferred. The alternative — one button that silently
+routes a band member's song into their own set — behaves differently for
+different people pressing the same control, which is the kind of rule nobody can
+predict and nobody can be told. A `+` inside Pulse's block adding to Pulse's set
+needs no explanation at all.
 
-*The one case worth a decision:* a band member adding a song almost certainly
-means "add to **our** set", not "add to the end of the night". Options are a
-second `+` inside the band's own block — positionally unambiguous, but a second
-button — or defaulting to their set when the adder is a member of exactly one
-band with a set in this night. Recommend shipping the single button first and
-seeing whether it actually annoys anyone; the reorder path covers it either way.
+That `+` is visible only to people who may actually use it: the band (per
+`can_sign_up_band`) and party admins.
 
 ### Up/down skips over a band set, never into it
 
@@ -117,6 +118,30 @@ Two reasons this is the rule rather than a compromise:
 - **Up/down cannot express a choice.** A single button cannot ask "over or into?".
   So the common case gets the button, and moving a song *into* a band set is a
   separate explicit action available to party admins and that band's members.
+
+### A band's block is collapsed by default
+
+**Decided.** A band set renders as one line — band name, song count, and the
+first few titles as a teaser — and expands on tap. Same move #107 just made for
+resolved logistics rows, and for the same reason: three bands of ten songs is
+thirty rows of something the reader is not currently acting on.
+
+Open songs stay plain rows, so a pure jam night is unchanged.
+
+**This has one consequence that must not be missed.** During a live show the
+now-playing song may be inside a collapsed block, which would leave the audience
+view showing a closed box while the band is on stage — the exact opposite of what
+live mode is for. So:
+
+- The set containing the `live_state = 'playing'` song is **always expanded**,
+  and cannot be collapsed while it holds the pointer.
+- When the show advances into a new set, that set expands and the previous one
+  may collapse.
+
+The teaser matters more than it looks. A collapsed block showing only "Pulse ·
+10 canciones" hides the setlist from exactly the person deciding whether to come.
+Showing "Pulse · 10 canciones · Even Flow, Dani California, Shy Away…" keeps the
+page answering that question without the full thirty rows.
 
 ### A band can play more than once
 
@@ -201,25 +226,44 @@ affected toques derive cleanly; **Monster Mash does not** and needs a decision:
 Recommend **two sets**: it is lossless, it exercises the multi-set-per-band case
 immediately, and it does not rewrite history.
 
-## Open questions
+## Decided
 
-1. **Who in a band may reorder — any member, or managers only?** `is_band_manager()`
-   exists and `band_member.role` is manager/member. Managers is the safer default;
-   any-member is friendlier. This is a product call.
-2. **Can a band's set contain a song where a non-member plays?** A guest sitting
-   in. `performance_user` is independent of set ownership, so yes by default —
-   worth confirming that is wanted.
-3. **What happens when a band drops off the lineup?** Does the set delete with its
-   songs, or do the songs fall back into an open set? Deleting is cleaner;
-   falling back is kinder to the people who signed up.
-4. **Does a set need its own applause target?** `applause_target` is an enum with
-   four values; adding `set` is possible. Out of scope here, but the shape should
-   not preclude it.
-5. **Nested reordering on a phone.** Two levels of up/down buttons is a lot of
-   chrome in a list that is already dense. Worth a look at whether sets collapse
-   to a single line when not being edited — the same move #107 made for logistics.
-6. **Where does a band member's "add song" go** — end of the night, or end of
-   their own set? See *Adding* above; recommend the simple version first.
+Everything the first draft left open has been settled. Three of them answered
+themselves from what the codebase already does — worth recording *why*, so they
+are not reopened later on taste.
+
+**Who in a band may reorder — `can_sign_up_band()`, not `is_band_manager()`.**
+Not a new decision at all. `sign_band_up` already gates on that function, which
+reads **`band.who_can_sign_up`** — a per-band setting the band itself chose.
+Inventing a manager-only rule for reordering would contradict a setting the band
+explicitly made, and would make *rearranging your own songs* stricter than
+*committing the band to a gig*, which is backwards. (Both bands currently sit at
+`'members'`.)
+
+**A guest may play in a band's set — already true, keep it.** `sign_band_up`
+populates `performance_user` from `band_member_instrument`, but
+`performance_user` has its own independent signup path. So the set governs *which
+songs are in the block*, not *who plays them*. That separation is worth stating
+because it is load-bearing: a set is a scheduling unit, not a roster.
+
+**A set gets no applause target.** `applause_target` could gain a `set` value —
+a set has an id and the enum is extensible — but `event` already covers "the
+whole night" and a per-set clap sits awkwardly between the two. Out of scope; the
+shape does not preclude it.
+
+**Removing a band deletes its songs.** `performance.set_id` gets
+`on delete cascade`, behind one confirm that names the count — *"Quitar a Pulse
+quita también sus 10 canciones"*. The signups go with them, which is correct: the
+band is not playing. Leaving ten unclaimed songs in the night would only move the
+cleanup to the organizer.
+
+Guard this while a show is **live**: removing the set that holds the now-playing
+pointer would strand `advance_show`. Refuse it during `live`, or require the show
+to be ended first.
+
+**Collapsed by default**, and **a `+` inside each band block** — both covered
+above, with the live-mode consequence of the first being the thing most likely to
+bite.
 
 ## Out of scope
 
