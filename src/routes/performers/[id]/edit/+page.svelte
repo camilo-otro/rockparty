@@ -6,6 +6,7 @@ import PerformerForm from '$lib/components/PerformerForm.svelte';
 import { ChevronLeft } from 'lucide-svelte';
 import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 import { normalizeText } from '$lib/sanitize';
+import { uploadProfileAvatar, deleteProfileAvatarByUrl } from '$lib/profileAvatar';
 import { page } from '$app/state';
 
 // Where to go once the profile is saved. The root layout sends profile-less
@@ -93,17 +94,39 @@ onMount(async () => {
     initialInstruments={initialInstruments}
     on:submit={async (e) => {
       submitting = true;
-      const { nickname, email, avatarUrl, instruments: selected } = e.detail;
+      const { nickname, email, avatarUrl, avatarBlob, removeAvatar, instruments: selected } = e.detail;
       const uid = userId;
       if (!uid) { toastError('No autenticado.'); submitting = false; return; }
       try {
-        // If avatarUrl is empty, try to get it from Google auth
+        // Avatar (#96). The column holds EITHER a Google CDN url (the signup
+        // default) or one of ours in profile-avatars, so every branch here has
+        // to end with a usable url rather than assuming which kind it started as.
         let finalAvatarUrl = avatarUrl;
-        if (!avatarUrl || avatarUrl.trim() === '') {
+        const googleAvatar = async () => {
           const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser?.user_metadata?.avatar_url) {
-            finalAvatarUrl = authUser.user_metadata.avatar_url;
+          return authUser?.user_metadata?.avatar_url ?? '';
+        };
+
+        if (avatarBlob) {
+          // Uploaded here, not in the form: only the page knows the uid, and the
+          // old url has to be passed so the previous object is cleaned up.
+          // Passing a Google url is harmless — it is outside the bucket, so
+          // deleteAvatarByUrl no-ops on it.
+          try {
+            finalAvatarUrl = await uploadProfileAvatar(uid, avatarBlob, avatarUrl || null);
+          } catch (err) {
+            reportError(err);
+            submitting = false;
+            return;   // never save a profile claiming a photo that is not there
           }
+        } else if (removeAvatar) {
+          // "Quitar la foto" falls back to the GOOGLE picture, not a blank
+          // silhouette — you can always get your original back, and the app
+          // never has to render an empty avatar.
+          if (avatarUrl) await deleteProfileAvatarByUrl(avatarUrl);
+          finalAvatarUrl = await googleAvatar();
+        } else if (!avatarUrl || avatarUrl.trim() === '') {
+          finalAvatarUrl = await googleAvatar();
         }
 
         // Check if profile exists

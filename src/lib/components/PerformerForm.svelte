@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import AvatarCropper from '$lib/components/AvatarCropper.svelte';
   export let submitting = false;
   export let initialEmail = '';
   export let initialNickname = '';
@@ -12,6 +13,11 @@
   let email = initialEmail;
   let nickname = initialNickname;
   let avatarUrl = initialAvatarUrl;
+  // Avatar (#96), same contract BandForm uses: the cropper emits a
+  // ready-to-upload WebP blob and the PAGE uploads it, since only the page knows
+  // the uid and holds the old url. removeAvatar flags clearing an existing one.
+  let avatarBlob: Blob | null = null;
+  let removeAvatar = false;
   let selectedInstruments: number[] = [...initialInstruments];
 
   function toggleInstrument(id: number) {
@@ -25,7 +31,7 @@
       dispatch('error', 'Todos los campos son obligatorios.');
       return;
     }
-    dispatch('submit', { nickname, email, avatarUrl, instruments: selectedInstruments });
+    dispatch('submit', { nickname, email, avatarUrl, avatarBlob, removeAvatar, instruments: selectedInstruments });
   }
 </script>
 <form on:submit|preventDefault={handleSubmit}>
@@ -34,7 +40,14 @@
     <input id="email" type="text" bind:value={email} readonly class="p-2 bg-base-900 border rounded-lg pointer-events-none" />
     <label for="nickname" class="mb-1 mt-3">Nickname</label>
     <input id="nickname" type="text" bind:value={nickname} required class="p-2 border rounded-lg" />
-    <input type="hidden" bind:value={avatarUrl} />
+
+    <AvatarCropper
+      initialUrl={initialAvatarUrl}
+      label="Tu foto"
+      on:crop={(e) => { avatarBlob = e.detail.blob; removeAvatar = false; }}
+      on:remove={() => { avatarBlob = null; removeAvatar = true; }}
+      on:error={(e) => dispatch('error', e.detail)}
+    />
 
     <span class="mb-1 mt-4">Instrumentos que tocas</span>
     <div class="flex flex-row flex-wrap gap-2">

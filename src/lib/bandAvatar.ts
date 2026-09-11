@@ -1,36 +1,14 @@
-import { supabase } from './supabaseClient';
+import { uploadAvatar, deleteAvatarByUrl } from './avatarStorage';
 
-// Band avatars (#75): a cropped/optimized 512x512 WebP in the public
-// `band-avatars` bucket at {band_id}/{timestamp}.webp. Versioned names +
-// delete-on-replace keep each band at exactly one avatar and the CDN cache clean.
+// Band avatars (#75). A cropped 512x512 WebP in the public `band-avatars`
+// bucket at {band_id}/{timestamp}.webp.
+//
+// The mechanics moved to avatarStorage.ts when profiles grew the same feature
+// (#96); this stays as the band-flavoured entry point so call sites are
+// unchanged and the bucket name is stated once.
 const BUCKET = 'band-avatars';
-const CACHE_CONTROL = '2592000'; // 30 days — safe, names are versioned
 
-// Upload a new avatar, return its public URL, and best-effort delete the old one.
-export async function uploadBandAvatar(bandId: number, blob: Blob, oldUrl?: string | null): Promise<string> {
-  const path = `${bandId}/${Date.now()}.webp`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
-    contentType: 'image/webp',
-    cacheControl: CACHE_CONTROL,
-    upsert: false
-  });
-  if (error) throw error;
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  if (oldUrl) await deleteBandAvatarByUrl(oldUrl);
-  return data.publicUrl;
-}
+export const uploadBandAvatar = (bandId: number, blob: Blob, oldUrl?: string | null) =>
+  uploadAvatar(BUCKET, bandId, blob, oldUrl);
 
-// Delete an avatar object given its public URL (best-effort; an orphan is minor).
-export async function deleteBandAvatarByUrl(url: string): Promise<void> {
-  const path = objectPathFromUrl(url);
-  if (!path) return;
-  await supabase.storage.from(BUCKET).remove([path]);
-}
-
-// Extract the object path ({band_id}/{ts}.webp) from a public URL.
-function objectPathFromUrl(url: string): string | null {
-  const marker = `/${BUCKET}/`;
-  const i = url.indexOf(marker);
-  if (i === -1) return null;
-  return url.slice(i + marker.length).split('?')[0];
-}
+export const deleteBandAvatarByUrl = (url: string) => deleteAvatarByUrl(BUCKET, url);
