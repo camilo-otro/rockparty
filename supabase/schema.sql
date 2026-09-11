@@ -595,6 +595,30 @@ returns boolean language sql stable security definer set search_path = '' as $$
          );
 $$;
 
+-- Is the current user an admin of this venue (its creator, or a venue_admin)?
+-- SECURITY DEFINER is load-bearing, not incidental (#102): venue_admin's SELECT
+-- policy is now restrictive, so an INLINE subquery in any of the policies below
+-- would be filtered by it — and a venue_admin policy referencing venue_admin
+-- would raise "infinite recursion detected in policy". Definer sidesteps both.
+--
+-- GRANTED TO ANON ON PURPOSE. It appears in party's SELECT policy, which applies
+-- `to anon`, and a policy calling a function the caller cannot EXECUTE raises
+-- permission-denied rather than evaluating false — revoking anon would break the
+-- public flyer (#68) for logged-out visitors. Same reason is_dev() is anon-callable.
+create or replace function public.is_venue_admin(vid bigint)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+           select 1 from public.venue v
+           where v.id = vid and v.created_by = (select auth.uid())
+         )
+      or exists (
+           select 1 from public.venue_admin va
+           where va.venue_id = vid and va.user_id = (select auth.uid())
+         );
+$$;
+revoke all on function public.is_venue_admin(bigint) from public, anon, authenticated;
+grant execute on function public.is_venue_admin(bigint) to anon, authenticated;
+
 -- Column-level split on party_admin: ordering is a party-admin decision,
 -- visibility is personal. RLS is per-row, so a trigger does the narrowing.
 -- No JWT => not an end-user request (SQL editor, service_role, a migration);
@@ -1370,33 +1394,24 @@ create policy "allow select to all users" on public.venue
 create policy "allow insert to authenticated users" on public.venue
   for insert to authenticated with check (true);
 create policy "allow update to venue admins" on public.venue
-  for update using (
-    (created_by = (select auth.uid()))
-    or exists (
-      select 1 from public.venue_admin
-      where venue_admin.venue_id = venue.id and venue_admin.user_id = (select auth.uid())
-    )
-  );
+  for update to authenticated using (public.is_venue_admin(id));
 
 -- ---- venue_admin ------------------------------------------------------------
-create policy "Enable read access for all users" on public.venue_admin
-  for select to anon, authenticated using (true);
+-- Was `using (true)` to anon AND authenticated, which published the whole
+-- venue -> manager mapping to anybody with the anon key (#102). Its sibling
+-- party_admin was authenticated-only, which is what made it a default rather
+-- than a decision.
+create policy "venue_admin select: self or the venue's managers" on public.venue_admin
+  for select to authenticated
+  using (user_id = (select auth.uid()) or public.is_venue_admin(venue_id));
 create policy "allow insert for party admins" on public.venue_admin
-  for insert to authenticated with check (
-    ((select venue.created_by from public.venue where venue.id = venue_admin.venue_id) = (select auth.uid()))
-    or exists (
-      select 1 from public.venue_admin venue_admin_1
-      where venue_admin_1.venue_id = venue_admin.venue_id and venue_admin_1.user_id = (select auth.uid())
-    )
-  );
+  for insert to authenticated with check (public.is_venue_admin(venue_id));
+-- The old expression omitted the venue's CREATOR, so a creator could add an
+-- admin but never remove one. is_venue_admin() brings them in — a small,
+-- deliberate widening, and the correct behaviour (#102).
 create policy "allow delete for venue admins" on public.venue_admin
-  for delete to authenticated using (
-    ((select auth.uid()) = user_id)
-    or exists (
-      select 1 from public.venue_admin venue_admin_1
-      where venue_admin_1.venue_id = venue_admin.venue_id and venue_admin_1.user_id = auth.uid()
-    )
-  );
+  for delete to authenticated
+  using (user_id = (select auth.uid()) or public.is_venue_admin(venue_id));
 
 -- ---- party ------------------------------------------------------------------
 -- Public statuses are world-readable; drafts/pending/cancelled only to the
@@ -1411,10 +1426,7 @@ create policy "select party: public statuses or owner/admins" on public.party
       or created_by = (select auth.uid())
       or exists (select 1 from public.party_admin pa
                  where pa.party_id = party.id and pa.user_id = (select auth.uid()))
-      or exists (select 1 from public.venue v
-                 where v.id = party.venue and v.created_by = (select auth.uid()))
-      or exists (select 1 from public.venue_admin va
-                 where va.venue_id = party.venue and va.user_id = (select auth.uid()))
+      or public.is_venue_admin(party.venue)
     )
     and (is_test = false or public.is_dev())
   );
@@ -1430,14 +1442,7 @@ create policy "allow update to party admins" on public.party
       select 1 from public.party_admin
       where party_admin.party_id = party.id and party_admin.user_id = (select auth.uid())
     )
-    or exists (
-      select 1 from public.venue v
-      where v.id = party.venue and v.created_by = (select auth.uid())
-    )
-    or exists (
-      select 1 from public.venue_admin
-      where venue_admin.venue_id = party.venue and venue_admin.user_id = (select auth.uid())
-    )
+    or public.is_venue_admin(party.venue)
   ) with check (true);
 
 -- ---- party_admin ------------------------------------------------------------
@@ -1613,23 +1618,9 @@ create policy "allow select to all users" on public.equipment_suggestion
 create policy "allow select to all users" on public.venue_equipment
   for select to anon, authenticated using (true);
 create policy "venue admins insert equipment" on public.venue_equipment
-  for insert to authenticated with check (
-    ((select venue.created_by from public.venue where venue.id = venue_equipment.venue_id) = (select auth.uid()))
-    or exists (
-      select 1 from public.venue_admin
-      where venue_admin.venue_id = venue_equipment.venue_id
-        and venue_admin.user_id = (select auth.uid())
-    )
-  );
+  for insert to authenticated with check (public.is_venue_admin(venue_id));
 create policy "venue admins delete equipment" on public.venue_equipment
-  for delete to authenticated using (
-    ((select venue.created_by from public.venue where venue.id = venue_equipment.venue_id) = (select auth.uid()))
-    or exists (
-      select 1 from public.venue_admin
-      where venue_admin.venue_id = venue_equipment.venue_id
-        and venue_admin.user_id = (select auth.uid())
-    )
-  );
+  for delete to authenticated using (public.is_venue_admin(venue_id));
 
 -- ---- venue_type -------------------------------------------------------------
 create policy "Enable read access for all users" on public.venue_type
