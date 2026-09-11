@@ -3,6 +3,7 @@
   import { normalizeText } from '$lib/sanitize';
   import { supabase } from '$lib/supabaseClient';
   import { isDev } from '$lib/stores/userFlags';
+  import { searchPeople, peopleByIds } from '$lib/peopleSearch';
   export let venues: any[] = [];
   export let loadingVenues: boolean = false;
   export let errorVenues: string | null = null;
@@ -55,7 +56,6 @@
   let performerApproval = initialPerformerApproval;
   let isTest = initialIsTest ?? true;
   let admins: any[] = [];
-  let userOptions: any[] = [];
   let adminInput = '';
   let filteredOptions: any[] = [];
 
@@ -63,28 +63,37 @@
     // Neither of these needs the other — one wave (#91, see #84). This form
     // mounts on every party create/edit page, so the chain was paid four times
     // over.
-    const [{ data: users }, { data: sched }] = await Promise.all([
-      // Everyone, for the admin autocomplete.
-      supabase.from('profile').select('id, nickname'),
+    const [existingAdmins, { data: sched }] = await Promise.all([
+      // Only the admins already on this toque — the autocomplete now searches
+      // server-side instead of holding the whole user table (#92).
+      peopleByIds(initialAdmins ?? []),
       // Upcoming toques that occupy a venue, for the conflict warning (#54).
       supabase.from('party')
         .select('id, venue, date')
         .in('status', ['confirmed', 'pending_venue', 'live'])
         .gte('date', todayStr)
     ]);
-    userOptions = users ?? [];
-    // Pre-fill admins if editing
-    if (initialAdmins && initialAdmins.length > 0) {
-      admins = userOptions.filter(u => initialAdmins.includes(u.id));
-    }
+    // Pre-fill from their own lookup: filtering a bounded search result would
+    // silently drop an existing admin who is not in the first page of matches.
+    admins = existingAdmins;
     scheduled = sched ?? [];
   });
 
+  // Debounced, latest-wins, bounded (#92). The debounce state lives here rather
+  // than in the shared module because it belongs to this instance.
+  let adminSearchTimer: ReturnType<typeof setTimeout>;
+  let adminSearchSeq = 0;
   function handleAdminInput(e: Event) {
     adminInput = (e.target as HTMLInputElement).value;
-    filteredOptions = userOptions.filter(u =>
-      u.nickname.toLowerCase().includes(adminInput.toLowerCase()) && !admins.some(a => a.id === u.id)
-    );
+    clearTimeout(adminSearchTimer);
+    const term = adminInput;
+    if (term.trim().length < 2) { filteredOptions = []; return; }
+    adminSearchTimer = setTimeout(async () => {
+      const seq = ++adminSearchSeq;
+      const found = await searchPeople(term);
+      if (seq !== adminSearchSeq) return;   // a newer keystroke superseded this
+      filteredOptions = found.filter((u) => !admins.some((a) => a.id === u.id));
+    }, 250);
   }
 
   function addAdmin(user: any) {

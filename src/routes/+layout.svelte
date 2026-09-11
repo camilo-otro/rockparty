@@ -72,7 +72,12 @@
 
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('visibilitychange', onVisible);
-    refreshUnread();
+    // NO refreshUnread() here (#93). afterNavigate above already runs on the
+    // INITIAL navigation, so calling it again fired the same
+    // `notification?select=id&read_at=is.null` twice, ~1ms apart, on every cold
+    // load. subscribeUnread stays: it is the only path that starts the realtime
+    // bell for a returning user with a live session, since onAuthStateChange
+    // now ignores events where the uid has not changed.
     subscribeUnread();
     // The uid from the session we already hold — never getUser(), which is both
     // a wasted round trip and the auth-loop trap (#101).

@@ -15,7 +15,6 @@
   let band: any = null;
   let isManager = false;
   let instruments: any[] = [];
-  let userOptions: any[] = [];
   let initialMembers: any[] = [];
   let initialPendingMembers: any[] = []; // #78
   let originalMembers: any[] = [];   // snapshot for the save-time diff
@@ -24,17 +23,15 @@
 
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; });
-    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: profiles }, { data: pend }] = await Promise.all([
+    const [{ data: b }, { data: mem }, { data: bmi }, { data: instr }, { data: pend }] = await Promise.all([
       supabase.from('band').select('id, name, bio, who_can_sign_up, created_by, is_test, avatar_url').eq('id', bandId).maybeSingle(),
       supabase.from('band_member').select('user_id, role, profile ( nickname )').eq('band_id', bandId),
       supabase.from('band_member_instrument').select('user_id, instrument_id').eq('band_id', bandId),
       supabase.from('instrument').select('id, name').order('id'),
-      supabase.from('profile').select('id, nickname'),
       supabase.from('band_pending_member').select('id, display_name, instrument_ids').eq('band_id', bandId)
     ]);
     band = b;
     instruments = instr ?? [];
-    userOptions = profiles ?? [];
     initialPendingMembers = (pend ?? []).map((p: any) => ({ id: p.id, display_name: p.display_name, instruments: p.instrument_ids ?? [] }));
     if (band) {
       const instByUser: Record<string, number[]> = {};
@@ -205,7 +202,6 @@
   <BandForm
     bind:this={bandForm}
     {instruments}
-    {userOptions}
     {currentUserId}
     initialName={band.name}
     initialBio={band.bio ?? ''}

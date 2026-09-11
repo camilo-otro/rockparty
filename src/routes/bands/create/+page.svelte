@@ -11,18 +11,16 @@
   let currentUserId: string | null = null;
   let isAuthenticated = false;
   let instruments: any[] = [];
-  let userOptions: any[] = [];
   let submitting = false;
   let unsub: () => void;
 
   onMount(async () => {
     unsub = user.subscribe((u) => { currentUserId = u?.id ?? null; isAuthenticated = !!u?.id; });
-    const [{ data: instr }, { data: profiles }] = await Promise.all([
-      supabase.from('instrument').select('id, name').order('id'),
-      supabase.from('profile').select('id, nickname')
+    // No profile fetch: BandForm searches server-side now (#92).
+    const [{ data: instr }] = await Promise.all([
+      supabase.from('instrument').select('id, name').order('id')
     ]);
     instruments = instr ?? [];
-    userOptions = profiles ?? [];
     // The creator is seeded into the roster inside BandForm (off currentUserId).
   });
 
@@ -95,7 +93,6 @@
 {:else}
   <BandForm
     {instruments}
-    {userOptions}
     {currentUserId}
     {submitting}
     submitLabel="Crear banda"

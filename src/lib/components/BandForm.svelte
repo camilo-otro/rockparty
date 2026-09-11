@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { searchPeople } from '$lib/peopleSearch';
   import { normalizeText } from '$lib/sanitize';
   import { isDev } from '$lib/stores/userFlags';
   import { X, Crown, Trash2, Link2, RefreshCw, Check } from 'lucide-svelte';
   import AvatarCropper from '$lib/components/AvatarCropper.svelte';
 
   export let instruments: any[] = [];        // { id, name }
-  export let userOptions: any[] = [];         // { id, nickname } — for the member search
   export let currentUserId: string | null = null;
   export let initialName = '';
   export let initialBio = '';
@@ -58,12 +58,24 @@
   let memberInput = '';
   let filtered: any[] = [];
 
+  // Server-side, debounced, latest-wins (#92). This picker had the same
+  // whole-user-table fetch as the admin ones — the issue only named those two,
+  // but BandForm mounts on two more pages with the identical bug. Existing
+  // members are unaffected: they arrive resolved via band_member's
+  // `profile ( nickname )` embed, not from this list.
+  let memberSearchTimer: ReturnType<typeof setTimeout>;
+  let memberSearchSeq = 0;
   function handleMemberInput(e: Event) {
     memberInput = (e.target as HTMLInputElement).value;
-    const q = memberInput.toLowerCase();
-    filtered = q
-      ? userOptions.filter((u) => (u.nickname ?? '').toLowerCase().includes(q) && !members.some((m) => m.user_id === u.id)).slice(0, 6)
-      : [];
+    clearTimeout(memberSearchTimer);
+    const term = memberInput;
+    if (term.trim().length < 2) { filtered = []; return; }
+    memberSearchTimer = setTimeout(async () => {
+      const seq = ++memberSearchSeq;
+      const found = await searchPeople(term);
+      if (seq !== memberSearchSeq) return;
+      filtered = found.filter((u) => !members.some((m) => m.user_id === u.id)).slice(0, 6);
+    }, 250);
   }
   function addMember(u: any) {
     members = [...members, { key: u.id, user_id: u.id, nickname: u.nickname, role: 'member', instruments: [], isPending: false }];

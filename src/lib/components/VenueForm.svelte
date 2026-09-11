@@ -4,6 +4,7 @@
   import AutocompleteInput from '$lib/components/AutocompleteInput.svelte';
   import { normalizeText } from '$lib/sanitize';
   import { isDev } from '$lib/stores/userFlags';
+  import { searchPeople, peopleByIds } from '$lib/peopleSearch';
   export let submitting = false;
   export let initialName = '';
   export let initialAddress = '';
@@ -54,7 +55,6 @@
   let allowsRehearsals = initialAllowsRehearsals;
   let isTest = initialIsTest ?? true;
   let admins: any[] = [];
-  let userOptions: any[] = [];
   let adminInput = '';
   let filteredOptions: any[] = [];
   // Venue profile state
@@ -92,19 +92,18 @@
   onMount(async () => {
     // The user list didn't need to go before the suggestion pool — fold it into
     // the same wave (#91, see #84).
-    const [{ data: users }, { data: notesData }, { data: sugData }] = await Promise.all([
-      // Everyone, for the admin autocomplete.
-      supabase.from('profile').select('id, nickname'),
+    const [existingAdmins, { data: notesData }, { data: sugData }] = await Promise.all([
+      // Only the admins already on this venue — the autocomplete now searches
+      // server-side instead of holding the whole user table (#92).
+      peopleByIds(initialAdmins ?? []),
       // The description-suggestion pool per equipment: real usage ranked by
       // frequency first, then the curated catalog (#49) fills the rest.
       supabase.from('venue_equipment').select('equipment_id, notes').not('notes', 'is', null),
       supabase.from('equipment_suggestion').select('equipment_id, label')
     ]);
-    userOptions = users ?? [];
-    // Pre-fill admins if editing
-    if (initialAdmins && initialAdmins.length > 0) {
-      admins = userOptions.filter(u => initialAdmins.includes(u.id));
-    }
+    // Pre-fill from their own lookup: filtering a bounded search result would
+    // silently drop an existing admin who is not in the first page of matches.
+    admins = existingAdmins;
     const counts: Record<number, Record<string, number>> = {};
     for (const r of notesData ?? []) {
       const n = (r.notes ?? '').trim();
@@ -136,11 +135,21 @@
     equipmentRows = equipmentRows;
   }
 
+  // Debounced, latest-wins, bounded (#92). The debounce state lives here rather
+  // than in the shared module because it belongs to this instance.
+  let adminSearchTimer: ReturnType<typeof setTimeout>;
+  let adminSearchSeq = 0;
   function handleAdminInput(e: Event) {
     adminInput = (e.target as HTMLInputElement).value;
-    filteredOptions = userOptions.filter(u =>
-      u.nickname.toLowerCase().includes(adminInput.toLowerCase()) && !admins.some(a => a.id === u.id)
-    );
+    clearTimeout(adminSearchTimer);
+    const term = adminInput;
+    if (term.trim().length < 2) { filteredOptions = []; return; }
+    adminSearchTimer = setTimeout(async () => {
+      const seq = ++adminSearchSeq;
+      const found = await searchPeople(term);
+      if (seq !== adminSearchSeq) return;   // a newer keystroke superseded this
+      filteredOptions = found.filter((u) => !admins.some((a) => a.id === u.id));
+    }, 250);
   }
 
   function addAdmin(user: any) {
