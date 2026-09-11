@@ -588,6 +588,48 @@ export type Database = {
           },
         ]
       }
+      party_set: {
+        Row: {
+          band_id: number | null
+          created_at: string
+          id: number
+          order: number
+          party_id: number
+          title: string | null
+        }
+        Insert: {
+          band_id?: number | null
+          created_at?: string
+          id?: number
+          order: number
+          party_id: number
+          title?: string | null
+        }
+        Update: {
+          band_id?: number | null
+          created_at?: string
+          id?: number
+          order?: number
+          party_id?: number
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_set_band_id_fkey"
+            columns: ["band_id"]
+            isOneToOne: false
+            referencedRelation: "band"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_set_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       performance: {
         Row: {
           band_id: number | null
@@ -599,6 +641,7 @@ export type Database = {
           order: number | null
           party: number | null
           ref_link: string | null
+          set_id: number | null
           song: number | null
           started_at: string | null
           suggested_by: string | null
@@ -613,6 +656,7 @@ export type Database = {
           order?: number | null
           party?: number | null
           ref_link?: string | null
+          set_id?: number | null
           song?: number | null
           started_at?: string | null
           suggested_by?: string | null
@@ -627,6 +671,7 @@ export type Database = {
           order?: number | null
           party?: number | null
           ref_link?: string | null
+          set_id?: number | null
           song?: number | null
           started_at?: string | null
           suggested_by?: string | null
@@ -644,6 +689,13 @@ export type Database = {
             columns: ["party"]
             isOneToOne: false
             referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "performance_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "party_set"
             referencedColumns: ["id"]
           },
           {
@@ -1040,6 +1092,7 @@ export type Database = {
       advance_show: { Args: { p_party: number }; Returns: number }
       band_claim_link: { Args: { p_pending_id: number }; Returns: string }
       can_applaud: { Args: { p_party: number }; Returns: boolean }
+      can_edit_set: { Args: { sid: number }; Returns: boolean }
       can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
@@ -1078,6 +1131,14 @@ export type Database = {
       }
       purge_stale_test_parties: { Args: never; Returns: number }
       regenerate_band_claim: { Args: { p_pending_id: number }; Returns: string }
+      reorder_set_songs: {
+        Args: { p_performance_ids: number[]; p_set: number }
+        Returns: undefined
+      }
+      reorder_sets: {
+        Args: { p_party: number; p_set_ids: number[] }
+        Returns: undefined
+      }
       search_songs: {
         Args: { lim?: number; q: string }
         Returns: {
