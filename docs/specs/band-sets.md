@@ -1,6 +1,6 @@
 # Band sets: making a band's block a real thing you can move
 
-**Status:** specced, decisions settled, not started · **Extends:** #40 (bands) / #37 (live mode)
+**Status:** specced, decisions settled, not started · **Issue:** #110 · **Extends:** #40 (bands) / #37 (live mode)
 
 ## The problem
 
