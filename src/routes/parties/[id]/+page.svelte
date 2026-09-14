@@ -587,7 +587,17 @@
       p_party: Number(page.params.id),
       p_set_ids: arr.map((st) => st.id)
     });
-    if (err) { reportError(err); await loadSetlist(Number(page.params.id)); }
+    if (err) reportError(err);
+    // ALWAYS re-read, not just on failure: reorder_sets normalises the night
+    // afterwards, and moving a band's block out from between two open ones
+    // MERGES them. The optimistic swap above cannot know that happened, so it
+    // left two open blocks on screen until something else forced a reload.
+    //
+    // Predicting the merge in the client was the other option and is the wrong
+    // one — it would be a second copy of a rule the database already owns, free
+    // to drift from it. loadSetlist deliberately leaves editMode alone, so the
+    // re-read is invisible apart from the blocks snapping together.
+    await loadSetlist(Number(page.params.id));
   }
 
   // Everyone who loses their spot if this song goes — approved and pending alike,

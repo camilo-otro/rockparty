@@ -457,7 +457,16 @@ Run against test party 11, `[open 14][band 2][open 5]`:
 
 The last row is why merging needs a trigger and not just a call inside
 `reorder_sets`: deleting a block is the commonest way two open blocks end up
-adjacent. `normalize_party_sets` is guarded with `pg_trigger_depth()` so it
+adjacent.
+
+**A merge is a structure change, so the client must re-read after one.** The
+first build of `moveSet` applied the swap optimistically and only re-read on
+failure, on the assumption that a reorder just permutes blocks. It does not —
+`reorder_sets` normalises afterwards, so moving a band's block out from between
+two open ones merges them, and the stale optimistic state sat on screen showing
+two separate open blocks until leaving edit mode forced a reload. Predicting the
+merge client-side was the alternative and is the wrong one: a second copy of a
+rule the database owns, free to drift. `normalize_party_sets` is guarded with `pg_trigger_depth()` so it
 cannot recurse through its own deletes or the performance GC.
 
 **Disabled states follow one rule**: UP is dead only on the first song of the
