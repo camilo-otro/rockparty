@@ -1111,6 +1111,10 @@ export type Database = {
         Args: { p_party: number; p_performance: number }
         Returns: number
       }
+      move_song_to_set: {
+        Args: { p_performance: number; p_position?: number; p_set: number }
+        Returns: undefined
+      }
       my_user_flags: {
         Args: never
         Returns: {
