@@ -420,13 +420,45 @@ end-to-end rather than argued: an organizer created a set for a band they do not
 belong to (`party_set` writes are admin-only, as intended) and was then refused
 on its contents.
 
-### Still unproven
+### The ownership matrix, proven end to end
 
-The *positive* half of ownership — a band member who is **not** a party admin
-successfully reordering their own set. Every account available admins the parties
-it plays in, so nothing here isolates it. The rule's body was evaluated per user
-against real membership and returns the right answer; only the end-to-end call is
-missing.
+Closed using a second account's test toque (party 41, which the tester does not
+administer) and Pulse (which they are in). Signing Pulse up created the set, so
+this also exercises the new creation path:
+
+| As | On | |
+|---|---|---|
+| organizer, not in the band | that band's set | **refused** — "you cannot rearrange this set" |
+| organizer, not in the band | moving a song *into* that set | **refused** — "you cannot put a song into that set" |
+| **band member, not an organizer** | **their own set** | **allowed** |
+| band member, not an organizer | the night's running order | **refused** — "only a party admin can reorder" |
+| band member, not an organizer | the organizer's open set | **refused** — "you cannot rearrange this set" |
+| neither | anything | refused |
+
+Both directions hold: the organizer owns *when*, the band owns *what*.
+
+`sign_band_up` behaved as designed — the first signup created one Pulse set at
+the end of the night and moved the song into it; the second joined the same set
+rather than creating a second.
+
+### Open question this surfaced: a band cannot undo its own signup
+
+Once a band signs up, it cannot get the song back out. Verified, all three routes
+refused:
+
+- `move_song_to_set` back to the open block — refused, the open set is the
+  organizer's.
+- a direct `performance` UPDATE — silently refused by RLS (**0 rows, no error**;
+  this is the PostgREST trap CLAUDE.md warns about, and it reads like success
+  unless you check `.select()`).
+- deleting the now-empty-ish band set — refused, `party_set` writes are
+  admin-only.
+
+Withdrawal was already organizer-only before this ticket (`set_band_signup_status`
+is admin/proponent-gated), so #110 does not make it worse in kind — but it now
+also leaves a set behind that only the organizer can remove. Worth deciding
+separately whether a band should be able to withdraw, and what happens to its
+block when the last song leaves (the GC only collects *open* sets, deliberately).
 
 ## Out of scope
 
