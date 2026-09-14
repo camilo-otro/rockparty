@@ -1124,6 +1124,10 @@ export type Database = {
         }[]
       }
       notify_upcoming_toques: { Args: never; Returns: undefined }
+      nudge_song: {
+        Args: { p_dir: number; p_performance: number }
+        Returns: undefined
+      }
       peek_band_claim: {
         Args: { p_token: string }
         Returns: {

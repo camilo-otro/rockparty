@@ -309,6 +309,23 @@
     editableSets = new Set(forSets.filter((_, i) => res[i].data === true).map((st) => st.id));
   }
 
+  // Is there anywhere for this song to go in that direction?
+  //
+  // Inside the block, always. At the EDGE of an open block, yes when another
+  // block lies that way — the song hops OVER it if it is a band's and lands in
+  // the next open one, creating a new open block at the end when the night
+  // finishes with a band. At the edge of a BAND block, no: a band's songs stay
+  // in the band's block, and pushing one out into the organizer's open list is
+  // not the band's call.
+  function canNudge(run: any, index: number, dir: -1 | 1) {
+    if (!run.set) return false;
+    const inside = dir < 0 ? index > 0 : index < run.items.length - 1;
+    if (inside) return true;
+    if (run.band) return false;
+    const bi = blocks.indexOf(run);
+    return dir < 0 ? bi > 0 : bi < blocks.length - 1;
+  }
+
   // The running order, as the database defines it: set first, then position
   // within the set. Used to re-sort locally after an optimistic move.
   function bySetThenOrder(a: any, b: any) {
@@ -512,25 +529,28 @@
   // removing a song, #62). Up/down arrows, no drag. Swapping two adjacent items
   // and re-numbering is deterministic — no drag, no DOM↔data desync.
   //
-  // Now scoped to ONE SET and persisted with a single reorder_set_songs call
-  // (#110). Two things changed and both matter:
-  //   * A song can no longer cross a block boundary by accident — the movement
-  //     that would slide a stranger's song into a band's set does not exist.
-  //   * It was one UPDATE round trip PER ROW, on every move: fifteen requests to
-  //     move one song in a fifteen-song list. Now it is one call.
-  // The RPC also renumbers server-side, so the client no longer has to persist a
-  // whole renumbered list to self-heal drifted orders.
+  // One call to nudge_song (#110), which owns the whole rule about where a song
+  // may land: swap inside the block, or hop OVER a band's block to the next open
+  // one, or start a new open block when the night ends with a band. Keeping that
+  // in the database means the client cannot offer a move the rule would refuse,
+  // and there is no second copy of "skip over, never into" to drift.
+  //
+  // It also replaced one UPDATE round trip PER ROW on every move — fifteen
+  // requests to shift one song in a fifteen-song list.
   async function moveSong(setId: number, index: number, dir: -1 | 1) {
     const block = blocks.find((b) => b.set?.id === setId);
-    if (!block) return;
-    const target = index + dir;
-    if (target < 0 || target >= block.items.length) return;
+    if (!block || !canNudge(block, index, dir)) return;
     const movedId = block.items[index].id;
-    const ordered = [...block.items];
-    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-    ordered.forEach((p, i) => (p.order = i + 1));
-    const arr = [...performances].sort(bySetThenOrder);
-    performances = arr;
+    // A swap inside the block is applied optimistically so the row moves under
+    // the finger. A hop between blocks is not: it can create, merge or delete
+    // blocks, so the structure has to come back from the server.
+    const inside = dir < 0 ? index > 0 : index < block.items.length - 1;
+    if (inside) {
+      const ordered = [...block.items];
+      [ordered[index], ordered[index + dir]] = [ordered[index + dir], ordered[index]];
+      ordered.forEach((p, i) => (p.order = i + 1));
+      performances = [...performances].sort(bySetThenOrder);
+    }
     // Flash the moved row. Remove the class, force a reflow on that row, then
     // re-add — the reliable way to restart a CSS animation regardless of whether
     // the keyed list moved this node up or down (a plain toggle can get coalesced).
@@ -539,13 +559,11 @@
     const el = document.querySelector(`[data-perf-id="${movedId}"]`) as HTMLElement | null;
     if (el) void el.offsetWidth;
     justMovedId = movedId;
-    const { error: err } = await supabase.rpc('reorder_set_songs', {
-      p_set: setId,
-      p_performance_ids: ordered.map((p) => p.id)
-    });
-    // A refusal here means the rule disagrees with what the UI offered, so
-    // re-read rather than leave the optimistic order on screen.
-    if (err) { reportError(err); await loadSetlist(Number(page.params.id)); }
+    const { error: err } = await supabase.rpc('nudge_song', { p_performance: movedId, p_dir: dir });
+    if (err) reportError(err);
+    // Re-read after a hop (the blocks may have changed shape) or a refusal (the
+    // optimistic order on screen is a lie).
+    if (err || !inside) await loadSetlist(Number(page.params.id));
   }
 
   // Move a whole block in the running order (#110). Organizer only — the other
@@ -1322,8 +1340,8 @@
                          organizer (can_edit_set decides, asked at load). -->
                     {#if editMode && canEditThis && run.items.length > 1}
                       <div class="flex flex-col shrink-0">
-                        <button on:click={() => moveSong(setKey, i, -1)} disabled={i === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={20} /></button>
-                        <button on:click={() => moveSong(setKey, i, 1)} disabled={i === run.items.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={20} /></button>
+                        <button on:click={() => moveSong(setKey, i, -1)} disabled={!canNudge(run, i, -1)} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={20} /></button>
+                        <button on:click={() => moveSong(setKey, i, 1)} disabled={!canNudge(run, i, 1)} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={20} /></button>
                       </div>
                     {/if}
                     {#if canApplaud && perf.started_at && perf.live_state !== 'skipped'}
@@ -1385,14 +1403,13 @@
                     <div class="text-lg text-yellow truncate">{getSongTitle(perf.song)}</div>
                     <div class="text-sm text-cold-light truncate">{getSongArtist(perf.song)}</div>
                   </div>
-                  <!-- Scoped to this BLOCK (#110): a song cannot cross a block
-                       boundary with an arrow, which is what stops a stranger's
-                       song sliding into a band's set. Nothing to reorder with a
-                       single song, so the arrows are left out entirely. -->
-                  {#if canEditThis && run.items.length > 1}
+                  <!-- At the edge of an open block these carry the song OVER the
+                       next band block into the following open one (#110) — the
+                       arrows stay live as long as somewhere exists to go. -->
+                  {#if canEditThis && (run.items.length > 1 || multiBlock)}
                     <div class="flex flex-col shrink-0">
-                      <button on:click={() => moveSong(run.set.id, index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
-                      <button on:click={() => moveSong(run.set.id, index, 1)} disabled={index === run.items.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
+                      <button on:click={() => moveSong(run.set.id, index, -1)} disabled={!canNudge(run, index, -1)} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
+                      <button on:click={() => moveSong(run.set.id, index, 1)} disabled={!canNudge(run, index, 1)} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
                     </div>
                   {/if}
                   {#if canRemoveSong(perf)}
