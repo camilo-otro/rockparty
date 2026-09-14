@@ -981,6 +981,7 @@ returns void language plpgsql security definer set search_path = '' as $$
 declare
   v_party bigint; v_party_title text; v_song_title text; v_band_name text;
   v_uid uuid := (select auth.uid());
+  v_set bigint; v_old_set bigint;
 begin
   if not public.can_sign_up_band(p_band) then
     raise exception 'not allowed to sign up this band';
@@ -1017,6 +1018,58 @@ begin
   left join public.song s on s.id = perf.song
   join public.band b on b.id = p_band
   where perf.id = p_performance;
+
+  -- #110: a band's songs ARE its block, so signing up puts the song in the
+  -- band's set — creating one at the end of the night if the band has none yet.
+  --
+  -- Without this, band sets had no creation path for new data: the ones that
+  -- exist were derived by the backfill from history, while sign_band_up wrote
+  -- band_id and left set_id alone. The song then sat in an OPEN set, which means
+  -- the BAND could not reorder its own song (the open set belongs to the
+  -- organizer) and the setlist would render it as a loose row rather than part
+  -- of the block. Both are the problem this ticket exists to fix.
+  --
+  -- The trade this makes, deliberately: a band can now put a block into someone
+  -- else's running order by signing up, and the song jumps from wherever it sat
+  -- into the band's block. The organizer's counterweight is the one they already
+  -- have — party_set writes are admin-only, so they can move or delete the block.
+  --
+  -- Last set, not first, when a band already plays twice: the newest song joins
+  -- the most recent block, and the band can move it with move_song_to_set.
+  select set_id into v_old_set from public.performance where id = p_performance;
+
+  select id into v_set
+  from public.party_set
+  where party_id = v_party and band_id = p_band
+  order by "order" desc, id desc
+  limit 1;
+
+  if v_set is null then
+    insert into public.party_set (party_id, band_id, "order")
+    select v_party, p_band, (coalesce(max("order"), 0) + 1)::smallint
+    from public.party_set where party_id = v_party
+    returning id into v_set;
+  end if;
+
+  if v_old_set is distinct from v_set then
+    -- Normalise the destination to 1..n before appending. The backfill
+    -- deliberately does not renumber "order", so a set may hold legacy globals
+    -- and a raw count+1 can sort BEFORE them — the same trap that made
+    -- move_song_to_set's append land first.
+    with ordered as (
+      select id, row_number() over (order by "order" nulls last, id) as ord
+      from public.performance where set_id = v_set
+    )
+    update public.performance p set "order" = o.ord::smallint
+    from ordered o where p.id = o.id;
+
+    update public.performance
+    set set_id = v_set,
+        "order" = ((select count(*) from public.performance where set_id = v_set) + 1)::smallint
+    where id = p_performance;
+    -- An open set emptied by that move is collected by trg_gc_empty_open_set,
+    -- which fires on update of set_id.
+  end if;
 
   if exists (
     select 1 from public.performance_user pu

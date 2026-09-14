@@ -349,6 +349,32 @@ to be ended first.
 above, with the live-mode consequence of the first being the thing most likely to
 bite.
 
+## How a band set comes into existence
+
+The first draft never said, and it turned out nothing created one. The nine sets
+that exist were derived by the backfill from historical contiguous runs;
+`sign_band_up` wrote `performance.band_id` and never touched `set_id`. Found in
+live test data — three songs on party 41 carrying `band_id = 3` while sitting in
+an **open** set — which breaks the two things this ticket is for: the band cannot
+reorder its own songs (an open set belongs to the organizer), and a set-based
+setlist would render them as loose rows, *regressing* the block display that #74
+already gives them.
+
+**Decided: `sign_band_up` joins the band's set, creating one at the end of the
+night if the band has none.** A band's songs are its block — that is the premise
+of the whole feature, and nothing else was going to build it.
+
+The trade, taken knowingly: a band can now put a block into someone else's
+running order by signing up, and the song jumps from wherever it sat into that
+block. The organizer's counterweight is unchanged — `party_set` writes stay
+admin-only, so they can move the block or delete it (which cascades its songs, as
+already decided). This is the **one** place a `party_set` row is created by
+someone who is not a party admin, and it is safe only because `sign_band_up` is
+`SECURITY DEFINER` and has already checked `can_sign_up_band()`.
+
+When a band already plays twice, the song joins the **last** of its sets; the
+band can move it with `move_song_to_set`.
+
 ## Verified against the database (2026-09-14)
 
 Stage 1 is applied and every write path has now been exercised as a signed-in
