@@ -441,6 +441,41 @@ Both directions hold: the organizer owns *when*, the band owns *what*.
 the end of the night and moved the song into it; the second joined the same set
 rather than creating a second.
 
+### Blocks merge, and songs hop over them — verified 2026-09-14
+
+Run against test party 11, `[open 14][band 2][open 5]`:
+
+| | |
+|---|---|
+| down from the last song of an open block | skips the band block whole, lands at the TOP of the next open one |
+| up from the top of an open block | lands at the BOTTOM of the previous one — clean round trip |
+| a band's song at either edge of its block | no-op; it stays in the band's block |
+| reorder that puts two open blocks together | merged, both sequences preserved in order |
+| night ends with a band's block, press down | new open block created after it |
+| night starts with a band's block, press up | new open block created before it |
+| delete a band's block sitting between two open ones | the two open blocks merge |
+
+The last row is why merging needs a trigger and not just a call inside
+`reorder_sets`: deleting a block is the commonest way two open blocks end up
+adjacent. `normalize_party_sets` is guarded with `pg_trigger_depth()` so it
+cannot recurse through its own deletes or the performance GC.
+
+**Disabled states follow one rule**: UP is dead only on the first song of the
+first block, DOWN only on the last song of the last. Anywhere else a song has
+somewhere to go. The symmetric "create a block at the START" case exists purely
+to make that true — without it, a night beginning with a band's block left the
+first loose song's up arrow enabled and silently doing nothing.
+
+*Band blocks are the one exception and stay bounded by themselves.* Only the
+band sees those arrows, and moving a song out means writing to the organizer's
+open block, which `can_edit_set` refuses — so an unbounded arrow there would be
+enabled and inert, the exact bug the start-case fixed. Letting bands eject songs
+into the open list would reverse the ownership decision and is not taken here.
+
+Note test party 11's set IDs changed during this (4 and 6 became 19 and 21):
+merging genuinely deletes a block rather than hiding it. Song order was rebuilt
+identically.
+
 ### Open question this surfaced: a band cannot undo its own signup
 
 Once a band signs up, it cannot get the song back out. Verified, all three routes
