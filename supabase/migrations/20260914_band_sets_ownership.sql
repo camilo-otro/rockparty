@@ -1,52 +1,107 @@
 -- =============================================================================
--- Migration: moving a song between sets (#110, stage 1b)
--- Date: 2026-09-11
+-- Migration: who owns a set's contents (#110, stage 1b)
+-- Date: 2026-09-14
 -- =============================================================================
 -- ADDITIVE. Safe to apply before or after the matching deploy — nothing calls
--- this until the client grows the controls.
+-- move_song_to_set until the client grows the controls, and the can_edit_set
+-- change only ever NARROWS what is allowed.
 --
--- Fixes two gaps in 20260911_band_sets.sql, both found by asking "how does a
--- band move a song between its OWN two sets?".
+-- Two things, from one refinement and one question.
 --
 -- -----------------------------------------------------------------------------
--- Gap 1: neither reorder RPC can move a song between sets
+-- The rule: a set's CONTENTS belong to its owner, its POSITION to the organizer
 -- -----------------------------------------------------------------------------
--- reorder_sets and reorder_set_songs write ONLY "order", on purpose. But the
--- schema deliberately allows a band to play twice in a night (no unique
--- constraint on (party_id, band_id)), so "move this song from our first set to
--- our second" is an ordinary thing for a band to want — and it needs set_id
--- written, which neither RPC does.
+-- Stage 1 had can_edit_set() return true for a party admin on ANY set. That was
+-- wrong, and the refinement is worth stating as a principle because it settles
+-- several other questions at once:
 --
--- The first instinct was to make cross-set moves party-admin-only, on the
--- grounds that admins already hold `performance` UPDATE. That is wrong: it
--- would send a band to the organizer to rearrange its own material, which is
--- the exact complaint this ticket exists to fix.
+--   The organizer decides WHEN a band plays. The band decides WHAT it plays,
+--   and in what order.
 --
--- The rule is not about WHO the caller is, it is about WHICH TWO SETS they are
--- touching: you may move a song when you can edit BOTH ends. can_edit_set()
--- already answers that, and every case falls out of it with no special-casing:
+-- An organizer moving Pulse from the top of the night to the bottom is running
+-- the event. An organizer reordering the songs inside Pulse's set is overruling
+-- a band about its own material, which is not the organizer's call — and the
+-- inability to arrange your own set is one of the three problems this ticket
+-- opened with.
 --
---   Pulse set 1 -> Pulse set 3       band  / band        allowed
---   band -> an open block            band  / admin-only  refused
---   band A -> band B's set           band  / other band  refused
+-- So can_edit_set() stops being "admin OR the band" and becomes a straight
+-- question of ownership:
+--
+--   band set (band_id not null)  ->  can_sign_up_band(band_id)   -- the band, only
+--   open set (band_id null)      ->  is_party_admin(party_id)    -- the organizer
+--
+-- Note what does NOT change: `party_set` rows themselves are still party-admin
+-- only (the "party_set: admins manage" policy from stage 1). That is the other
+-- half of the split and it was already right — creating a band's block, moving
+-- it in the running order, and removing it are all the organizer's, and
+-- reorder_sets() is still gated on is_party_admin(). This migration narrows
+-- authority over what is INSIDE a block, and touches nothing about the block.
+--
+-- Consequence worth naming: a party admin can no longer add a song to, remove a
+-- song from, or reorder a band's set. Their remedy if a band goes silent is the
+-- one they already had — delete the set, which cascades its songs. This
+-- CONTRADICTS a line in docs/specs/band-sets.md that had moving a song into a
+-- band set available to "party admins and that band's members"; the spec has
+-- been corrected rather than the other way round, because injecting a song into
+-- a band's set is deciding their setlist just as much as reordering it is.
+--
+-- -----------------------------------------------------------------------------
+-- move_song_to_set: because neither reorder RPC can cross sets
+-- -----------------------------------------------------------------------------
+-- Found by asking "how does a band move a song between its OWN two sets?" — a
+-- case the schema deliberately allows, since a band may play twice in a night.
+-- reorder_sets and reorder_set_songs write ONLY "order"; this needs set_id.
+--
+-- The gate is can_edit_set on BOTH ends — you may move a song when you own
+-- where it comes from and where it goes. With the ownership rule above, every
+-- case falls out with no special-casing:
+--
+--   Pulse set 1 -> Pulse set 3       band  / band    allowed
+--   band -> an open block            band  / admin   refused
+--   band A -> band B's set           band  / band B  refused
+--   admin -> into a band's set       admin / band    refused  (was allowed)
+--   admin pulls out of a band's set  band  / admin   refused  (was allowed)
 --   admin moves an open song over a
 --     band block (the spec's
---     "skip over, never into")       admin / admin       allowed
---   admin -> into a band's set       admin / admin       allowed
+--     "skip over, never into")       admin / admin   allowed
 --
--- The skip-over behaviour is therefore not a separate mechanism; it is this one
--- with both ends open.
+-- That last row is the point: skip-over is not a separate mechanism, it is this
+-- one with both ends open. And an admin can never land a song INSIDE a band's
+-- block, which is the property the spec wanted and now gets from the type
+-- system of the rule rather than from a special case.
 --
 -- -----------------------------------------------------------------------------
 -- Gap 2: the GC only fired on DELETE
 -- -----------------------------------------------------------------------------
 -- gc_empty_open_set was an AFTER DELETE trigger, so an open set emptied by
--- MOVING its last song out — which was impossible before this migration and is
--- routine after it — would have been left behind as an empty block forever.
--- It now fires on UPDATE OF set_id too.
+-- MOVING its last song out — impossible before this migration, routine after
+-- it — would have been left behind as an empty block forever. It now fires on
+-- UPDATE OF set_id too.
+--
+-- Stage 2 note: the `performance` INSERT tightening must follow the same rule —
+-- open set OR a member of the set's band, and NOT "or a party admin".
 -- =============================================================================
 
 begin;
+
+-- -----------------------------------------------------------------------------
+-- Ownership: supersedes the can_edit_set() from 20260911_band_sets.sql
+-- -----------------------------------------------------------------------------
+-- The band, and only the band, for a band set. The organizer, and only the
+-- organizer, for an open one. can_sign_up_band() (not is_band_manager()) stays
+-- the test of WHICH band members: it is what sign_band_up already uses, and it
+-- reads band.who_can_sign_up, a setting the band itself chose.
+create or replace function public.can_edit_set(sid bigint)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.party_set s
+    where s.id = sid
+      and case
+            when s.band_id is not null then public.can_sign_up_band(s.band_id)
+            else public.is_party_admin(s.party_id)
+          end
+  );
+$$;
 
 -- -----------------------------------------------------------------------------
 -- Gap 2 first, so the move RPC below can rely on it.
@@ -180,7 +235,8 @@ commit;
 
 -- =============================================================================
 -- After applying: reconcile supabase/schema.sql and regenerate
--- src/lib/database.types.ts (one new function; gc_empty_open_set replaced).
+-- src/lib/database.types.ts (one new function; can_edit_set and
+-- gc_empty_open_set replaced).
 --
 -- NOT guarded here, and worth knowing: moving the song that currently holds
 -- live_state = 'playing'. It cannot strand the show — advance_show re-queries

@@ -720,21 +720,24 @@ returns boolean language sql stable security definer set search_path = '' as $$
   );
 $$;
 -- creator becomes the first manager (mirrors party.auto_add_admin)
--- Who may rearrange a set's songs (#110). can_sign_up_band(), NOT
--- is_band_manager(): that is the function sign_band_up already uses, and it
--- reads band.who_can_sign_up — a setting the band itself chose. A manager-only
--- rule would make rearranging your own songs stricter than committing the band
--- to a gig. EXECUTABLE BY ANON on purpose: a definer function the caller cannot
--- execute raises permission-denied instead of returning false (#102).
+-- Who owns a set's CONTENTS (#110). The organizer decides WHEN a band plays;
+-- the band decides WHAT it plays and in what order — so a party admin can
+-- neither reorder, add to, nor remove from a band's set. Their remedy is to
+-- delete the set (party_set writes are still admin-only, which is the other
+-- half of the split). can_sign_up_band(), NOT is_band_manager(): that is the
+-- function sign_band_up already uses, and it reads band.who_can_sign_up, a
+-- setting the band itself chose. EXECUTABLE BY ANON on purpose: a definer
+-- function the caller cannot execute raises permission-denied instead of
+-- returning false (#102).
 create or replace function public.can_edit_set(sid bigint)
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.party_set s
     where s.id = sid
-      and (
-        public.is_party_admin(s.party_id)
-        or (s.band_id is not null and public.can_sign_up_band(s.band_id))
-      )
+      and case
+            when s.band_id is not null then public.can_sign_up_band(s.band_id)
+            else public.is_party_admin(s.party_id)
+          end
   );
 $$;
 

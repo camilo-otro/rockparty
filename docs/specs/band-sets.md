@@ -117,7 +117,8 @@ Two reasons this is the rule rather than a compromise:
   not exist.
 - **Up/down cannot express a choice.** A single button cannot ask "over or into?".
   So the common case gets the button, and moving a song *into* a band set is a
-  separate explicit action available to party admins and that band's members.
+  separate explicit action available to **that band** — not to party admins, per
+  the ownership rule below.
 
 ### A band's block is collapsed by default
 
@@ -161,6 +162,17 @@ This is the part that decides the shape. The requirement is:
 - Organizers reorder **sets** within the night.
 - A band reorders **songs within its own set** — and nowhere else.
 - Non-members cannot slot a song **into** a band's set.
+- **Organizers cannot either.** Refined after the first draft: a party admin can
+  neither reorder, add to, nor remove from a band's set. *The organizer decides
+  WHEN a band plays; the band decides WHAT it plays and in what order.* Deciding
+  a band's running order is not the organizer's call, and "a band cannot arrange
+  its own set" is one of the three problems this ticket opened with — a rule that
+  left the organizer able to overrule them would only half-fix it.
+
+  The organizer's remedy if a band goes quiet is the one they already have:
+  delete the set, which cascades its songs. `party_set` rows stay admin-only, so
+  booking a band into the night, moving its block and removing it are all still
+  theirs. The split is **contents vs position**.
 
 Two facts make this an RPC job rather than a policy job:
 
@@ -182,7 +194,7 @@ So:
 
 ```
 reorder_sets(p_party, p_set_ids bigint[])              -- party admins
-reorder_set_songs(p_set, p_performance_ids bigint[])   -- party admins OR that band
+reorder_set_songs(p_set, p_performance_ids bigint[])   -- whoever OWNS the set
 move_song_to_set(p_performance, p_set, p_position)     -- can_edit_set BOTH ends
 ```
 
@@ -200,13 +212,21 @@ The rule is not about who the caller is but about **which two sets they touch**:
 you may move a song when you can edit *both ends*. `can_edit_set()` already
 answers that, and everything falls out with no special cases:
 
+`can_edit_set()` now answers "who owns this set" rather than "is this person
+important", which makes the table fall out with no special cases at all:
+
 | Move | Source / target | |
 |---|---|---|
 | Pulse set 1 → Pulse set 3 | band / band | allowed |
-| Band → an open block | band / admin-only | refused |
+| Band → an open block | band / organizer | refused |
 | Band A → Band B's set | band / other band | refused |
-| Admin moves an open song over a band block | admin / admin | allowed |
-| Admin → into a band's set | admin / admin | allowed |
+| Admin → into a band's set | organizer / band | refused |
+| Admin pulls a song out of a band's set | band / organizer | refused |
+| Admin moves an open song over a band block | organizer / organizer | allowed |
+
+The last row is the point: an admin can never land a song *inside* a band's
+block, which the first draft wanted and got from a hand-written special case.
+Here it falls out of the ownership rule.
 
 So **"up/down skips over a band set" is not a separate mechanism** — it is this
 one with both ends open.
@@ -294,7 +314,9 @@ Everything the first draft left open has been settled. Three of them answered
 themselves from what the codebase already does — worth recording *why*, so they
 are not reopened later on taste.
 
-**Who in a band may reorder — `can_sign_up_band()`, not `is_band_manager()`.**
+**Which band members may reorder — `can_sign_up_band()`, not `is_band_manager()`.**
+(Separate axis from the organizer question above: that one settles *whether an
+organizer may at all* — no — and this one settles *which members* may.)
 Not a new decision at all. `sign_band_up` already gates on that function, which
 reads **`band.who_can_sign_up`** — a per-band setting the band itself chose.
 Inventing a manager-only rule for reordering would contradict a setting the band
