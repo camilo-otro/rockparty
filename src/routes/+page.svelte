@@ -202,8 +202,10 @@
       </h2>
       <div class="m-4 mt-0 rounded-lg overflow-clip">
         <ul class="p-0 space-y-[1px]">
+          <!-- No status chip: this list is `.eq('status','pending_venue')`, so
+               every row would carry the same one and the heading already says it. -->
           {#each visiblePending as party}
-            <PartyListItem {party} venueName={getVenueName(party.venue)} showStatus />
+            <PartyListItem {party} venueName={getVenueName(party.venue)} />
           {/each}
         </ul>
       </div>
@@ -215,6 +217,9 @@
       <h2 class="text-3xl text-white m-4 mb-4">TUS LOCALES</h2>
       <div class="m-4 mt-0 rounded-lg overflow-clip">
         <ul class="p-0 space-y-[1px]">
+          <!-- Kept: this list is confirmed OR live, and PartyListItem drops the
+               "Confirmado" half, so the chip appears only to say a show is ON —
+               which nothing else on this page tells you. -->
           {#each visibleVenueUpcoming as party}
             <PartyListItem {party} venueName={getVenueName(party.venue)} showStatus />
           {/each}

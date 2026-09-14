@@ -1089,8 +1089,8 @@
       <!-- "Confirmado" tells a visitor nothing they can't already infer from being
            here — a confirmed toque is just the normal case. Every other status
            does carry information (a draft, a pending approval, a cancellation),
-           so the badge stays for those. In lists it stays for all of them, where
-           it distinguishes one row from another. -->
+           so the badge stays for those. PartyListItem now applies the same rule,
+           so a list never shows "Confirmado" either. -->
       {#if party.status !== 'confirmed'}
         <StatusBadge status={party.status} />
       {/if}
