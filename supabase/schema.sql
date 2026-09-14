@@ -807,6 +807,91 @@ grant execute on function public.reorder_set_songs(bigint, bigint[]) to authenti
 revoke all on function public.can_edit_set(bigint) from public;
 grant execute on function public.can_edit_set(bigint) to anon, authenticated;
 
+-- Move one song between sets (#110). Needed because both reorder RPCs write
+-- ONLY "order", while a band moving a song between its OWN two sets — which the
+-- schema deliberately allows — needs set_id. Gated by can_edit_set at BOTH ends,
+-- so ownership alone decides it: an admin can never land a song inside a band's
+-- block, and a band can never push one out into the open list.
+--
+-- p_position is 1-based; null appends. The destination is normalised to 1..n
+-- FIRST, because the backfill in 20260911_band_sets.sql deliberately does not
+-- renumber "order" (that is what let it ship before the client), so a set's
+-- values may be legacy globals. Comparing a 1-based position against those
+-- directly put songs one slot early, and made an append land FIRST on a set
+-- whose orders started above the incoming value.
+create or replace function public.move_song_to_set(
+  p_performance bigint,
+  p_set bigint,
+  p_position int default null
+)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  v_source bigint;
+  v_party  bigint;
+  v_target_party bigint;
+  v_count  int;
+  v_pos    int;
+begin
+  select set_id, party into v_source, v_party
+  from public.performance where id = p_performance;
+  if not found then
+    raise exception 'that song is not on any setlist';
+  end if;
+  if v_source is null or not public.can_edit_set(v_source) then
+    raise exception 'you cannot take a song out of that set';
+  end if;
+  if not public.can_edit_set(p_set) then
+    raise exception 'you cannot put a song into that set';
+  end if;
+  select party_id into v_target_party from public.party_set where id = p_set;
+  if v_target_party is null then
+    raise exception 'that set does not exist';
+  end if;
+  if v_target_party <> v_party then
+    raise exception 'that set belongs to a different toque';
+  end if;
+  if v_source = p_set then
+    return;
+  end if;
+
+  select count(*) into v_count from public.performance where set_id = p_set;
+  v_pos := coalesce(p_position, v_count + 1);
+  if v_pos < 1 then v_pos := 1; end if;
+  if v_pos > v_count + 1 then v_pos := v_count + 1; end if;
+
+  with ordered as (
+    select id, row_number() over (order by "order" nulls last, id) as ord
+    from public.performance where set_id = p_set
+  )
+  update public.performance p set "order" = o.ord::smallint
+  from ordered o where p.id = o.id;
+
+  update public.performance
+  set set_id = p_set,
+      "order" = v_pos::smallint,
+      band_id = (select band_id from public.party_set where id = p_set)
+  where id = p_performance;
+
+  with ordered as (
+    select id, row_number() over (
+      order by "order" nulls last, case when id = p_performance then 0 else 1 end, id
+    ) as ord
+    from public.performance where set_id = p_set
+  )
+  update public.performance p set "order" = o.ord::smallint
+  from ordered o where p.id = o.id;
+
+  with ordered as (
+    select id, row_number() over (order by "order" nulls last, id) as ord
+    from public.performance where set_id = v_source
+  )
+  update public.performance p set "order" = o.ord::smallint
+  from ordered o where p.id = o.id;
+end;
+$$;
+revoke all on function public.move_song_to_set(bigint, bigint, int) from public, anon, authenticated;
+grant execute on function public.move_song_to_set(bigint, bigint, int) to authenticated;
+
 -- Every performance belongs to a set, but nobody should have to know that. This
 -- assigns the trailing OPEN set (creating one when the last block is a band's)
 -- whenever the caller does not name one — which is what let #110's migration
@@ -848,6 +933,11 @@ begin
   if old.set_id is null then
     return null;
   end if;
+  -- Fires on UPDATE OF set_id too, or an open set emptied by MOVING its last
+  -- song out (routine once move_song_to_set exists) would be orphaned.
+  if tg_op = 'UPDATE' and new.set_id is not distinct from old.set_id then
+    return null;
+  end if;
   delete from public.party_set s
   where s.id = old.set_id
     and s.band_id is null
@@ -857,7 +947,7 @@ end;
 $$;
 drop trigger if exists trg_gc_empty_open_set on public.performance;
 create trigger trg_gc_empty_open_set
-  after delete on public.performance
+  after delete or update of set_id on public.performance
   for each row execute function public.gc_empty_open_set();
 revoke all on function public.assign_performance_set() from public, anon, authenticated;
 revoke all on function public.gc_empty_open_set() from public, anon, authenticated;
