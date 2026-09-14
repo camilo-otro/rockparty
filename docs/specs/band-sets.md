@@ -349,6 +349,59 @@ to be ended first.
 above, with the live-mode consequence of the first being the thing most likely to
 bite.
 
+## Verified against the database (2026-09-14)
+
+Stage 1 is applied and every write path has now been exercised as a signed-in
+user, against test party 11 (`[open 14] [band 2] [open 5]`) and capibear's test
+party 41 / band 3. Party 11 was snapshotted first and restored field-for-field
+afterwards; no stray rows or sets remain.
+
+**Two bugs were found by running the code, neither visible in review.** Both were
+cases where the SQL encoded a subtly different rule than the comment above it.
+
+1. **`move_song_to_set` landed one slot early, and appends could land first.**
+   The backfill deliberately does not renumber `"order"` — that is what let stage
+   1 ship before the client — so sets still hold legacy *global* positions (party
+   11's first set runs 0..13, its band set 14..15). The RPC treated `p_position`
+   as 1-based and tied it against those raw values. Measured: position 1 landed
+   at position 2; and an append into the band set computed `v_pos = 3` against
+   orders 14 and 15, which would have put the song **first**. Fixed by
+   normalising the destination to 1..n before inserting.
+
+   *Lesson worth keeping: "the backfill does not renumber" is load-bearing for
+   the deploy ordering, so nothing downstream may assume `"order"` is 1..n.*
+
+2. **A loose song joined the last OPEN set rather than the last BLOCK.** With the
+   night ordered `[open] [open] [band]`, a new song landed in the middle, ahead
+   of the band — while the button that added it sits at the bottom of the list.
+   That is precisely the shape this feature creates: the first time an organizer
+   moves a band to the end of the night, everything added afterwards goes in
+   front of them.
+
+### What passed
+
+| | |
+|---|---|
+| `reorder_sets` | reorders the night; refuses a wrong count, a foreign set id, a non-admin |
+| `reorder_set_songs` | reorders within a set; refuses a wrong count and a song from another set |
+| `move_song_to_set` | position 1, middle, and append all land correctly; `band_id` follows the set; refuses a cross-toque target |
+| insert trigger | joins the trailing open block, and creates a new one when the night ends with a band set |
+| GC trigger | removes an open set emptied by a **move** and by a **delete**; leaves an occupied one alone |
+| **ownership** | a party admin who is **not** in the band is refused on that band's set — both `reorder_set_songs` ("you cannot rearrange this set") and `move_song_to_set` ("you cannot put a song into that set") |
+
+The ownership row is the one the refinement was about, and it is now proven
+end-to-end rather than argued: an organizer created a set for a band they do not
+belong to (`party_set` writes are admin-only, as intended) and was then refused
+on its contents.
+
+### Still unproven
+
+The *positive* half of ownership — a band member who is **not** a party admin
+successfully reordering their own set. Every account available admins the parties
+it plays in, so nothing here isolates it. The rule's body was evaluated per user
+against real membership and returns the right answer; only the end-to-end call is
+missing.
+
 ## Out of scope
 
 - **Set durations / scheduling by clock time.** "Pulse at 21:00" is a different
