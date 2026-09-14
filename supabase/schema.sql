@@ -902,15 +902,19 @@ grant execute on function public.move_song_to_set(bigint, bigint, int) to authen
 create or replace function public.assign_performance_set()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
-  v_set bigint;
+  v_set  bigint;
+  v_band bigint;
 begin
   if new.set_id is not null or new.party is null then
     return new;
   end if;
-  select id into v_set from public.party_set
-  where party_id = new.party and band_id is null
-  order by "order" desc limit 1;
-  if v_set is null then
+  -- The LAST BLOCK, whatever kind it is — not "the last open set anywhere".
+  -- Filtering to open sets up front put a new song in the MIDDLE of the night
+  -- whenever a band's block sat last, which is the shape #110 exists to create.
+  select id, band_id into v_set, v_band from public.party_set
+  where party_id = new.party
+  order by "order" desc, id desc limit 1;
+  if v_set is null or v_band is not null then
     insert into public.party_set (party_id, band_id, "order")
     select new.party, null, (coalesce(max("order"), 0) + 1)::smallint
     from public.party_set where party_id = new.party
