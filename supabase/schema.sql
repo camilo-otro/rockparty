@@ -856,17 +856,23 @@ begin
     order by "order" desc limit 1;
   end if;
 
+  -- No open block that way: the night starts or ends with a band's block. Start
+  -- a new open block beyond it, so a song can always reach either end of the
+  -- night and the arrow is dead only at the true extremes.
   if v_target is null then
-    if p_dir = -1 then
-      return;
-    end if;
     if not public.is_party_admin(v_party) then
       return;
     end if;
-    insert into public.party_set (party_id, band_id, "order")
-    select v_party, null, (coalesce(max("order"), 0) + 1)::smallint
-    from public.party_set where party_id = v_party
-    returning id into v_target;
+    if p_dir = 1 then
+      insert into public.party_set (party_id, band_id, "order")
+      select v_party, null, (coalesce(max("order"), 0) + 1)::smallint
+      from public.party_set where party_id = v_party
+      returning id into v_target;
+    else
+      insert into public.party_set (party_id, band_id, "order")
+      values (v_party, null, 0)
+      returning id into v_target;
+    end if;
   end if;
 
   perform public.move_song_to_set(p_performance, v_target, case when p_dir = 1 then 1 else null end);

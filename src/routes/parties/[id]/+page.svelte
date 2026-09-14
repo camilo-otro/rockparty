@@ -311,12 +311,15 @@
 
   // Is there anywhere for this song to go in that direction?
   //
-  // Inside the block, always. At the EDGE of an open block, yes when another
-  // block lies that way — the song hops OVER it if it is a band's and lands in
-  // the next open one, creating a new open block at the end when the night
-  // finishes with a band. At the edge of a BAND block, no: a band's songs stay
-  // in the band's block, and pushing one out into the organizer's open list is
-  // not the band's call.
+  // For a loose song the answer is the whole night: UP is dead only on the first
+  // song of the FIRST block, DOWN only on the last song of the LAST. Anywhere in
+  // between there is somewhere to go — the song hops over a band's block if one
+  // is in the way, and nudge_song creates an open block beyond it when the night
+  // starts or ends with a band.
+  //
+  // A BAND block is the exception and stays bounded by itself: a band's songs
+  // stay in the band's block, since pushing one out into the organizer's open
+  // list is not the band's call (and can_edit_set would refuse it).
   function canNudge(run: any, index: number, dir: -1 | 1) {
     if (!run.set) return false;
     const inside = dir < 0 ? index > 0 : index < run.items.length - 1;

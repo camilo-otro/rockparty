@@ -41,13 +41,20 @@
 --   * inside the block            -> swap with the neighbour
 --   * at the edge of an OPEN block -> skip the next band block entirely and land
 --                                     at the near end of the next open one
---   * nothing open that way, down  -> create a new open block at the end
---   * nothing open that way, up    -> already at the top; do nothing
+--   * no open block that way       -> create one beyond the band's block, at
+--                                     whichever end of the night is needed
 --   * at the edge of a BAND block  -> do nothing. A band's songs stay in the
 --                                     band's block; pushing one out into the
 --                                     organizer's open list is not the band's
 --                                     call, and the ownership rule would refuse
 --                                     it anyway.
+--
+-- So an arrow is dead only at the true extremes of the night: UP on the first
+-- song of the first block, DOWN on the last song of the last. Everywhere else a
+-- song has somewhere to go, which is what the disabled states in the client are
+-- computed from. The symmetry matters — without the "create at the start" case,
+-- a night beginning with a band's block left the first open song's up arrow
+-- enabled and doing nothing.
 --
 -- Permission is unchanged and still comes from can_edit_set at both ends, so a
 -- band can nudge within its own set and an organizer can move loose songs
@@ -194,19 +201,26 @@ begin
   end if;
 
   if v_target is null then
-    -- Nothing open above: this song is already at the top of the night.
-    if p_dir = -1 then
-      return;
-    end if;
-    -- Nothing open below, i.e. the night ends with a band's block. Start a new
-    -- open block after it. Creating a block is the organizer's.
+    -- No open block that way, i.e. the night STARTS or ENDS with a band's block.
+    -- Start a new open block beyond it, so a song can always travel to either
+    -- end of the night — the arrow is disabled only at the true extremes (first
+    -- song of the first block, last song of the last). Creating a block is the
+    -- organizer's, so a non-admin simply stops here.
     if not public.is_party_admin(v_party) then
       return;
     end if;
-    insert into public.party_set (party_id, band_id, "order")
-    select v_party, null, (coalesce(max("order"), 0) + 1)::smallint
-    from public.party_set where party_id = v_party
-    returning id into v_target;
+    if p_dir = 1 then
+      insert into public.party_set (party_id, band_id, "order")
+      select v_party, null, (coalesce(max("order"), 0) + 1)::smallint
+      from public.party_set where party_id = v_party
+      returning id into v_target;
+    else
+      -- order 0 sorts ahead of everything; normalize_party_sets renumbers the
+      -- night 1..n at the end of the hop.
+      insert into public.party_set (party_id, band_id, "order")
+      values (v_party, null, 0)
+      returning id into v_target;
+    end if;
   end if;
 
   -- Down lands at the TOP of the next block, up lands at the BOTTOM of the
