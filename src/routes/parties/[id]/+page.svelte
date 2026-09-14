@@ -25,6 +25,16 @@
   let party: any = null;
   let venue: any = null;
   let performances: any[] =   [];
+  // #110: the blocks a night is made of. A set is a real row now, not a run of
+  // consecutive band_id — it survives a reorder, it can be empty (a booked band
+  // with no songs yet), and one band can have two of them in one night.
+  let sets: any[] = [];
+  // Which of those sets THIS user may rearrange the contents of. Answered by
+  // can_edit_set() rather than re-derived here, so the client cannot drift from
+  // the rule the database enforces: the band for a band set, the organizer for
+  // an open one.
+  let editableSets = new Set<number>();
+  let editableLoadedFor = '';
   let songs: any[] = [];
   let users: any[] = [];
   let partyPerformers: any[] = [];
@@ -253,21 +263,61 @@
         ? performances.filter((p) => openInstrumentIds(p).some((id) => myInstrumentIds.includes(id)))
         : performances;
 
-  // Band sets: a band's CONSECUTIVE songs render as one block with the lineup
-  // shown once, instead of repeating it on every row. Only in the running-order
-  // view — the other views re-sort/filter, so "consecutive" would be arbitrary —
-  // and never in edit mode, where rows must stay individually movable/removable.
-  // When grouping is off, everything is one open run => the original flat list.
-  $: grouping = !editMode && setlistView === 'orden';
-  $: runs = grouping
-    ? displayed.reduce<{ band: any; items: any[] }[]>((acc, p) => {
-        const last = acc[acc.length - 1];
-        const sameRun = last && (last.band && p.band ? last.band.id === p.band.id : !last.band && !p.band);
-        if (sameRun) last.items.push(p);
-        else acc.push({ band: p.band, items: [p] });
-        return acc;
-      }, [])
-    : [{ band: null, items: displayed }];
+  // Blocks come from party_set (#110). Previously they were inferred from a run
+  // of consecutive band_id, which meant a block could not be moved as a unit,
+  // could not be empty, and silently merged two sets by the same band.
+  //
+  // Grouping now stays on in EDIT mode too — that is the point of the feature.
+  // The other views re-sort or filter, so blocks would be arbitrary there.
+  $: grouping = setlistView === 'orden';
+  $: blocks = grouping
+    ? sets
+        .map((st) => ({ set: st, band: st.band, items: displayed.filter((p) => p.set_id === st.id) }))
+        // Keep an empty BAND block (a band booked but with no songs yet); an
+        // empty open block is garbage-collected server-side and never shows.
+        .filter((b) => b.items.length > 0 || !!b.band)
+    : [{ set: null, band: null, items: displayed }];
+  // A pure jam night is one block, and must look exactly as it does today — so
+  // the per-block furniture (header, move arrows) only appears once a night
+  // actually has more than one block.
+  $: multiBlock = blocks.length > 1;
+  // During a show the set holding the pointer is force-expanded and cannot be
+  // collapsed: a closed box while the band is on stage is the opposite of what
+  // live mode is for.
+  $: liveSetId = nowPlaying?.set_id ?? null;
+
+  // The row number is position in the NIGHT, counted across blocks — so moving a
+  // band's block to the front renumbers everything after it. Derived rather than
+  // stored: `performances` is kept sorted in running order, so its index IS the
+  // position, and it recomputes on every move.
+  $: nightIndexById = Object.fromEntries(performances.map((p: any, i: number) => [p.id, i]));
+
+  // Re-asked whenever the viewer or the set list changes — keyed on both, so it
+  // runs once per real change rather than on every realtime refresh. Logged out,
+  // the answer is always false and no call is made.
+  $: editableKey = currentUserId && sets.length ? `${currentUserId}:${sets.map((st) => st.id).join(',')}` : '';
+  $: if (editableKey !== editableLoadedFor) refreshEditableSets(editableKey);
+
+  async function refreshEditableSets(key: string) {
+    editableLoadedFor = key;
+    if (!key) { editableSets = new Set<number>(); return; }
+    const forSets = [...sets];
+    const res = await Promise.all(forSets.map((st) => supabase.rpc('can_edit_set', { sid: st.id })));
+    // Another change may have landed while these were in flight; the key guard
+    // makes the last one win rather than an older answer overwriting it.
+    if (editableLoadedFor !== key) return;
+    editableSets = new Set(forSets.filter((_, i) => res[i].data === true).map((st) => st.id));
+  }
+
+  // The running order, as the database defines it: set first, then position
+  // within the set. Used to re-sort locally after an optimistic move.
+  function bySetThenOrder(a: any, b: any) {
+    const sa = sets.find((x) => x.id === a.set_id)?.order ?? 9999;
+    const sb = sets.find((x) => x.id === b.set_id)?.order ?? 9999;
+    return sa - sb
+      || (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
+      || a.id - b.id;
+  }
 
   async function setStatus(next: PartyStatus, reason: string | null = null): Promise<boolean> {
     if (!party) return false;
@@ -459,18 +509,27 @@
   }
 
   // Setlist reordering (#59), one of the two things edit mode does (the other is
-  // removing a song, #62). Up/down arrows, no drag. Swapping two
-  // adjacent items and re-numbering the array is deterministic — no drag, no
-  // DOM↔data desync. We persist the FULL renumbered list (not just the two moved
-  // rows) so any move leaves the stored order a clean 0..n — this self-heals the
-  // drifted/duplicate/null orders that made the old drag flaky.
-  async function moveSong(index: number, dir: -1 | 1) {
+  // removing a song, #62). Up/down arrows, no drag. Swapping two adjacent items
+  // and re-numbering is deterministic — no drag, no DOM↔data desync.
+  //
+  // Now scoped to ONE SET and persisted with a single reorder_set_songs call
+  // (#110). Two things changed and both matter:
+  //   * A song can no longer cross a block boundary by accident — the movement
+  //     that would slide a stranger's song into a band's set does not exist.
+  //   * It was one UPDATE round trip PER ROW, on every move: fifteen requests to
+  //     move one song in a fifteen-song list. Now it is one call.
+  // The RPC also renumbers server-side, so the client no longer has to persist a
+  // whole renumbered list to self-heal drifted orders.
+  async function moveSong(setId: number, index: number, dir: -1 | 1) {
+    const block = blocks.find((b) => b.set?.id === setId);
+    if (!block) return;
     const target = index + dir;
-    if (target < 0 || target >= performances.length) return;
-    const movedId = performances[index].id;
-    const arr = [...performances];
-    [arr[index], arr[target]] = [arr[target], arr[index]];
-    arr.forEach((p, i) => (p.order = i));
+    if (target < 0 || target >= block.items.length) return;
+    const movedId = block.items[index].id;
+    const ordered = [...block.items];
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    ordered.forEach((p, i) => (p.order = i + 1));
+    const arr = [...performances].sort(bySetThenOrder);
     performances = arr;
     // Flash the moved row. Remove the class, force a reflow on that row, then
     // re-add — the reliable way to restart a CSS animation regardless of whether
@@ -480,11 +539,34 @@
     const el = document.querySelector(`[data-perf-id="${movedId}"]`) as HTMLElement | null;
     if (el) void el.offsetWidth;
     justMovedId = movedId;
-    const results = await Promise.all(
-      arr.map((p) => supabase.from('performance').update({ order: p.order }).eq('id', p.id))
-    );
-    const err = results.find((r) => r.error)?.error;
-    if (err) reportError(err);
+    const { error: err } = await supabase.rpc('reorder_set_songs', {
+      p_set: setId,
+      p_performance_ids: ordered.map((p) => p.id)
+    });
+    // A refusal here means the rule disagrees with what the UI offered, so
+    // re-read rather than leave the optimistic order on screen.
+    if (err) { reportError(err); await loadSetlist(Number(page.params.id)); }
+  }
+
+  // Move a whole block in the running order (#110). Organizer only — the other
+  // half of the split: they decide WHEN a band plays, the band decides what.
+  // Takes the set ID, not its index: the markup iterates `blocks`, which can
+  // differ from `sets` (an empty open block is filtered out), so an index from
+  // one list is not an index into the other.
+  async function moveSet(setId: number, dir: -1 | 1) {
+    const index = sets.findIndex((st) => st.id === setId);
+    const target = index + dir;
+    if (index < 0 || target < 0 || target >= sets.length) return;
+    const arr = [...sets];
+    [arr[index], arr[target]] = [arr[target], arr[index]];
+    arr.forEach((st, i) => (st.order = i + 1));
+    sets = arr;
+    performances = [...performances].sort(bySetThenOrder);
+    const { error: err } = await supabase.rpc('reorder_sets', {
+      p_party: Number(page.params.id),
+      p_set_ids: arr.map((st) => st.id)
+    });
+    if (err) { reportError(err); await loadSetlist(Number(page.params.id)); }
   }
 
   // Everyone who loses their spot if this song goes — approved and pending alike,
@@ -637,28 +719,52 @@
     // order, which an UPDATE changes (a new tuple version lands elsewhere) — so
     // start_show / advance_show visibly reshuffled the setlist. The id tiebreak
     // keeps it deterministic even if two rows share an order.
-    const { data: perfData, error: perfErr } = await supabase
-      .from('performance')
-      .select('id, song, suggested_by, ref_link, key, order, band_id, live_state, started_at')
-      .eq('party', pid)
-      .order('order', { ascending: true, nullsFirst: false })
-      .order('id', { ascending: true });
+    // Two-level ordering (#110): the night is a sequence of SETS, a set is a
+    // sequence of songs. Fetched in the same wave — party_set depends on nothing.
+    const [perfRes, setRes] = await Promise.all([
+      supabase
+        .from('performance')
+        .select('id, song, suggested_by, ref_link, key, order, band_id, set_id, live_state, started_at')
+        .eq('party', pid)
+        .order('order', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true }),
+      supabase
+        .from('party_set')
+        .select('id, band_id, order, title')
+        .eq('party_id', pid)
+        .order('order', { ascending: true })
+        .order('id', { ascending: true })
+    ]);
+    const { data: perfData, error: perfErr } = perfRes;
     if (perfErr) { errorPerformances = perfErr.message; return; }
+    if (setRes.error) { errorPerformances = setRes.error.message; return; }
+    const setRows = (setRes.data ?? []) as any[];
+    const setOrderById: Record<number, number> = Object.fromEntries(setRows.map((st) => [st.id, st.order]));
+    // Sort by set first, then position within the set. A row whose set somehow
+    // did not come back sorts last rather than jumping to the top.
     const perfs = (perfData ?? []).sort(
-      (a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id
+      (a, b) =>
+        (setOrderById[a.set_id as number] ?? Number.MAX_SAFE_INTEGER) -
+          (setOrderById[b.set_id as number] ?? Number.MAX_SAFE_INTEGER) ||
+        (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) ||
+        a.id - b.id
     );
-    // Renumber 0..n for display. Safe only because the list above is now
-    // deterministically ordered — moveSong persists these values, so a scrambled
-    // list would have written the scramble to the DB.
-    perfs.forEach((perf, index) => { perf.order = index; });
+    // NB: nothing is renumbered here. `order` means position within a SET now and
+    // the reorder RPCs own it server-side, while the row number shown on screen
+    // is derived (see nightIndexById) — it has to recompute after a move, which
+    // a value baked in at load time does not.
     const songIds = [...new Set(perfs.map((p) => p.song).filter((x): x is number => x != null))];
     const userIds = [...new Set(perfs.map((p) => p.suggested_by).filter((x): x is string => x != null))];
     if (party?.created_by) userIds.push(party.created_by);
     // Co-organizers are named in the header and may appear nowhere else on the
     // page, so their profiles have to be fetched here too.
     userIds.push(...partyAdmins);
-    // Band-owned songs (#74): resolve band names for the setlist rows.
-    const bandIds = [...new Set(perfs.map((p) => p.band_id).filter((x): x is number => x != null))];
+    // Band names for the setlist rows (#74) AND for the set headers (#110) — a
+    // band block with no songs yet still has to say whose it is.
+    const bandIds = [...new Set(
+      [...perfs.map((p) => p.band_id), ...setRows.map((st) => st.band_id)]
+        .filter((x): x is number => x != null)
+    )];
     // One wave, not three: these depend on the performance rows but not on each
     // other. Each round trip to Supabase is ~175ms of pure latency, so serialising
     // them cost half a second for nothing.
@@ -677,6 +783,19 @@
     songs = songData ?? [];
     users = userData ?? [];
     usersLoaded = true;
+    sets = setRows.map((st) => ({
+      ...st,
+      band: st.band_id
+        ? {
+            id: st.band_id,
+            name: bandsById[st.band_id]?.name ?? 'Banda',
+            avatar_url: bandsById[st.band_id]?.avatar_url ?? null
+          }
+        : null
+    }));
+    // editableSets is filled by the reactive block near the top rather than here:
+    // the user store can resolve AFTER this first load, and a band member whose
+    // uid landed late would otherwise sit there with no controls until a reload.
 
     // "MÚSICOS" lineup counts only APPROVED signups.
     const performerMap: Record<string, { user_id: string, instruments: string[], songCount: number }> = {};
@@ -1095,7 +1214,10 @@
            reachable with a single song too (reordering just has nothing to do),
            and by a non-admin who suggested at least one song — they can take their
            own back even though the arrows aren't theirs to use. -->
-      {#if performances.length > 0 && (canAdmin || mySuggestionCount > 0)}
+      <!-- ...and by a band member with a set of their own to arrange (#110), who
+           may be neither an admin nor the suggester of anything here. Without
+           this they can own a block and have no way to open the controls. -->
+      {#if performances.length > 0 && (canAdmin || mySuggestionCount > 0 || editableSets.size > 0)}
         <button on:click={() => { editMode = !editMode; if (editMode) setlistView = 'orden'; }} class="text-cold-light text-sm border border-cold-light/40 hover:border-cold-light rounded-lg px-3 py-1 transition">
           {editMode ? 'Listo' : 'Editar'}
         </button>
@@ -1134,14 +1256,26 @@
         {#if displayed.length === 0}
           <div class="bg-base-900 rounded-lg px-4 py-3 text-cold-light text-sm">Ninguna canción tiene un cupo en lo que tocas.</div>
         {/if}
-        {#each runs as run}
+        {#each blocks as run (run.set?.id ?? 'flat')}
+        {@const canEditThis = !!run.set && editableSets.has(run.set.id)}
+        {@const setIndex = run.set ? sets.indexOf(run.set) : -1}
         {#if run.band}
-          <!-- Band set (#74): lineup shown once; collapses to a summary. -->
-          {@const setKey = run.items[0].id}
+          <!-- Band block (#74 visuals, #110 backing). The block is a party_set
+               row now, so it survives a reorder and can be empty. -->
+          {@const setKey = run.set.id}
+          {@const bandPending = run.items.some((p) => p.band?.pending)}
           {@const needsAction = run.items.some((p) => p.band?.pending && canApproveSong(p))}
-          {@const isOpen = expandedSets.has(setKey) || needsAction}
+          <!-- Force-expanded while it holds the now-playing pointer: a closed box
+               with the band on stage is the opposite of what live mode is for.
+               Also expanded in edit mode, since you cannot reorder what you
+               cannot see. -->
+          {@const isOpen = expandedSets.has(setKey) || needsAction || setKey === liveSetId || editMode}
           <div class="rounded-lg overflow-clip border-l-2 border-cold-base">
-            <button type="button" on:click={() => toggleSet(setKey)} class="w-full bg-base-900 px-4 py-2.5 flex items-center gap-3 text-left hover:bg-base-950 transition">
+            <div class="w-full bg-base-900 px-4 py-2.5 flex items-center gap-3">
+            <!-- The toggle is its own button so the move arrows are not nested
+                 inside it (a button inside a button swallows the tap). -->
+            <button type="button" on:click={() => toggleSet(setKey)} disabled={setKey === liveSetId}
+                    class="flex items-center gap-3 flex-1 min-w-0 text-left disabled:cursor-default">
               {#if run.band.avatar_url}
                 <img src={run.band.avatar_url} alt="" class="w-9 h-9 rounded-full object-cover border border-cold-base shrink-0" />
               {:else}
@@ -1150,11 +1284,11 @@
               <div class="flex-1 min-w-0">
                 <span class="text-white truncate block">{run.band.name}</span>
                 <span class="text-cold-light text-xs uppercase tracking-wide">
-                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'} · ~{formatMinutes(setMinutes(run.items))}{#if run.band.pending} · <span class="text-yellow">pendiente</span>{/if}
+                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'} · ~{formatMinutes(setMinutes(run.items))}{#if bandPending} · <span class="text-yellow">pendiente</span>{/if}
                 </span>
               </div>
               <div class="flex flex-row -space-x-2 shrink-0">
-                {#each run.items[0].bandLineup ?? [] as m, i}
+                {#each run.items[0]?.bandLineup ?? [] as m, i}
                   <img src={m.user_avatar || '/images/avatar-default.svg'} alt="" class="w-6 h-6 rounded-full border border-cold-base bg-base-900" style="z-index: {i + 1}" />
                 {/each}
               </div>
@@ -1162,19 +1296,36 @@
                 {#if isOpen}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
               </span>
             </button>
+            <!-- Moving the BLOCK is the organizer's (#110): they decide when a
+                 band plays, the band decides what it plays. -->
+            {#if editMode && canAdmin && multiBlock}
+              <div class="flex flex-col shrink-0 border-l border-cold-light/20 pl-2">
+                <button on:click={() => moveSet(setKey, -1)} disabled={setIndex === 0} aria-label="Subir esta banda en el orden" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={20} /></button>
+                <button on:click={() => moveSet(setKey, 1)} disabled={setIndex === sets.length - 1} aria-label="Bajar esta banda en el orden" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={20} /></button>
+              </div>
+            {/if}
+            </div>
             {#if isOpen}
             <div class="flex flex-col gap-[1px] mt-[1px]">
-              {#each run.items as perf (perf.id)}
+              {#each run.items as perf, i (perf.id)}
                 {@const tally = songTally[perf.id]}
                 <div class="bg-base-900" data-perf-id={perf.id}>
                   <!-- The clap sits BESIDE the link, never inside it: a button
                        nested in an anchor is invalid and swallows the tap. -->
                   <div class="flex items-center gap-2 pr-3">
                     <a href={`/performance/${perf.id}`} class="px-4 py-2 flex items-baseline gap-3 flex-1 min-w-0">
-                      <span class="text-gray-400 text-xl font-medium w-7 shrink-0">{(perf.order ?? 0) + 1}</span>
+                      <span class="text-gray-400 text-xl font-medium w-7 shrink-0">{nightIndexById[perf.id] + 1}</span>
                       <span class="text-yellow truncate">{getSongTitle(perf.song)}</span>
                       <span class="text-sm text-cold-light truncate ml-auto">{getSongArtist(perf.song)}</span>
                     </a>
+                    <!-- Rearranging a band's own set: only the band, never the
+                         organizer (can_edit_set decides, asked at load). -->
+                    {#if editMode && canEditThis && run.items.length > 1}
+                      <div class="flex flex-col shrink-0">
+                        <button on:click={() => moveSong(setKey, i, -1)} disabled={i === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={20} /></button>
+                        <button on:click={() => moveSong(setKey, i, 1)} disabled={i === run.items.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={20} /></button>
+                      </div>
+                    {/if}
                     {#if canApplaud && perf.started_at && perf.live_state !== 'skipped'}
                       <ApplauseButton count={tally?.count ?? 0} clapped={!!tally?.mine}
                                       busy={clapBusy.has('song:' + perf.id)} label={getSongTitle(perf.song)}
@@ -1210,6 +1361,18 @@
             {/if}
           </div>
         {:else}
+        <!-- Open songs stay plain rows, so a pure jam night looks exactly as it
+             did. The handle for moving the block only appears in edit mode, and
+             only once a night actually has more than one block. -->
+        {#if editMode && canAdmin && multiBlock && run.set}
+          <div class="flex items-center gap-2 px-1 pt-1">
+            <span class="text-xs uppercase tracking-wide text-cold-light">Abiertas</span>
+            <div class="ml-auto flex flex-row shrink-0">
+              <button on:click={() => moveSet(run.set.id, -1)} disabled={setIndex === 0} aria-label="Subir este bloque" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={20} /></button>
+              <button on:click={() => moveSet(run.set.id, 1)} disabled={setIndex === sets.length - 1} aria-label="Bajar este bloque" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={20} /></button>
+            </div>
+          </div>
+        {/if}
         <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
           {#each run.items as perf, index (perf.id)}
             <li class="bg-base-900 px-4 p-3" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}
@@ -1217,18 +1380,19 @@
                 class:border-warm-base={isLive && perf.live_state === 'playing'}>
               {#if editMode}
                 <div class="flex items-center gap-2">
-                  <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{index + 1}</span>
+                  <span class="text-gray-400 text-2xl font-medium mr-2 w-7 text-center shrink-0">{nightIndexById[perf.id] + 1}</span>
                   <div class="flex-1 min-w-0">
                     <div class="text-lg text-yellow truncate">{getSongTitle(perf.song)}</div>
                     <div class="text-sm text-cold-light truncate">{getSongArtist(perf.song)}</div>
                   </div>
-                  <!-- Reordering is admin-only, and there's nothing to reorder with
-                       a single song — the arrows would both be permanently
-                       disabled, so leave them out entirely. -->
-                  {#if canAdmin && performances.length > 1}
+                  <!-- Scoped to this BLOCK (#110): a song cannot cross a block
+                       boundary with an arrow, which is what stops a stranger's
+                       song sliding into a band's set. Nothing to reorder with a
+                       single song, so the arrows are left out entirely. -->
+                  {#if canEditThis && run.items.length > 1}
                     <div class="flex flex-col shrink-0">
-                      <button on:click={() => moveSong(index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
-                      <button on:click={() => moveSong(index, 1)} disabled={index === performances.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
+                      <button on:click={() => moveSong(run.set.id, index, -1)} disabled={index === 0} aria-label="Subir" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronUp size={22} /></button>
+                      <button on:click={() => moveSong(run.set.id, index, 1)} disabled={index === run.items.length - 1} aria-label="Bajar" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={22} /></button>
                     </div>
                   {/if}
                   {#if canRemoveSong(perf)}
@@ -1244,7 +1408,7 @@
                 <div class="flex items-center gap-2">
                   <a href={`/performance/${perf.id}`} on:click={(e) => openSong(e, perf.id)} class="block flex-1 min-w-0">
                     <div class="flex items-center gap-2">
-                      <span class="text-gray-400 text-3xl font-medium mr-2">{(perf.order ?? index) + 1}</span>
+                      <span class="text-gray-400 text-3xl font-medium mr-2">{nightIndexById[perf.id] + 1}</span>
                       <div class="flex-1">
                         <PerformanceListItem
                           title={getSongTitle(perf.song)}
