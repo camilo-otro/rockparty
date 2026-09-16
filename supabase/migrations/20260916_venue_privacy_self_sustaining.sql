@@ -28,7 +28,7 @@
 -- these triggers make the database do the right thing with whatever the client
 -- writes:
 --
---   1. a new venue of a home-ish type starts PRIVATE
+--   1. a new venue of the private type starts PRIVATE
 --   2. whatever lands in the old columns is mirrored into venue_contact, and
 --      then blanked on `venue` if the venue is private
 --
@@ -38,11 +38,35 @@
 
 begin;
 
+-- 0 ---------------------------------------------------------------------------
+-- Make the type mean what people already use it for.
+--
+-- Type 4 was "Club Privado", described purely as an exclusive members-only
+-- establishment. Every venue actually filed under it is somebody's house —
+-- Cami's House, Donde Naty, Capivenue. People bent the nearest available type to
+-- mean "a private place", which is the behaviour, so the label should say so.
+--
+-- That also turns the trigger below from a heuristic into a correct reading: the
+-- type now genuinely means "a private address", so defaulting `private` from it
+-- is not a guess.
+--
+-- The description is user-facing copy shown when picking a type, so it states
+-- the consequence outright. Someone choosing this should know their address
+-- stops being public — an invisible privacy behaviour is a worse privacy
+-- behaviour.
+update public.venue_type
+set name = 'Club / Residencia privada',
+    description = 'Un club exclusivo o la casa de alguien: desde un espacio solo para miembros hasta una sala, una terraza o un garaje donde se arma un toque entre conocidos. La dirección exacta y los datos de contacto de estos lugares NO son públicos — solo los ven quienes organizan el toque, quienes confirmaron asistencia y quienes van a tocar.'
+where id = 4;
+
 -- 1 ---------------------------------------------------------------------------
--- "Club Privado" (4) is the closest thing the type list has to "somebody's
--- home", and it is what the first migration used to seed the existing rows.
--- INSERT only: an admin who later unsets the flag means it, and should not have
--- it forced back on every save.
+-- The type now means "a private address" (see above), so a new venue of that
+-- type starts private. INSERT only: an admin who later unsets the flag means it,
+-- and should not have it forced back on every save.
+--
+-- Not a complete answer on its own — a house can also be filed under "Espacio al
+-- Aire Libre" (8), whose description already mentions "un patio trasero". The
+-- explicit toggle in VenueForm is still needed; this covers the common case.
 create or replace function public.venue_default_private()
 returns trigger language plpgsql set search_path = '' as $$
 begin
@@ -130,8 +154,8 @@ commit;
 --
 -- STILL AHEAD on #113:
 --   * client reads venue_contact and shows `area` (13 files); VenueForm gains
---     `area` and an explicit `private` toggle, so the venue_type = 4 heuristic
---     stops being the only way in
+--     `area` and an explicit `private` toggle, so the venue type stops being the
+--     only way in — a house filed under "Espacio al Aire Libre" needs it
 --   * stage 2: drop address / whatsapp / contact_name from `venue`, and this
 --     migration's second trigger with them
 -- =============================================================================

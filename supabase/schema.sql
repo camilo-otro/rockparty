@@ -1923,7 +1923,10 @@ create policy "moderators may delete unused songs" on public.song
 create or replace function public.venue_default_private()
 returns trigger language plpgsql set search_path = '' as $$
 begin
-  if new.venue_type = 4 then   -- "Club Privado", the closest thing to "a home"
+  -- type 4 is "Club / Residencia privada" — it MEANS a private address, so this
+  -- is a reading of the type rather than a heuristic. Does not cover a house
+  -- filed under "Espacio al Aire Libre"; VenueForm's explicit toggle does.
+  if new.venue_type = 4 then
     new.private := true;
   end if;
   return new;
