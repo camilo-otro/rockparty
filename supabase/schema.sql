@@ -755,7 +755,7 @@ begin
     join public.performance pf on pf.set_id = old.id
     where p.id = old.party_id and p.status = 'live' and pf.live_state = 'playing'
   ) then
-    raise exception 'that block is playing right now — end the show first';
+    raise exception 'Ese bloque se está tocando ahora. Termina el show primero.';
   end if;
   return old;
 end;
@@ -841,10 +841,10 @@ begin
   end if;
   select set_id, party into v_set, v_party from public.performance where id = p_performance;
   if not found or v_set is null then
-    raise exception 'that song is not on a setlist';
+    raise exception 'Esa canción no está en un setlist.';
   end if;
   if not public.can_edit_set(v_set) then
-    raise exception 'you cannot rearrange this set';
+    raise exception 'No puedes reordenar este bloque.';
   end if;
 
   -- 1..n before any arithmetic; the backfill leaves legacy globals behind.
@@ -921,18 +921,18 @@ declare
   v_count int;
 begin
   if not public.is_party_admin(p_party) then
-    raise exception 'only a party admin can reorder the running order';
+    raise exception 'Solo un organizador puede cambiar el orden de la noche.';
   end if;
   select count(*) into v_count from public.party_set where party_id = p_party;
   if v_count <> coalesce(array_length(p_set_ids, 1), 0) then
-    raise exception 'expected % set ids for this toque, got %',
+    raise exception 'Se esperaban % bloques de este toque y llegaron %.',
       v_count, coalesce(array_length(p_set_ids, 1), 0);
   end if;
   if exists (
     select 1 from unnest(p_set_ids) as t(id)
     where not exists (select 1 from public.party_set s where s.id = t.id and s.party_id = p_party)
   ) then
-    raise exception 'one of those sets does not belong to this toque';
+    raise exception 'Uno de esos bloques no es de este toque.';
   end if;
   -- WITH ORDINALITY, not row_number() over () — only the former is guaranteed
   -- to reflect the array's own order.
@@ -952,18 +952,18 @@ declare
   v_count int;
 begin
   if not public.can_edit_set(p_set) then
-    raise exception 'you cannot rearrange this set';
+    raise exception 'No puedes reordenar este bloque.';
   end if;
   select count(*) into v_count from public.performance where set_id = p_set;
   if v_count <> coalesce(array_length(p_performance_ids, 1), 0) then
-    raise exception 'expected % songs for this set, got %',
+    raise exception 'Se esperaban % canciones en este bloque y llegaron %.',
       v_count, coalesce(array_length(p_performance_ids, 1), 0);
   end if;
   if exists (
     select 1 from unnest(p_performance_ids) as t(id)
     where not exists (select 1 from public.performance p where p.id = t.id and p.set_id = p_set)
   ) then
-    raise exception 'one of those songs is not in this set';
+    raise exception 'Una de esas canciones no está en este bloque.';
   end if;
   update public.performance p
   set "order" = t.ord::smallint
@@ -1006,20 +1006,20 @@ begin
   select set_id, party into v_source, v_party
   from public.performance where id = p_performance;
   if not found then
-    raise exception 'that song is not on any setlist';
+    raise exception 'Esa canción no está en ningún setlist.';
   end if;
   if v_source is null or not public.can_edit_set(v_source) then
-    raise exception 'you cannot take a song out of that set';
+    raise exception 'No puedes sacar una canción de ese bloque.';
   end if;
   if not public.can_edit_set(p_set) then
-    raise exception 'you cannot put a song into that set';
+    raise exception 'No puedes poner una canción en ese bloque.';
   end if;
   select party_id into v_target_party from public.party_set where id = p_set;
   if v_target_party is null then
-    raise exception 'that set does not exist';
+    raise exception 'Ese bloque no existe.';
   end if;
   if v_target_party <> v_party then
-    raise exception 'that set belongs to a different toque';
+    raise exception 'Ese bloque es de otro toque.';
   end if;
   if v_source = p_set then
     return;
@@ -1966,22 +1966,47 @@ create policy "party_set: admins manage" on public.party_set
 create policy "select performance: parent party visible" on public.performance
   for select to anon, authenticated
   using (public.can_see_party(performance.party));
--- #110 stage 2. An OPEN block still takes a song from anyone signed in — that is
--- the jam-night model and the reason open blocks exist. A BAND's block takes one
--- only from that band: NOT from the party admin either, matching can_edit_set,
--- since injecting a song into a band's set is deciding their setlist as much as
--- reordering it would be.
--- The null branch is for a caller that omits set_id (all of them today): the
--- BEFORE INSERT trigger fills in the trailing OPEN block, so it can never reach
--- a band's set that way.
-create policy "insert performance: open block, or that band" on public.performance
+-- Stage 2 phrased the rule positively: "a row is allowed if its block EXISTS and
+-- is open or mine". That reads correctly and is wrong, because of a Postgres
+-- detail worth writing down.
+--
+-- The client never sends set_id. The BEFORE INSERT trigger picks a block, and
+-- when the night ends with a band's block it CREATES a new open one. The RLS
+-- WITH CHECK then runs in the OUTER statement, whose snapshot was taken before
+-- the trigger fired — so the block the trigger just inserted IS NOT VISIBLE to
+-- it. The EXISTS finds nothing and the insert is refused.
+--
+-- The symptom was exact and confusing: adding a song for a band worked once and
+-- then never again. The first one joins an EXISTING open block (visible, fine);
+-- sign_band_up then moves it into a new band block at the end of the night; and
+-- from then on the night ENDS with a band block, so every later add needs a
+-- freshly created open block and hits the invisibility.
+--
+-- Inverting it fixes it without loosening what matters. Refuse only what is
+-- DEMONSTRABLY someone else's band block:
+--
+--   allowed  <=>  there is no visible party_set row for this set_id that is a
+--                 band block I am not in
+--
+-- A block the statement cannot see yields no row and is allowed — which is
+-- exactly right for the trigger's own block, because the trigger only ever
+-- creates OPEN blocks. There is no way to reach a band's block by omitting
+-- set_id. Passing a band block's id explicitly still finds the row and is still
+-- refused, which is the attack this policy exists to stop.
+--
+-- The lesson generalises past this policy: a policy that requires a row to be
+-- VISIBLE fails open-loop against anything a BEFORE trigger creates in the same
+-- statement. Phrase such a check as "refuse the bad", not "permit the good".
+drop policy if exists "insert performance: open block, or that band" on public.performance;
+drop policy if exists "insert performance: not into another band's block" on public.performance;
+create policy "insert performance: not into another band's block" on public.performance
   for insert to authenticated
   with check (
-    performance.set_id is null
-    or exists (
+    not exists (
       select 1 from public.party_set s
       where s.id = performance.set_id
-        and (s.band_id is null or public.can_sign_up_band(s.band_id))
+        and s.band_id is not null
+        and not public.can_sign_up_band(s.band_id)
     )
   );
 create policy "Enable Update for authenticated users only" on public.performance
