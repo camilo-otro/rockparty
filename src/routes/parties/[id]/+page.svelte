@@ -502,13 +502,33 @@
   }
 
   // Estimated set length: song durations (song.duration is decimal MINUTES) plus
-  // a minute of transition between songs. Approximate by design — a handful of
-  // catalog songs still sit at the default duration.
-  const TRANSITION_MIN = 1;
-  function setMinutes(items: any[]): number {
-    const songMins = items.reduce((t, p) => t + (songs.find((s) => s.id === p.song)?.duration ?? 0), 0);
-    return songMins + Math.max(0, items.length - 1) * TRANSITION_MIN;
+  // the time the room actually eats between songs. Approximate by design — a
+  // handful of catalog songs still sit at the default duration.
+  //
+  // The gap depends on WHO is playing, which is the whole point of blocks: a
+  // band runs its own set back to back, while an open block swaps musicians
+  // between every song. A band also has to get on and set up first, and that
+  // changeover is charged to the band's own block so the night adds up without
+  // anything having to model the space between blocks.
+  const TRANSITION_BAND_MIN = 1;  // same musicians, straight into the next song
+  const TRANSITION_OPEN_MIN = 2;  // different musicians every song
+  const CHANGEOVER_MIN = 15;      // a band getting on stage and line-checking
+
+  // `songList` is a parameter rather than a closure read because Svelte's legacy
+  // mode tracks reactive dependencies BY NAME: a `$:` or template expression
+  // that only mentions `blocks` would not recompute when `songs` arrives, and
+  // the two land in separate waves of loadSetlist.
+  function setMinutes(items: any[], isBand: boolean, songList: any[]): number {
+    // An empty band block is a band with nothing listed yet. Charging it a
+    // changeover would print "0 canciones · ~15 min", which reads as a bug.
+    if (items.length === 0) return 0;
+    const songMins = items.reduce((t, p) => t + (songList.find((s) => s.id === p.song)?.duration ?? 0), 0);
+    const gap = isBand ? TRANSITION_BAND_MIN : TRANSITION_OPEN_MIN;
+    return (isBand ? CHANGEOVER_MIN : 0) + songMins + (items.length - 1) * gap;
   }
+
+  // The whole night, blocks and changeovers included. Named deps, same reason.
+  $: nightMinutes = blocks.reduce((t, r) => t + setMinutes(r.items, !!r.band, songs), 0);
   function formatMinutes(mins: number): string {
     const m = Math.round(mins);
     if (m < 60) return `${m} min`;
@@ -1285,7 +1305,15 @@
       </button>
     </div>
     <div bind:this={setlistEl} class="flex items-center justify-between mt-4 mb-2 scroll-mt-4">
-      <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
+      <div>
+        <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
+        <!-- The night's running time. Open blocks stay plain rows on purpose, so
+             this is the one place the time they take — and the changeover each
+             band needs — is visible at all. -->
+        {#if performances.length > 0}
+          <span class="text-cold-light text-xs uppercase tracking-wide">~{formatMinutes(nightMinutes)} en total</span>
+        {/if}
+      </div>
       <!-- Edit mode covers removing a song as well as reordering, so it must be
            reachable with a single song too (reordering just has nothing to do),
            and by a non-admin who suggested at least one song — they can take their
@@ -1360,7 +1388,7 @@
               <div class="flex-1 min-w-0">
                 <span class="text-white truncate block">{run.band.name}</span>
                 <span class="text-cold-light text-xs uppercase tracking-wide">
-                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'} · ~{formatMinutes(setMinutes(run.items))}{#if bandPending} · <span class="text-yellow">pendiente</span>{/if}
+                  {run.items.length} {run.items.length === 1 ? 'canción' : 'canciones'} · ~{formatMinutes(setMinutes(run.items, true, songs))}{#if bandPending} · <span class="text-yellow">pendiente</span>{/if}
                 </span>
               </div>
               <div class="flex flex-row -space-x-2 shrink-0">
