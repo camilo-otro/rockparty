@@ -1033,6 +1033,7 @@ export type Database = {
       venue_contact: {
         Row: {
           address: string | null
+          contact: string | null
           contact_name: string | null
           created_at: string
           venue_id: number
@@ -1040,6 +1041,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          contact?: string | null
           contact_name?: string | null
           created_at?: string
           venue_id: number
@@ -1047,6 +1049,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          contact?: string | null
           contact_name?: string | null
           created_at?: string
           venue_id?: number

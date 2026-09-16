@@ -118,7 +118,9 @@ create table if not exists public.venue (
   name            varchar,
   address         varchar,
   contact_name    varchar,
-  contact         varchar,            -- free-form handle, e.g. "@acturo"
+  contact         varchar,            -- free-form contact; holds phone numbers
+                                      -- and emails in practice, so it moved to
+                                      -- venue_contact too (#113).
   venue_type      bigint references public.venue_type (id),
   allow_party     boolean not null default true,
   allow_rehearsal boolean not null default false,
@@ -135,11 +137,12 @@ create table if not exists public.venue (
   house_rules       text,
   is_test           boolean not null default false, -- test data, dev-only (#67)
   -- Privacy (#113). `area` is the coarse, ALWAYS-public location; the exact
-  -- address / whatsapp / contact_name live in venue_contact behind their own
-  -- policy. `private` marks a venue that is somebody's home.
-  -- NOTE address/contact_name/whatsapp above are still here but are BLANK for
-  -- private venues and are dropped in stage 2, once the client reads
-  -- venue_contact (13 files do today).
+  -- address / whatsapp / contact_name / contact live in venue_contact behind
+  -- their own policy. `private` marks a venue that is somebody's home.
+  -- NOTE those four columns above are still here but are BLANK for private
+  -- venues and are dropped in stage 2, once the client reads venue_contact.
+  -- `instagram` stays public on purpose: a handle is published deliberately,
+  -- and the venue page links it as a way to be found.
   area              text,
   private           boolean not null default false
 );
@@ -153,6 +156,7 @@ create table if not exists public.venue_contact (
   address      text,
   whatsapp     text,
   contact_name text,
+  contact      text,
   created_at   timestamptz not null default now()
 );
 
@@ -1976,20 +1980,25 @@ begin
   if pg_trigger_depth() > 1 then
     return null;
   end if;
-  if new.address is not null or new.whatsapp is not null or new.contact_name is not null then
-    insert into public.venue_contact (venue_id, address, whatsapp, contact_name)
-    values (new.id, new.address, new.whatsapp, new.contact_name)
+  if new.address is not null or new.whatsapp is not null
+     or new.contact_name is not null or new.contact is not null then
+    insert into public.venue_contact (venue_id, address, whatsapp, contact_name, contact)
+    values (new.id, new.address, new.whatsapp, new.contact_name, new.contact)
     on conflict (venue_id) do update set
       address      = coalesce(excluded.address, public.venue_contact.address),
       whatsapp     = coalesce(excluded.whatsapp, public.venue_contact.whatsapp),
-      contact_name = coalesce(excluded.contact_name, public.venue_contact.contact_name);
+      contact_name = coalesce(excluded.contact_name, public.venue_contact.contact_name),
+      contact      = coalesce(excluded.contact, public.venue_contact.contact);
   else
     insert into public.venue_contact (venue_id) values (new.id)
     on conflict (venue_id) do nothing;
   end if;
   if new.private
-     and (new.address is not null or new.whatsapp is not null or new.contact_name is not null) then
-    update public.venue set address = null, whatsapp = null, contact_name = null where id = new.id;
+     and (new.address is not null or new.whatsapp is not null
+          or new.contact_name is not null or new.contact is not null) then
+    update public.venue
+    set address = null, whatsapp = null, contact_name = null, contact = null
+    where id = new.id;
   end if;
   return null;
 end;
@@ -1998,7 +2007,6 @@ drop trigger if exists trg_sync_venue_contact on public.venue;
 create trigger trg_sync_venue_contact
   after insert or update on public.venue
   for each row execute function public.sync_venue_contact();
-revoke all on function public.venue_default_private() from public, anon, authenticated;
 revoke all on function public.sync_venue_contact() from public, anon, authenticated;
 
 -- venue_contact (#113). A PUBLIC venue's address stays public — a bar's address
