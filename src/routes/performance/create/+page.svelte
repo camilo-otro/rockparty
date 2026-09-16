@@ -22,7 +22,13 @@
     let added: any[] = [];
     // Sign up as a band (#73): '' = open jam; otherwise a band id. Set ONCE, applies
     // to every song added this session (#77) — the win for a band's setlist.
-    let signupChoice = '';
+    // string | number because the <select>'s options carry NUMERIC values
+    // (value={b.id}) while the empty default is ''. Svelte's select binding
+    // matches by value identity, so assigning the string "2" from a URL would
+    // silently match nothing.
+    let signupChoice: string | number = '';
+    let bandParam: string | null = null;
+    let bandPreset = false;
     let bandsLoaded = false;
     let partyIsTest = false;
     let partyLoaded = false;
@@ -79,6 +85,14 @@
         .eq('user_id', uid);
       myBandRows = data ?? [];
     }
+    // Applied once, and only if the band really is one of mine — the param
+    // comes from a URL, so it decides nothing the picker would not have allowed.
+    $: if (!bandPreset && bandParam && myBands.length) {
+      // Assign the band's OWN id, not the string from the URL — see signupChoice.
+      const match = myBands.find((b: any) => String(b.id) === bandParam);
+      if (match) signupChoice = match.id;
+      bandPreset = true;
+    }
     $: myBands = myBandRows
       .filter((r: any) => r.band && (r.band.who_can_sign_up === 'members' || r.role === 'manager'))
       // A test band can't play a real event (RLS/RPC enforce it too) — hide the option (#76).
@@ -94,6 +108,10 @@
         userId = u?.id ?? null;
       });
       partyId = page.url.searchParams.get('partyId') ?? null;
+      // Arriving from a band's own `+` on the setlist (#110): preselect that
+      // band so the song lands in their block. Only a preselection — the picker
+      // stays, so they can still open the song to anyone instead.
+      bandParam = page.url.searchParams.get('band');
       if (partyId) {
         // Independent of each other: one wave, not two.
         const [partyRes] = await Promise.all([

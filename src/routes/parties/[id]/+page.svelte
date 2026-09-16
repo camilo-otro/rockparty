@@ -648,6 +648,45 @@
     });
   }
 
+  // Removing a band's block takes its songs with it — performance.set_id is ON
+  // DELETE CASCADE, decided on the grounds that leaving ten unclaimed songs
+  // behind only moves the cleanup to the organizer. So the confirm names the
+  // count, and the people who lose a spot.
+  function removeSet(block: any) {
+    const n = block.items.length;
+    const seen = new Set<string>();
+    const people: { user_id: string; avatar: string; name: string }[] = [];
+    for (const perf of block.items) {
+      for (const p of affectedByRemoval(perf)) {
+        if (!seen.has(p.user_id)) { seen.add(p.user_id); people.push(p); }
+      }
+    }
+    const name = block.band?.name ?? 'la banda';
+    openDialog({
+      title: `¿Quitar a ${name} del toque?`,
+      body: n
+        ? `Se eliminarán también sus ${n} ${n === 1 ? 'canción' : 'canciones'} del setlist.`
+        : 'Su bloque está vacío, así que no se pierde ninguna canción.',
+      people,
+      withReason: false,
+      confirmLabel: 'Quitar',
+      run: async () => {
+        const { data, error: e } = await supabase
+          .from('party_set').delete().eq('id', block.set.id).select('id');
+        // Two different refusals. The live-show guard RAISES, so it arrives as a
+        // real error with a message worth showing. RLS refusing is silent — 0
+        // rows and no error, the PostgREST trap — so the row count is the only
+        // way to tell it from success.
+        if (e) { reportError(e); return; }
+        if (!data || data.length === 0) { toastError('No tienes permiso para quitar este bloque.'); return; }
+        toastSuccess(`${name} ya no toca en este toque.`);
+        // Structure change: removing a block can leave two open blocks adjacent,
+        // which the database merges. Re-read rather than guess at the result.
+        await loadSetlist(Number(page.params.id));
+      }
+    });
+  }
+
   // Per-song approval (#29). An approver is a party admin, or — in proponent
   // mode — the song's proponent.
   function canApproveSong(perf: any): boolean {
@@ -1341,6 +1380,13 @@
                 <button on:click={() => moveSet(setKey, 1)} disabled={setIndex === sets.length - 1} aria-label="Bajar esta banda en el orden" class="p-1 text-cold-light hover:text-white disabled:opacity-30"><ChevronDown size={20} /></button>
               </div>
             {/if}
+            <!-- Un-booking the band is the organizer's, like placing them — the
+                 other half of "the organizer decides WHEN a band plays". It is
+                 also their only remedy if a band goes quiet, since they cannot
+                 touch the block's contents. -->
+            {#if editMode && canAdmin}
+              <button on:click={() => removeSet(run)} aria-label={`Quitar a ${run.band.name} del toque`} class="p-1 ml-1 text-warm-base hover:text-red-400 shrink-0"><Trash2 size={20} /></button>
+            {/if}
             </div>
             {#if isOpen}
             <div class="flex flex-col gap-[1px] mt-[1px]">
@@ -1394,6 +1440,17 @@
                   {/if}
                 </div>
               {/each}
+              <!-- The band's own `+` (#110). Positional rather than inferred: a
+                   `+` inside Pulse's block adding to Pulse's set needs no
+                   explanation, where one shared button that silently routes by
+                   who pressed it behaves differently for different people.
+                   Shown to whoever may edit this block — the band. -->
+              {#if canEditThis}
+                <a href={`/performance/create?partyId=${party.id}&band=${run.band.id}`}
+                   class="bg-base-900 text-cold-light hover:text-white text-sm text-center py-2 transition">
+                  Agregar una canción a {run.band.name} <Plus size={15} class="inline-block" />
+                </a>
+              {/if}
             </div>
             {/if}
           </div>
