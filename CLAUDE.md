@@ -19,6 +19,13 @@ sessions / gigs among musicians. Spanish-language UI. Core entities:
 - **Performances** — a performer playing a song at a party. Ordered by an
   `order` column, moved with up/down buttons (there is **no** drag-and-drop
   library; SortableJS was removed).
+- **Sets** (`party_set`, #110) — the blocks a night is made of. A night is a
+  sequence of sets; a set is a sequence of songs, so `performance."order"` means
+  position **within its set**, not in the night. `band_id` null is an OPEN block
+  (the loose songs, created and garbage-collected implicitly); a band's block is
+  visible, orderable as a unit, and can appear twice in one night. **The
+  organizer decides WHEN a band plays, the band decides WHAT it plays** —
+  `can_edit_set()` is that rule, and `party_set` writes stay admin-only.
 - **Bands** — a persistent lineup that can be signed up for a performance (#40),
   with claim links for members who have no account yet (#79).
 - **Logistics** — what a toque needs and who brings it: `party_requirement`
@@ -190,8 +197,11 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
   UPDATE policies check `created_by` or membership in `venue_admin`/`party_admin`.
   `performance` UPDATE is party-admin only (creator or `party_admin`) — an older
   note here described it as `using true`, which has not been true for a while.
-  `performance` INSERT, however, IS `with check (true)`: anyone signed in can add
-  a song to any party's setlist.
+  `performance` INSERT was `with check (true)` until #110 stage 2; it is now
+  "the target block is OPEN, or you are in that block's band". An open block
+  still takes a song from anyone signed in (the jam-night model); a band's block
+  takes one only from that band — **not from the party admin either**, matching
+  `can_edit_set`.
   Venue-side checks go through `is_venue_admin()` (#102); do not inline a
   `venue_admin` subquery in a policy, as its SELECT is now restrictive.
 - **Test-data visibility (#67):** `party.is_test` / `venue.is_test` hide dev/test
@@ -211,9 +221,14 @@ the HOUSE"). Additional glyph at `static/images/Digital_Glyph_White.svg`.
   these over inlining a subquery, see *Recurring lessons*):
   `is_dev()`, `is_party_admin(pid)`, `is_band_manager(bid)`, `is_venue_admin(vid)`,
   `is_song_moderator()`, `can_see_party(pid)`, `can_see_band(bid)`,
-  `can_applaud(pid)`, `can_sign_up_band(bid)`, `song_on_real_setlist(song)`.
-  Narrow-write RPCs: `confirm_requirement`, `set_song_reviewed`, `sign_band_up`,
-  `set_band_signup_status`, `claim_band_member`, and the live-mode controls
+  `can_applaud(pid)`, `can_sign_up_band(bid)`, `song_on_real_setlist(song)`,
+  `can_edit_set(sid)` (#110 — the band for a band block, the organizer for an
+  open one).
+  Narrow-write RPCs: `confirm_requirement`, `set_song_reviewed`, `sign_band_up`
+  (which also moves the song into the band's block), `set_band_signup_status`,
+  `claim_band_member`, the set controls (`reorder_sets`, `reorder_set_songs`,
+  `move_song_to_set`, `nudge_song` — what the setlist arrows call), and the
+  live-mode controls
   (`start_show`, `advance_show`, `skip_song`, `jump_to_song`, `end_current_song`,
   `undo_last_move`, `end_show`). Read helpers: `my_user_flags()`,
   `songs_for_moderation()`, `search_songs(q, lim)`, `peek_band_claim(token)`.
@@ -296,9 +311,11 @@ Two-branch model: **`main` = production, `dev` = work-in-progress.**
 - **22 hardcoded `VOLVER` links.** Most pages have one entry point so it does not
   matter; `/performers/[id]` uses `afterNavigate` to remember where it was opened
   from, because it has four. Copy that pattern if another page grows entry points.
-- **`performance` INSERT is `with check (true)`** — anyone signed in can add a
-  song to any party's setlist. Deliberate today (the jam-night model), but it is
-  what #110 has to tighten to keep non-members out of a band's set.
+- **No per-block `+`, and no way to delete a band's block.** #110 shipped the
+  blocks but not two of its controls: a band adds to its own block only
+  indirectly (add a loose song, then sign the band up, which moves it), and the
+  organizer's documented remedy when a band goes quiet — delete the block, which
+  cascades its songs — exists only in SQL.
 
 ## History
 
