@@ -11,6 +11,9 @@ import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
 
 // State variables
 let venue: any = null;
+// The embedded venue_contact row (#113): the form needs the exact address, and
+// an admin editing the venue is entitled to it.
+let venueContact: any = null;
 let venueTypes: any[] = [];
 let venueAdmins: string[] = [];
 let errorVenueTypes: string | null = null;
@@ -26,7 +29,8 @@ onMount(async () => {
 
   const [{ data: venueData }, { data: typesData, error: typesError }, { data: adminData }, { data: equipData }, { data: veData }] =
     await Promise.all([
-      supabase.from('venue').select('*').eq('id', Number(id)).single(),
+      // venue_contact embedded over its FK, so the address costs no extra round trip.
+      supabase.from('venue').select('*, contact_ref:venue_contact(address, whatsapp, contact_name, contact)').eq('id', Number(id)).single(),
       supabase.from('venue_type').select('id, name'),
       supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id)),
       supabase.from('equipment').select('id, name, category').order('id'),
@@ -37,6 +41,7 @@ onMount(async () => {
   venueAdmins = adminData ? adminData.map(a => a.user_id) : [];
   equipmentOptions = equipData ?? [];
   initialEquipment = (veData ?? []).map((r: any) => ({ equipment_id: r.equipment_id, quantity: r.quantity, notes: r.notes }));
+  venueContact = (venueData as any)?.contact_ref ?? null;
   venue = venueData; // set last so the form mounts with everything ready
 });
 </script>
@@ -53,10 +58,12 @@ onMount(async () => {
   <VenueForm
     submitting={submitting}
     initialName={venue.name}
-    initialAddress={venue.address}
-    initialContactName={venue.contact_name}
-    initialContact={venue.contact}
-    initialWhatsapp={venue.whatsapp || ''}
+    initialArea={venue.area ?? ''}
+    initialPrivate={venue.private ?? false}
+    initialAddress={venueContact?.address ?? ''}
+    initialContactName={venueContact?.contact_name ?? ''}
+    initialContact={venueContact?.contact ?? ''}
+    initialWhatsapp={venueContact?.whatsapp ?? ''}
     initialInstagram={venue.instagram || ''}
     initialVenueType={venue.venue_type}
     venueTypes={venueTypes}
@@ -77,14 +84,18 @@ onMount(async () => {
     initialIsTest={venue.is_test}
     on:submit={async (e) => {
       submitting = true;
-      const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
+      const { name, area, isPrivate, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
               equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules, isTest } = e.detail;
       try {
+        // Contact details live in venue_contact (#113) — see the create page.
         const { error: dbError } = await supabase
           .from('venue')
-          .update({ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals,
+          .update({ name, area, private: isPrivate, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals,
                     requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules, is_test: isTest })
           .eq('id', venue.id);
+        const { error: cErr } = await supabase.from('venue_contact')
+          .upsert({ venue_id: venue.id, address, whatsapp, contact_name: contactName, contact }, { onConflict: 'venue_id' });
+        if (cErr) reportError(cErr);
         if (dbError) {
           reportError(dbError);
         } else {

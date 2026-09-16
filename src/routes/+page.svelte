@@ -61,7 +61,7 @@
     const w1: any[] = await Promise.all([
       supabase.from('party').select('id, title, date, venue, status, is_test')
         .in('status', ['confirmed', 'live']).order('date', { ascending: true }),
-      supabase.from('venue').select('id, name, address, is_test'),
+      supabase.from('venue').select('id, name, area, is_test'),
       uid ? supabase.from('venue').select('id').eq('created_by', uid) : skipped,
       uid ? supabase.from('venue_admin').select('venue_id').eq('user_id', uid) : skipped,
       uid ? supabase.from('profile_instrument').select('instrument_id').eq('profile_id', uid) : skipped,

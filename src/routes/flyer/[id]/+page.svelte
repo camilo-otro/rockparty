@@ -139,7 +139,7 @@
             <MapPin size={20} class="text-yellow shrink-0 mt-0.5" />
             <div>
               <div class="text-lg leading-tight">{venue.name}</div>
-              {#if venue.address}<div class="text-sm text-cold-light">{venue.address}</div>{/if}
+              {#if venue.area}<div class="text-sm text-cold-light">{venue.area}</div>{/if}
             </div>
           </div>
         {/if}

@@ -11,6 +11,7 @@
     let submitting = false;
     let name = '';
     let address = '';
+    let area = '';
     let contactName = '';
     let contact = '';
     let whatsapp = '';
@@ -69,6 +70,7 @@
   <VenueForm
       submitting={submitting}
       initialName={name}
+      initialArea={area}
       initialAddress={address}
       initialContactName={contactName}
       initialContact={contact}
@@ -84,19 +86,30 @@
       equipmentOptions={equipmentOptions}
       on:submit={async (e) => {
         submitting = true;
-        const { name, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
+        const { name, area, isPrivate, address, contactName, contact, whatsapp, instagram, venueType, allowsParties, allowsRehearsals, admins,
                 equipment, requiresApproval, engagementModel, engagementNotes, minAge, curfew, capacity, houseRules, isTest } = e.detail;
         try {
           const { supabase } = await import('$lib/supabaseClient');
+          // address / whatsapp / contact_name / contact go to venue_contact, NOT
+          // here (#113). Writing them onto `venue` would publish a private venue's
+          // address until the trigger blanked it, and those columns are dropped
+          // in stage 2 anyway.
           const { data, error: dbError } = await supabase
             .from('venue')
-            .insert([{ name, address, contact_name: contactName, contact, whatsapp, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals, created_by: userId,
+            .insert([{ name, area, private: isPrivate, instagram, venue_type: venueType, allow_party: allowsParties, allow_rehearsal: allowsRehearsals, created_by: userId,
                        requires_approval: requiresApproval, engagement_model: engagementModel, engagement_notes: engagementNotes, min_age: minAge, curfew, capacity, house_rules: houseRules, is_test: isTest }])
             .select();
           if (dbError) {
             reportError(dbError);
           } else {
             const newVenueId = data && data.length > 0 ? data[0].id : null;
+            // The row itself is created by a trigger on venue, so this is an
+            // update of what is already there rather than an insert.
+            if (newVenueId) {
+              const { error: cErr } = await supabase.from('venue_contact')
+                .upsert({ venue_id: newVenueId, address, whatsapp, contact_name: contactName, contact }, { onConflict: 'venue_id' });
+              if (cErr) reportError(cErr);
+            }
             // The creator already has admin rights via created_by, so skip a
             // redundant self row; upsert-ignore tolerates any other duplicate.
             if (newVenueId && admins && admins.length > 0) {

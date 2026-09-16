@@ -995,7 +995,7 @@
       await Promise.all([
         party?.venue
           ? Promise.all([
-              supabase.from('venue').select('id, name, address, requires_approval, created_by').eq('id', party.venue).maybeSingle(),
+              supabase.from('venue').select('id, name, area, requires_approval, created_by').eq('id', party.venue).maybeSingle(),
               supabase.from('venue_admin').select('user_id').eq('venue_id', party.venue)
             ]).then(([venueRes, vAdminRes]) => {
               if (!venueRes.error) venue = venueRes.data;
@@ -1249,7 +1249,7 @@
     </div>
     <div class="text-lg mb-2 text-white">{party.description}</div>
     <div class="mb-2 text-white">{dayjs(party.date).locale('es').format('ddd D [de] MMMM, YYYY')}</div>
-    <div class="mb-2 text-cold-light"><MapPin class="inline-block" size={18} /> {venue ? venue.name : 'Cargando...'} - {venue ? venue.address : ''}</div>
+    <div class="mb-2 text-cold-light"><MapPin class="inline-block" size={18} /> {venue ? venue.name : 'Cargando...'}{venue?.area ? ` - ${venue.area}` : ''}</div>
     {#if party.status === 'confirmed' || party.status === 'live'}
       <div class="flex items-center gap-3 mt-2 mb-1">
         {#if currentUserId}

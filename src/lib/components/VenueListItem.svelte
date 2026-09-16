@@ -11,7 +11,8 @@
       <div class="text-sm text-white">{venue.description}</div>
     {/if}
     <div class="flex flex-row width-full justify-between">
-        <div class="text-sm text-white">{venue.address}</div>
+        <!-- The coarse location, never the exact address (#113). -->
+        <div class="text-sm text-white">{venue.area ?? ''}</div>
         <div class="text-sm text-cold-light">{venue.count ? `${venue.count} fiestas próximas` : ''}</div>
     </div>
   </li>

@@ -19,7 +19,7 @@
     // creator to venue_admin, so ownership and admin membership are genuinely
     // separate questions — the same pair the home page and the menu store ask.
     const [ownedRes, adminRes] = await Promise.all([
-      supabase.from('venue').select('id, name, address, is_test').eq('created_by', uid),
+      supabase.from('venue').select('id, name, area, is_test').eq('created_by', uid),
       supabase.from('venue_admin').select('venue_id').eq('user_id', uid)
     ]);
 
@@ -29,7 +29,7 @@
       .filter((id: number) => !owned.some((v: any) => v.id === id));
 
     const { data: adminVenues } = adminIds.length
-      ? await supabase.from('venue').select('id, name, address, is_test').in('id', adminIds)
+      ? await supabase.from('venue').select('id, name, area, is_test').in('id', adminIds)
       : { data: [] as any[] };
 
     venues = [...owned, ...(adminVenues ?? [])].sort((a, b) =>

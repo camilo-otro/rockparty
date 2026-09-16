@@ -7,6 +7,10 @@
   import { searchPeople, peopleByIds } from '$lib/peopleSearch';
   export let submitting = false;
   export let initialName = '';
+  // #113. `area` is the coarse location EVERYONE sees; `address` is the exact
+  // one, which for a private venue reaches only the people actually going.
+  export let initialArea = '';
+  export let initialPrivate = false;
   export let initialAddress = '';
   export let initialContactName = '';
   export let initialContact = '';
@@ -45,6 +49,8 @@
   ];
 
   let name = initialName;
+  let area = initialArea;
+  let isPrivate = initialPrivate;
   let address = initialAddress;
   let contactName = initialContactName;
   let contact = initialContact;
@@ -162,13 +168,25 @@
     admins = admins.filter(a => a.id !== userId);
   }
 
+  // Picking "Club / Residencia privada" turns privacy on, because that type
+  // MEANS a private address — the same reading the database makes on insert.
+  // Only when the type CHANGES, so someone who deliberately unticks it after is
+  // not overruled on the next keystroke.
+  let lastType = selectedVenueType;
+  $: if (selectedVenueType !== lastType) {
+    lastType = selectedVenueType;
+    if (String(selectedVenueType) === '4') isPrivate = true;
+  }
+
   function handleSubmit() {
-    if (!name || !address || !contactName || !contact || !selectedVenueType) {
+    if (!name || !area || !address || !contactName || !contact || !selectedVenueType) {
       dispatch('error', 'Todos los campos son obligatorios.');
       return;
     }
     dispatch('submit', {
       name: normalizeText(name, 120),
+      area: normalizeText(area, 120),
+      isPrivate,
       address: normalizeText(address, 200),
       contactName: normalizeText(contactName, 120),
       contact: normalizeText(contact, 200),
@@ -224,8 +242,29 @@
   <div class="flex flex-col w-full p-4 mb-4">
     <label for="name" class="mb-1">Nombre del Local</label>
     <input id="name" type="text" bind:value={name} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre del local')} on:input={clearInvalid} />
-    <label for="address" class="mb-1">Dirección</label>
-    <input id="address" type="text" bind:value={address} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la dirección del local')} on:input={clearInvalid} />
+    <label for="area" class="mb-1">Zona o barrio</label>
+    <input id="area" type="text" bind:value={area} required class="p-2 border rounded-lg mb-1" placeholder="Usaquén, Chapinero, Cedritos…" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la zona o barrio')} on:input={clearInvalid} />
+    <span class="text-cold-light/70 text-xs mb-2">Esto lo ve cualquiera, también en el flyer público.</span>
+
+    <!-- The privacy switch. Stated as a consequence, not a setting name: someone
+         adding their house needs to know what changes, and an invisible privacy
+         behaviour is a worse privacy behaviour. -->
+    <div class="flex items-start gap-2 mb-2 mt-2 bg-base-900 rounded-lg p-3">
+      <input id="venue_private" type="checkbox" bind:checked={isPrivate} class="mt-1" />
+      <label for="venue_private" class="cursor-pointer text-sm">
+        Es una casa o un lugar privado
+        <span class="block text-cold-light/70 text-xs mt-0.5">
+          La dirección exacta y los datos de contacto solo los ven quienes organizan el toque,
+          quienes confirmaron asistencia y quienes van a tocar.
+        </span>
+      </label>
+    </div>
+
+    <label for="address" class="mb-1">Dirección exacta</label>
+    <input id="address" type="text" bind:value={address} required class="p-2 border rounded-lg mb-1" on:invalid={(event) => setInvalid(event, 'Por favor ingresa la dirección del local')} on:input={clearInvalid} />
+    <span class="text-cold-light/70 text-xs mb-2">
+      {#if isPrivate}Privada: solo la ven quienes van.{:else}Pública: aparece en el flyer y en la página del local.{/if}
+    </span>
     <label for="contact_name" class="mb-1">Persona de contacto</label>
     <input id="contact_name" type="text" bind:value={contactName} required class="p-2 border rounded-lg mb-2" on:invalid={(event) => setInvalid(event, 'Por favor ingresa el nombre de la persona de contacto')} on:input={clearInvalid} />
     <label for="contact" class="mb-1">Info de contacto</label>
@@ -233,7 +272,11 @@
     <label for="whatsapp" class="mb-1">WhatsApp (opcional)</label>
     <input id="whatsapp" type="text" bind:value={whatsapp} class="p-2 border rounded-lg mb-2" placeholder="+5491234567890" on:blur={validateWhatsapp} on:input={clearInvalid} />
     <label for="instagram" class="mb-1">Instagram (opcional)</label>
-    <input id="instagram" type="text" bind:value={instagram} class="p-2 border rounded-lg mb-2" placeholder="usuario_instagram" on:blur={validateInstagram} on:input={clearInvalid} />
+    <input id="instagram" type="text" bind:value={instagram} class="p-2 border rounded-lg mb-1" placeholder="usuario_instagram" on:blur={validateInstagram} on:input={clearInvalid} />
+    <!-- Instagram is the one field in this group that stays public (#113), and the
+         checkbox above has just promised the rest are not. Say so here rather than
+         let the grouping imply a protection this field does not have. -->
+    <span class="text-cold-light/70 text-xs mb-2">Este sí es público, aunque el lugar sea privado.</span>
     <label for="venue_type" class="mb-1">Tipo de Local</label>
     <select id="venue_type" bind:value={selectedVenueType} class="p-2 border rounded-lg" required on:invalid={(event) => setInvalid(event, 'Por favor selecciona un tipo de local')} on:input={clearInvalid}>
       {#each venueTypes as type}

@@ -22,7 +22,7 @@ export const load: PageLoad = async ({ params }) => {
     supabase
       .from('party')
       // Aliased so the embed doesn't shadow the scalar `party.venue` column.
-      .select('id, title, date, description, venue, status, is_test, venue_ref:venue ( name, address )')
+      .select('id, title, date, description, venue, status, is_test, venue_ref:venue ( name, area )')
       .eq('id', id)
       .maybeSingle(),
     supabase
@@ -40,7 +40,10 @@ export const load: PageLoad = async ({ params }) => {
     return { party: null, venue: null, songs: [] as string[], songCount: 0, musicianCount: 0, rsvpCount: 0 };
   }
 
-  const venue = ((party as any).venue_ref ?? null) as { name: string | null; address: string | null } | null;
+  // `area`, never `address` (#113): the flyer is rendered server-side with no
+  // session, so it is anonymous by construction and must not carry the exact
+  // location of somebody's house.
+  const venue = ((party as any).venue_ref ?? null) as { name: string | null; area: string | null } | null;
   const rows = (perfRes.data ?? []) as any[];
   const songs = rows.map((r) => r.song?.title).filter(Boolean).slice(0, 5) as string[];
   // Status is filtered here rather than on the embed: it's a handful of rows per
