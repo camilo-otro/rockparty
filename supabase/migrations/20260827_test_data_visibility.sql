@@ -51,7 +51,7 @@ $$;
 insert into public.dev_user (user_id)
 values
   ('0671ee04-4ab2-4f59-a6f6-e5cda28677d8'),  -- Cami
-  ('ae82b725-ceb3-4642-bc7e-11236cc026a0'),  -- Yorch (Jorge, elchivo@gmail.com), designer
+  ('ae82b725-ceb3-4642-bc7e-11236cc026a0'),  -- Yorch, designer
   ('2ba9d70f-00a0-49ee-ada6-12e26ae93da7')   -- Capibear, Cami's alternate testing account
 on conflict (user_id) do nothing;
 

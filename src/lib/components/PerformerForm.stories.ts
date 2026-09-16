@@ -20,16 +20,16 @@ export default meta;
 type Story = StoryObj<typeof PerformerForm>;
 
 export const Default: Story = {
-  args: { initialEmail: 'camilootro@gmail.com', initialNickname: '', submitting: false, instruments }
+  args: { initialEmail: 'musico@ejemplo.com', initialNickname: '', submitting: false, instruments }
 };
 export const WithInstruments: Story = {
   args: {
-    initialEmail: 'camilootro@gmail.com',
+    initialEmail: 'musico@ejemplo.com',
     initialNickname: 'Cami Soto',
     instruments,
     initialInstruments: [2, 4]
   }
 };
 export const Submitting: Story = {
-  args: { initialEmail: 'camilootro@gmail.com', initialNickname: 'Cami Soto', submitting: true, instruments }
+  args: { initialEmail: 'musico@ejemplo.com', initialNickname: 'Cami Soto', submitting: true, instruments }
 };

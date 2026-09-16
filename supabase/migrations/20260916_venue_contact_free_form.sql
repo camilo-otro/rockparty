@@ -12,9 +12,11 @@
 -- alone, on the strength of its schema comment: "free-form handle, e.g.
 -- @acturo". The data says otherwise. Read as an anonymous caller AFTER that fix:
 --
---   Cami's House   contact = <mobile number>
---   Lugar por definir  contact = @camilo_otro
---   Donde Naty     contact = @<instagram handle>
+--   <home venue>   contact = <a bare 10-digit mobile number>
+--   <home venue>   contact = <an instagram handle>
+--   <home venue>   contact = <an instagram handle, someone else's>
+--
+-- Values redacted; the repo is public.
 --
 -- The form's own label is "Info de contacto — telefono, correo, instagram", so
 -- a phone number there is the field working as designed, not misuse. It belongs

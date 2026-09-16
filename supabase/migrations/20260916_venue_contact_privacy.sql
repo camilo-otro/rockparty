@@ -13,8 +13,11 @@
 -- anon key — which ships inside the JS bundle. Measured against production:
 --
 --   GET /rest/v1/venue?select=name,address,whatsapp,contact_name&venue_type=eq.4
---     Cami's House   <full street address>   <mobile number>   Cami Soto
---     Donde Naty     <street>                         Naty
+--     <home venue>   <full street address>   <mobile number>   <resident>
+--     <home venue>   <street>                                  <resident>
+--
+-- Values redacted: this repo is public, so quoting them here would republish
+-- what the migration exists to remove.
 --
 -- Two real homes and a real phone number, to callers with no account. Joined
 -- against `party_rsvp` — which is `using (true)` — that is a home address and a

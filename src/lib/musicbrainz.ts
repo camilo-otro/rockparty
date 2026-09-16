@@ -28,7 +28,7 @@ export async function fetchSongTitles(title: string) {
   const url = `${baseUrl}?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'RockPartyWebApp/Beta (camilootro@gmail.com)'
+      'User-Agent': 'RockPartyWebApp/Beta (+https://rockthehouse.app)'
     }
   });
   if (res.status !== 200 && res.status !== 304) throw new Error('MusicBrainz request failed');
@@ -48,7 +48,7 @@ export async function fetchArtistNames(artist: string) {
   const url = `${baseUrl}?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'RockPartyWebApp/Beta (camilootro@gmail.com)'
+      'User-Agent': 'RockPartyWebApp/Beta (+https://rockthehouse.app)'
     }
   });
   if (res.status !== 200 && res.status !== 304) throw new Error('MusicBrainz request failed');

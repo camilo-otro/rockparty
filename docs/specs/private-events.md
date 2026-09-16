@@ -16,11 +16,13 @@ bundle, so "public" means public:
 ```
 GET /rest/v1/venue?select=name,address,whatsapp,contact_name&venue_type=eq.4
 
-  Cami's House      <full street address>    <mobile number>    Cami Soto
-  Donde Naty        <street>                           Naty
+  <home venue>      <full street address>   <mobile number>   <resident's name>
+  <home venue>      <street>                                  <resident's name>
 ```
 
 Two real homes, one real phone number. Not a hypothetical: those rows are live.
+The actual values are redacted here — this repo is public, and writing them down
+to prove they were readable would have republished exactly what the fix removes.
 
 The pattern in the data shows the intent was already there and unenforced —
 public venues carry a NEIGHBOURHOOD (`Usaquen`, `Chapinero`, `Cedritos`) while
