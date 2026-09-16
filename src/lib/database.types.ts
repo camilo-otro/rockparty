@@ -904,6 +904,7 @@ export type Database = {
       venue: {
         Row: {
           address: string | null
+          area: string | null
           allow_party: boolean
           allow_rehearsal: boolean
           capacity: number | null
@@ -922,12 +923,14 @@ export type Database = {
           is_test: boolean
           min_age: number | null
           name: string | null
+          private: boolean
           requires_approval: boolean
           venue_type: number | null
           whatsapp: string | null
         }
         Insert: {
           address?: string | null
+          area?: string | null
           allow_party?: boolean
           allow_rehearsal?: boolean
           capacity?: number | null
@@ -946,12 +949,14 @@ export type Database = {
           is_test?: boolean
           min_age?: number | null
           name?: string | null
+          private?: boolean
           requires_approval?: boolean
           venue_type?: number | null
           whatsapp?: string | null
         }
         Update: {
           address?: string | null
+          area?: string | null
           allow_party?: boolean
           allow_rehearsal?: boolean
           capacity?: number | null
@@ -970,6 +975,7 @@ export type Database = {
           is_test?: boolean
           min_age?: number | null
           name?: string | null
+          private?: boolean
           requires_approval?: boolean
           venue_type?: number | null
           whatsapp?: string | null
@@ -1019,6 +1025,38 @@ export type Database = {
             foreignKeyName: "venue_admin_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
+            referencedRelation: "venue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_contact: {
+        Row: {
+          address: string | null
+          contact_name: string | null
+          created_at: string
+          venue_id: number
+          whatsapp: string | null
+        }
+        Insert: {
+          address?: string | null
+          contact_name?: string | null
+          created_at?: string
+          venue_id: number
+          whatsapp?: string | null
+        }
+        Update: {
+          address?: string | null
+          contact_name?: string | null
+          created_at?: string
+          venue_id?: number
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_contact_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
             referencedRelation: "venue"
             referencedColumns: ["id"]
           },
@@ -1095,6 +1133,7 @@ export type Database = {
       can_edit_set: { Args: { sid: number }; Returns: boolean }
       can_see_band: { Args: { bid: number }; Returns: boolean }
       can_see_party: { Args: { pid: number }; Returns: boolean }
+      can_see_venue_contact: { Args: { vid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
       claim_band_member: { Args: { p_token: string }; Returns: number }
       confirm_requirement: {

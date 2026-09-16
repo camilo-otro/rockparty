@@ -133,7 +133,27 @@ create table if not exists public.venue (
   curfew            time,             -- music-off time
   capacity          integer,
   house_rules       text,
-  is_test           boolean not null default false  -- test data, dev-only (#67)
+  is_test           boolean not null default false, -- test data, dev-only (#67)
+  -- Privacy (#113). `area` is the coarse, ALWAYS-public location; the exact
+  -- address / whatsapp / contact_name live in venue_contact behind their own
+  -- policy. `private` marks a venue that is somebody's home.
+  -- NOTE address/contact_name/whatsapp above are still here but are BLANK for
+  -- private venues and are dropped in stage 2, once the client reads
+  -- venue_contact (13 files do today).
+  area              text,
+  private           boolean not null default false
+);
+
+-- venue_contact — the columns that must not be public (#113).
+-- A separate table and not a policy, because RLS controls which ROWS a caller
+-- sees, never which COLUMNS — and hiding the venue row instead would take its
+-- NAME with it, which is how a toque says where it is.
+create table if not exists public.venue_contact (
+  venue_id     bigint primary key references public.venue (id) on delete cascade,
+  address      text,
+  whatsapp     text,
+  contact_name text,
+  created_at   timestamptz not null default now()
 );
 
 -- venue_admin — who may administer a venue (besides its creator).
@@ -478,6 +498,37 @@ create or replace function public.can_see_band(bid bigint)
 returns boolean language sql stable security invoker set search_path = '' as $$
   select exists (select 1 from public.band b where b.id = bid);
 $$;
+
+-- Who has a reason to know exactly where a venue is (#113). DEFINER because the
+-- tables it reads (party, party_rsvp, performance_user) are themselves behind
+-- RLS, and reading them from inside a policy evaluates as the CALLER and
+-- silently under-reports. EXECUTABLE BY ANON on purpose: the policy applies
+-- `to anon`, and a definer function the caller cannot execute raises
+-- permission-denied instead of returning false (#102).
+create or replace function public.can_see_venue_contact(vid bigint)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select
+    public.is_venue_admin(vid)
+    or exists (
+      select 1 from public.party p
+      where p.venue = vid and public.is_party_admin(p.id)
+    )
+    or exists (
+      select 1 from public.party p
+      join public.party_rsvp r on r.party_id = p.id
+      where p.venue = vid and r.user_id = (select auth.uid())
+    )
+    or exists (
+      select 1 from public.party p
+      join public.performance pf on pf.party = p.id
+      join public.performance_user pu on pu.performance_id = pf.id
+      where p.venue = vid
+        and pu.user_id = (select auth.uid())
+        and pu.status = 'approved'
+    );
+$$;
+revoke all on function public.can_see_venue_contact(bigint) from public;
+grant execute on function public.can_see_venue_contact(bigint) to anon, authenticated;
 
 -- is_dev: true when the caller is a developer (#67). SECURITY DEFINER so it can
 -- read dev_user regardless of that table's RLS. Used by the party/venue SELECT
@@ -1865,6 +1916,21 @@ create policy "moderators may delete unused songs" on public.song
 
 -- ---- venue ------------------------------------------------------------------
 -- Test venues (#67) are hidden from everyone except devs.
+-- venue_contact (#113). A PUBLIC venue's address stays public — a bar's address
+-- on a flyer is the point. A private one reaches only its admins, the organiser
+-- of a toque booked there, and anyone who RSVP'd or is approved to play.
+alter table public.venue_contact enable row level security;
+create policy "venue_contact: public venues, or people going" on public.venue_contact
+  for select to anon, authenticated
+  using (
+    exists (select 1 from public.venue v where v.id = venue_contact.venue_id and v.private = false)
+    or public.can_see_venue_contact(venue_contact.venue_id)
+  );
+create policy "venue_contact: venue admins write" on public.venue_contact
+  for all to authenticated
+  using (public.is_venue_admin(venue_contact.venue_id))
+  with check (public.is_venue_admin(venue_contact.venue_id));
+
 create policy "allow select to all users" on public.venue
   for select to anon, authenticated using (is_test = false or public.is_dev());
 create policy "allow insert to authenticated users" on public.venue
@@ -2168,8 +2234,13 @@ create policy "notification delete own" on public.notification
 
 -- ---- party_rsvp -------------------------------------------------------------
 -- Attendance is public (counts/lists); users add/remove only their own. #58.
-create policy "allow select to all users" on public.party_rsvp
-  for select to anon, authenticated using (true);
+-- #113: was `using (true)` — a person-to-event map for every toque, to anyone.
+-- can_see_party is SECURITY INVOKER, so an RSVP is visible exactly when the
+-- toque is, and it inherits any private/unlisted work later with no change here.
+-- STILL OPEN, see #113: for a PUBLIC toque the rows remain readable and resolve
+-- to names via a profile embed, which contradicts the count-not-names precedent.
+create policy "party_rsvp select: parent party visible" on public.party_rsvp
+  for select to anon, authenticated using (public.can_see_party(party_rsvp.party_id));
 create policy "rsvp insert self" on public.party_rsvp
   for insert to authenticated with check (user_id = (select auth.uid()));
 create policy "rsvp delete self" on public.party_rsvp
