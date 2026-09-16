@@ -111,6 +111,7 @@ No schema change required — `song` already has `title`, `artist`, `ref_link`
 - **Other services** (YouTube / Apple / Deezer). Deezer has a no-auth API with full
   metadata and could be a client-only complement; match across services by ISRC.
 - **Album art on setlists** (needs `art_url`).
-- Migrating the **rehearsal page** off MusicBrainz (it still imports
-  `$lib/musicbrainz.ts`); this ticket only reworks `/songs/create`.
+- ~~Migrating the **rehearsal page** off MusicBrainz~~ — done since. The page no
+  longer imports it and `$lib/musicbrainz.ts` was deleted 2026-09-16, leaving
+  Spotify as the only metadata source.
 - **Paste-a-whole-setlist** (multiple links at once) — pairs with #77 multi-add.
