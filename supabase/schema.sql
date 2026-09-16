@@ -1920,22 +1920,51 @@ create policy "moderators may delete unused songs" on public.song
 -- cleanup; `private` defaults to false and the client still writes the old
 -- columns, so without these a new home venue would leak exactly as before.
 -- The second trigger becomes a no-op once stage 2 drops those columns.
-create or replace function public.venue_default_private()
+-- Everything filled in when a venue is created, in one place. created_by is set
+-- by TRIGGER not DEFAULT, because a default only applies when the column is
+-- OMITTED and a client sending an explicit null would skip it — leaving a row
+-- nobody can edit, see the contact of, or delete (#113).
+create or replace function public.venue_defaults()
 returns trigger language plpgsql set search_path = '' as $$
 begin
+  if new.created_by is null then
+    new.created_by := (select auth.uid());
+  end if;
   -- type 4 is "Club / Residencia privada" — it MEANS a private address, so this
-  -- is a reading of the type rather than a heuristic. Does not cover a house
-  -- filed under "Espacio al Aire Libre"; VenueForm's explicit toggle does.
+  -- reads the type rather than guessing. Does not cover a house filed under
+  -- "Espacio al Aire Libre"; VenueForm's explicit toggle will.
   if new.venue_type = 4 then
     new.private := true;
   end if;
   return new;
 end;
 $$;
-drop trigger if exists trg_venue_default_private on public.venue;
-create trigger trg_venue_default_private
+drop trigger if exists trg_venue_defaults on public.venue;
+create trigger trg_venue_defaults
   before insert on public.venue
-  for each row execute function public.venue_default_private();
+  for each row execute function public.venue_defaults();
+
+-- A venue could never be deleted by anyone. The venue-owned children cascade;
+-- party.venue is NO ACTION and would fail at the FK with a raw error, so the
+-- trigger refuses that case in the app's language instead.
+create or replace function public.block_venue_delete_with_parties()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  v_n int;
+begin
+  select count(*) into v_n from public.party p where p.venue = old.id;
+  if v_n > 0 then
+    raise exception 'Este local tiene % toque(s) asociados. Bórralos o muévelos antes de eliminarlo.', v_n;
+  end if;
+  return old;
+end;
+$$;
+drop trigger if exists trg_block_venue_delete_with_parties on public.venue;
+create trigger trg_block_venue_delete_with_parties
+  before delete on public.venue
+  for each row execute function public.block_venue_delete_with_parties();
+revoke all on function public.venue_defaults() from public, anon, authenticated;
+revoke all on function public.block_venue_delete_with_parties() from public, anon, authenticated;
 
 -- DEFINER: venue_contact is writable only by the venue's admins, and at INSERT
 -- time the creator is not one yet. A null incoming value deliberately does NOT
@@ -1991,6 +2020,8 @@ create policy "allow select to all users" on public.venue
   for select to anon, authenticated using (is_test = false or public.is_dev());
 create policy "allow insert to authenticated users" on public.venue
   for insert to authenticated with check (true);
+create policy "venue delete: admins, if nothing is booked" on public.venue
+  for delete to authenticated using (public.is_venue_admin(id));
 create policy "allow update to venue admins" on public.venue
   for update to authenticated using (public.is_venue_admin(id));
 
