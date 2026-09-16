@@ -296,8 +296,9 @@ create table if not exists public.performance (
   ended_at     timestamptz,
   -- #110: which set this song sits in. "order" therefore means position WITHIN
   -- the set, not position in the night — the night's order is party_set."order".
-  -- Still nullable: a NOT NULL is stage 2, after the client deploy.
-  set_id       bigint references public.party_set (id) on delete cascade
+  -- NOT NULL since stage 2; assign_performance_set() fills it when the caller
+  -- omits it, which every client path does.
+  set_id       bigint not null references public.party_set (id) on delete cascade
   -- band_id added by ALTER below (band table defined later) — #40
 );
 create index if not exists idx_performance_set on public.performance (set_id, "order");
@@ -740,6 +741,30 @@ returns boolean language sql stable security definer set search_path = '' as $$
           end
   );
 $$;
+
+-- Removing the block that is ON STAGE would strand advance_show(): the
+-- now-playing pointer IS a performance row and deleting the set cascades it. A
+-- trigger, not a DELETE policy — a policy that refuses returns 0 rows and
+-- PostgREST answers 200/204 with an empty body, so the client reads the refusal
+-- as success.
+create or replace function public.block_live_set_delete()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (
+    select 1 from public.party p
+    join public.performance pf on pf.set_id = old.id
+    where p.id = old.party_id and p.status = 'live' and pf.live_state = 'playing'
+  ) then
+    raise exception 'that block is playing right now — end the show first';
+  end if;
+  return old;
+end;
+$$;
+drop trigger if exists trg_block_live_set_delete on public.party_set;
+create trigger trg_block_live_set_delete
+  before delete on public.party_set
+  for each row execute function public.block_live_set_delete();
+revoke all on function public.block_live_set_delete() from public, anon, authenticated;
 
 -- Two open blocks side by side are not a thing the model should express: an
 -- open block IS "the loose songs here". They appear whenever something between
@@ -1941,8 +1966,24 @@ create policy "party_set: admins manage" on public.party_set
 create policy "select performance: parent party visible" on public.performance
   for select to anon, authenticated
   using (public.can_see_party(performance.party));
-create policy "allow insert to authenticated users" on public.performance
-  for insert to authenticated with check (true);
+-- #110 stage 2. An OPEN block still takes a song from anyone signed in — that is
+-- the jam-night model and the reason open blocks exist. A BAND's block takes one
+-- only from that band: NOT from the party admin either, matching can_edit_set,
+-- since injecting a song into a band's set is deciding their setlist as much as
+-- reordering it would be.
+-- The null branch is for a caller that omits set_id (all of them today): the
+-- BEFORE INSERT trigger fills in the trailing OPEN block, so it can never reach
+-- a band's set that way.
+create policy "insert performance: open block, or that band" on public.performance
+  for insert to authenticated
+  with check (
+    performance.set_id is null
+    or exists (
+      select 1 from public.party_set s
+      where s.id = performance.set_id
+        and (s.band_id is null or public.can_sign_up_band(s.band_id))
+    )
+  );
 create policy "Enable Update for authenticated users only" on public.performance
   for update to authenticated using (
     exists (

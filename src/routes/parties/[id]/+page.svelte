@@ -449,21 +449,27 @@
       const newId = np.id;
       // Copy the setlist (performances).
       if (performances.length) {
-        const rows = performances.map((p: any) => ({
+        // `order` is renumbered 1..n across the whole copy rather than carried
+        // over. Since #110 it means "position within a SET", so two songs in
+        // different blocks share a value — and the byOrder map below, which
+        // assumes it is unique per party, would then attach one song's lineup to
+        // another. The copy lands as a single open block anyway (sets are not
+        // copied), so a flat sequence is also the honest value.
+        const rows = performances.map((p: any, i: number) => ({
           party: newId, song: p.song, key: p.key, ref_link: p.ref_link,
-          order: p.order, suggested_by: p.suggested_by ?? currentUserId
+          order: i + 1, suggested_by: p.suggested_by ?? currentUserId
         }));
         const { data: newPerfs, error: perfErr } = await supabase.from('performance').insert(rows).select();
         if (perfErr) reportError(perfErr);
         else if (newPerfs) {
-          // Map new performances to their source by order (unique per party), then
-          // copy each song's approved lineup. The status trigger re-approves them
-          // (the cloner is the new draft's admin).
+          // Map new performances back to their source by the sequence assigned
+          // above, then copy each song's approved lineup. The status trigger
+          // re-approves them (the cloner is the new draft's admin).
           const byOrder: Record<number, number> = {};
           for (const p of newPerfs) if (p.order != null) byOrder[p.order] = p.id;
           const signupRows: any[] = [];
-          for (const p of performances) {
-            const newPid = p.order != null ? byOrder[p.order] : undefined;
+          for (const [i, p] of performances.entries()) {
+            const newPid = byOrder[i + 1];
             if (!newPid) continue;
             for (const perf of (p.performers ?? [])) {
               signupRows.push({ performance_id: newPid, user_id: perf.user_id, instrument_id: perf.instrument_id });
