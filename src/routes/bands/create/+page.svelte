@@ -62,13 +62,16 @@
         if (pErr) { reportError(pErr); return; }
       }
       // Avatar upload needs the band id (path + RLS), so it happens post-insert.
+      // The band exists by now, so a failed photo must not read as a failed
+      // creation — but it must not read as a success either.
+      let avatarFailed = false;
       if (avatarBlob) {
         try {
           const url = await uploadBandAvatar(band.id, avatarBlob);
           await supabase.from('band').update({ avatar_url: url }).eq('id', band.id);
-        } catch (err) { reportError(err as any); }
+        } catch (err) { reportError(err as any); avatarFailed = true; }
       }
-      toastSuccess('¡Banda creada!');
+      toastSuccess(avatarFailed ? 'Banda creada, pero la foto no se pudo subir.' : '¡Banda creada!');
       goto(`/bands/${band.id}`);
     } catch (err) {
       toastError('No se pudo conectar con el servidor.');

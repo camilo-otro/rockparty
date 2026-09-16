@@ -168,7 +168,7 @@ served* — so all crop/downscale/re-encode runs in the browser before upload. T
 is also the cheapest path: we store one small file, never the multi-MB original.
 
 - A dedicated Storage bucket `band-avatars`, **public read** (plain `<img>` loads
-  without auth). Path convention **`{band_id}/{timestamp}.webp`**. Writes gated by
+  without auth). Path convention **`{band_id}/{timestamp}.{webp|jpg}`**. Writes gated by
   a `storage.objects` policy reusing the existing helper — only a band's
   **managers** may write its folder:
   `bucket_id = 'band-avatars' and public.is_band_manager((storage.foldername(name))[1]::bigint)`.
@@ -177,8 +177,11 @@ is also the cheapest path: we store one small file, never the multi-MB original.
   draggable + zoom square crop → 512×512 → re-encode `image/webp` at ~0.8 (a 512²
   avatar is typically 30–60 KB) → **hard size cap ~150 KB** (step quality down if
   over). A small reusable cropper component (venue/performer avatars can reuse it).
+  **Read `blob.type` back:** `toBlob` does not fail on a format the browser cannot
+  encode, it silently returns PNG, so the cropper falls back to `image/jpeg` when
+  WebP comes back as something else (#75 follow-up, 2026-09-16).
 - **Delete-on-replace, versioned names.** Each change uploads a fresh
-  `{band_id}/{timestamp}.webp`, stores the full public URL in `band.avatar_url`,
+  `{band_id}/{timestamp}.{webp|jpg}`, stores the full public URL in `band.avatar_url`,
   then **deletes the previous object** — so each band holds exactly one avatar
   (storage is O(bands), not O(edits)) and the new URL keeps CDN caching clean.
   Upload with a long `cacheControl` (~30 days), safe because names are versioned.

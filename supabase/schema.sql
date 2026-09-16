@@ -2392,13 +2392,16 @@ grant select (id, band_id, display_name, instrument_ids, created_at)
   on public.band_pending_member to anon, authenticated;
 
 -- ---- band avatars (storage, #75) --------------------------------------------
--- Bucket 'band-avatars' (public read; file_size_limit 256 KB, image/webp only —
--- a server-side backstop to the client 150 KB/WebP crop). Objects live at
--- {band_id}/{timestamp}.webp; only a band's managers may write its folder.
+-- Bucket 'band-avatars' (public read; file_size_limit 256 KB, image/webp +
+-- image/jpeg — a server-side backstop to the client's 150 KB crop). Objects live
+-- at {band_id}/{timestamp}.{webp|jpg}; only a band's managers may write its
+-- folder. JPEG was added 2026-09-16: a browser that cannot encode WebP silently
+-- gets PNG out of canvas.toBlob, so WebP-only made avatars unsettable there.
 -- Defined in migrations/20260903_band_avatars_bucket.sql (storage schema — kept
 -- here for reference; storage.buckets/objects are managed by Supabase).
 --   insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
---     values ('band-avatars','band-avatars', true, 262144, array['image/webp']);
+--     values ('band-avatars','band-avatars', true, 262144,
+--             array['image/webp','image/jpeg']);
 --   policy "band-avatars public read"    select using (bucket_id = 'band-avatars')
 --   policy "band-avatars manager insert" insert with check
 --     (bucket_id = 'band-avatars' and public.is_band_manager((storage.foldername(name))[1]::bigint))

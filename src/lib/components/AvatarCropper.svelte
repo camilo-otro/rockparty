@@ -1,7 +1,8 @@
 <!-- AvatarCropper.svelte — reusable square avatar cropper (#75).
      Picks an image, lets the user pan (drag) + zoom to frame a square, and emits
-     a 512x512 WebP Blob (<= ~150 KB). No dependencies; all client-side because
-     Supabase image transforms are Pro-only. Reusable for venue/performer avatars.
+     a 512x512 Blob of <= ~150 KB — WebP, or JPEG where the browser cannot encode
+     WebP. No dependencies; all client-side because Supabase image transforms are
+     Pro-only. Reusable for venue/performer avatars.
      Events: crop { blob, previewUrl }, remove. -->
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from 'svelte';
@@ -13,7 +14,8 @@
   const dispatch = createEventDispatcher();
   const FRAME = 240;   // on-screen crop frame (px)
   const OUT = 512;     // exported avatar size (px)
-  const MAX_BYTES = 150 * 1024;
+  const MAX_BYTES = 150 * 1024;       // what we aim for
+  const HARD_MAX_BYTES = 250 * 1024;  // the bucket's own limit is 256 KB; stop short of it
 
   let mode: 'idle' | 'editing' = 'idle';
   let previewUrl: string | null = initialUrl;  // what the idle state shows
@@ -87,6 +89,23 @@
     try { canvas.releasePointerCapture(e.pointerId); } catch {}
   }
 
+  // toBlob does NOT fail on a format the browser cannot encode: the HTML spec
+  // says it must silently produce PNG instead. So asking for WebP and trusting
+  // the answer uploaded PNGs mislabelled as WebP, which the WebP-only bucket
+  // refused with "mime type image/png is not supported" — the same message no
+  // matter what the user picked, because the OUTPUT format is the browser's
+  // choice, not theirs. Always read blob.type back.
+  //
+  // JPEG is the fallback because every canvas can encode it. PNG is not an
+  // option: it ignores `quality`, so an oversized avatar has no way to shrink.
+  const ENCODINGS = ['image/webp', 'image/jpeg'] as const;
+
+  async function encode(out: HTMLCanvasElement, type: string, q: number): Promise<Blob | null> {
+    const blob = await new Promise<Blob | null>((res) => out.toBlob(res, type, q));
+    // The silent-PNG fallback, caught: this browser cannot encode `type`.
+    return blob && blob.type === type ? blob : null;
+  }
+
   async function exportBlob(): Promise<Blob | null> {
     if (!bitmap) return null;
     const out = document.createElement('canvas');
@@ -95,16 +114,27 @@
     if (!octx) return null;
     const k = OUT / FRAME;
     octx.drawImage(bitmap, offsetX * k, offsetY * k, iw * scale * k, ih * scale * k);
-    for (const q of [0.8, 0.7, 0.6, 0.5]) {
-      const blob = await new Promise<Blob | null>((res) => out.toBlob(res, 'image/webp', q));
-      if (blob && (blob.size <= MAX_BYTES || q === 0.5)) return blob;
+
+    let smallest: Blob | null = null;
+    for (const type of ENCODINGS) {
+      for (const q of [0.8, 0.7, 0.6, 0.5]) {
+        const blob = await encode(out, type, q);
+        // Null on the first pass means this browser cannot encode `type` at
+        // all, so move on to the next format rather than retrying it.
+        if (!blob) break;
+        if (blob.size <= MAX_BYTES) return blob;
+        // Keep the best effort so far. Previously this returned the q=0.5 blob
+        // regardless of size, handing the server something over its 256 KB
+        // limit and turning one clear failure into a second confusing one.
+        if (!smallest || blob.size < smallest.size) smallest = blob;
+      }
     }
-    return null;
+    return smallest && smallest.size <= HARD_MAX_BYTES ? smallest : null;
   }
 
   async function apply() {
     const blob = await exportBlob();
-    if (!blob) { dispatch('error', 'No se pudo procesar la imagen.'); return; }
+    if (!blob) { dispatch('error', 'No se pudo procesar la imagen. Intenta con una foto más pequeña o menos detallada.'); return; }
     if (ownPreview) URL.revokeObjectURL(ownPreview);
     ownPreview = URL.createObjectURL(blob);
     previewUrl = ownPreview;

@@ -94,9 +94,13 @@
     try {
       // Avatar: upload new (deleting the old), or clear + delete on remove.
       let avatarUpdate: Record<string, any> = {};
+      // A failed photo must not cost someone the rest of their edits, so this
+      // carries on — but the success toast below has to admit it, or the error
+      // is followed by "Banda actualizada." and reads as though it worked.
+      let avatarFailed = false;
       if (avatarBlob) {
         try { avatarUpdate.avatar_url = await uploadBandAvatar(bandId, avatarBlob, band.avatar_url); }
-        catch (err) { reportError(err as any); }
+        catch (err) { reportError(err as any); avatarFailed = true; }
       } else if (removeAvatar && band.avatar_url) {
         await deleteBandAvatarByUrl(band.avatar_url);
         avatarUpdate.avatar_url = null;
@@ -177,7 +181,7 @@
         const failed = results.find((r: any) => r?.error);
         if (failed) { reportError(failed.error); return; }
       }
-      toastSuccess('Banda actualizada.');
+      toastSuccess(avatarFailed ? 'Banda actualizada, pero la foto no se pudo subir.' : 'Banda actualizada.');
       goto(`/bands/${bandId}`);
     } catch (err) {
       toastError('No se pudo conectar con el servidor.');
