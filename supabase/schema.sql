@@ -1916,6 +1916,59 @@ create policy "moderators may delete unused songs" on public.song
 
 -- ---- venue ------------------------------------------------------------------
 -- Test venues (#67) are hidden from everyone except devs.
+-- Keeping #113's fix alive for NEW venues. The first migration was a one-time
+-- cleanup; `private` defaults to false and the client still writes the old
+-- columns, so without these a new home venue would leak exactly as before.
+-- The second trigger becomes a no-op once stage 2 drops those columns.
+create or replace function public.venue_default_private()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if new.venue_type = 4 then   -- "Club Privado", the closest thing to "a home"
+    new.private := true;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_venue_default_private on public.venue;
+create trigger trg_venue_default_private
+  before insert on public.venue
+  for each row execute function public.venue_default_private();
+
+-- DEFINER: venue_contact is writable only by the venue's admins, and at INSERT
+-- time the creator is not one yet. A null incoming value deliberately does NOT
+-- clear the stored one, or every unrelated edit to a private venue (whose public
+-- columns are always null) would wipe its contact details.
+create or replace function public.sync_venue_contact()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if pg_trigger_depth() > 1 then
+    return null;
+  end if;
+  if new.address is not null or new.whatsapp is not null or new.contact_name is not null then
+    insert into public.venue_contact (venue_id, address, whatsapp, contact_name)
+    values (new.id, new.address, new.whatsapp, new.contact_name)
+    on conflict (venue_id) do update set
+      address      = coalesce(excluded.address, public.venue_contact.address),
+      whatsapp     = coalesce(excluded.whatsapp, public.venue_contact.whatsapp),
+      contact_name = coalesce(excluded.contact_name, public.venue_contact.contact_name);
+  else
+    insert into public.venue_contact (venue_id) values (new.id)
+    on conflict (venue_id) do nothing;
+  end if;
+  if new.private
+     and (new.address is not null or new.whatsapp is not null or new.contact_name is not null) then
+    update public.venue set address = null, whatsapp = null, contact_name = null where id = new.id;
+  end if;
+  return null;
+end;
+$$;
+drop trigger if exists trg_sync_venue_contact on public.venue;
+create trigger trg_sync_venue_contact
+  after insert or update on public.venue
+  for each row execute function public.sync_venue_contact();
+revoke all on function public.venue_default_private() from public, anon, authenticated;
+revoke all on function public.sync_venue_contact() from public, anon, authenticated;
+
 -- venue_contact (#113). A PUBLIC venue's address stays public — a bar's address
 -- on a flyer is the point. A private one reaches only its admins, the organiser
 -- of a toque booked there, and anyone who RSVP'd or is approved to play.
