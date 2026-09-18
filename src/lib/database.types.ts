@@ -1158,6 +1158,7 @@ export type Database = {
         Args: { p_dir: number; p_performance: number }
         Returns: undefined
       }
+      party_rsvp_count: { Args: { p_party: number }; Returns: number }
       peek_band_claim: {
         Args: { p_token: string }
         Returns: {

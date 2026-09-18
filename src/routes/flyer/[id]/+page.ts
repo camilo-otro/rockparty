@@ -30,7 +30,9 @@ export const load: PageLoad = async ({ params }) => {
       .select('id, order, song ( title ), performance_user ( user_id, status )')
       .eq('party', id)
       .order('order', { ascending: true }),
-    supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', id)
+    // Rendered server-side with no session, so this is an ANONYMOUS caller and
+    // gets no party_rsvp rows at all now (#113). The count comes from the RPC.
+    supabase.rpc('party_rsvp_count', { p_party: id })
   ]);
 
   const party = partyRes.data;
@@ -52,5 +54,5 @@ export const load: PageLoad = async ({ params }) => {
     rows.flatMap((r) => (r.performance_user ?? []).filter((s: any) => s.status === 'approved').map((s: any) => s.user_id))
   ).size;
 
-  return { party, venue, songs, songCount: rows.length, musicianCount, rsvpCount: rsvpRes.count ?? 0 };
+  return { party, venue, songs, songCount: rows.length, musicianCount, rsvpCount: (rsvpRes.data as number | null) ?? 0 };
 };

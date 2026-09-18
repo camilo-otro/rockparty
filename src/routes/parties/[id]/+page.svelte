@@ -775,13 +775,17 @@
   let rsvpBusy = false;
   async function loadRsvp() {
     if (!party?.id) return;
+    // The COUNT is public, the roster is not (#113): party_rsvp rows are now
+    // readable only by their owner and the toque's organisers, so a head-count
+    // over the table would return 1 or 0 instead of the total. The RPC is
+    // DEFINER and counts everyone, while still refusing a toque you cannot see.
     const [countRes, mineRes] = await Promise.all([
-      supabase.from('party_rsvp').select('user_id', { count: 'exact', head: true }).eq('party_id', party.id),
+      supabase.rpc('party_rsvp_count', { p_party: party.id }),
       currentUserId
         ? supabase.from('party_rsvp').select('user_id').eq('party_id', party.id).eq('user_id', currentUserId).maybeSingle()
         : Promise.resolve({ data: null })
     ]);
-    rsvpCount = countRes.count ?? 0;
+    rsvpCount = (countRes.data as number | null) ?? 0;
     iAmGoing = !!mineRes.data;
   }
   async function toggleRsvp() {
