@@ -13,9 +13,12 @@
   // have the exact address — which is the normal case for a private venue, not
   // an error. Named textually in the markup so legacy-mode reactivity follows it.
   //
-  // Aliased `contact_ref`, NOT `contact`: `venue.contact` is an existing scalar
-  // column (the free-form handle) and an embed of the same name shadows it —
-  // the page rendered "Contacto: [object Object]". Same trap as `type_ref`.
+  // Aliased `contact_ref`, NOT `contact`. `venue.contact` was a scalar column at
+  // the time (the free-form handle) and an embed of the same name shadowed it —
+  // the page rendered "Contacto: [object Object]". Stage 2 has since dropped that
+  // column, so the collision is gone, but the alias stays: it is the same trap as
+  // `type_ref`, and re-using a table's own column name for an embed invites it
+  // back the moment someone adds a `contact` column again.
   $: contact = venue?.contact_ref ?? null;
   let venueType: any = null;
   let loading = true;
@@ -161,7 +164,15 @@
 
       <div class="mb-3">
         <div class="text-white mb-1">Equipo disponible</div>
-        {#if equipment.length === 0}
+        <!-- Same shape as the address (#113): for a private venue the rows are
+             simply not returned to someone with no reason to have them, so say
+             that rather than "No especificado.", which claims the host never
+             filled it in. -->
+        {#if equipment.length === 0 && venue.private}
+          <div class="text-cold-light text-sm">
+            El equipo disponible se comparte con quienes organizan un toque aquí, quienes confirman asistencia y quienes van a tocar.
+          </div>
+        {:else if equipment.length === 0}
           <div class="text-cold-light text-sm">No especificado.</div>
         {:else}
           <ul class="flex flex-col gap-2">

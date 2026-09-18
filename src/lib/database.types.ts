@@ -903,13 +903,10 @@ export type Database = {
       }
       venue: {
         Row: {
-          address: string | null
-          area: string | null
           allow_party: boolean
           allow_rehearsal: boolean
+          area: string | null
           capacity: number | null
-          contact: string | null
-          contact_name: string | null
           created_at: string
           created_by: string | null
           curfew: string | null
@@ -926,16 +923,12 @@ export type Database = {
           private: boolean
           requires_approval: boolean
           venue_type: number | null
-          whatsapp: string | null
         }
         Insert: {
-          address?: string | null
-          area?: string | null
           allow_party?: boolean
           allow_rehearsal?: boolean
+          area?: string | null
           capacity?: number | null
-          contact?: string | null
-          contact_name?: string | null
           created_at?: string
           created_by?: string | null
           curfew?: string | null
@@ -952,16 +945,12 @@ export type Database = {
           private?: boolean
           requires_approval?: boolean
           venue_type?: number | null
-          whatsapp?: string | null
         }
         Update: {
-          address?: string | null
-          area?: string | null
           allow_party?: boolean
           allow_rehearsal?: boolean
+          area?: string | null
           capacity?: number | null
-          contact?: string | null
-          contact_name?: string | null
           created_at?: string
           created_by?: string | null
           curfew?: string | null
@@ -978,7 +967,6 @@ export type Database = {
           private?: boolean
           requires_approval?: boolean
           venue_type?: number | null
-          whatsapp?: string | null
         }
         Relationships: [
           {
