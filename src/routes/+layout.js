@@ -29,7 +29,29 @@ export const load = async ({ depends, url }) => {
     // `role` is gone (#99): it was never read by any policy, function or
     // component — it only LOOKED like an admin flag, and it was user-writable.
     // Selecting it here was the one thing keeping it alive.
-    let { data: dbUser } = await supabase.from('profile').select('id, nickname').eq('id', session.user.id).single();
+    let { data: dbUser, error: profileErr } = await supabase.from('profile').select('id, nickname').eq('id', session.user.id).single();
+    // A FAILED query and a MISSING profile both arrive as `data: null`, and this
+    // used to read both as "you have no profile" and bounce the person into
+    // onboarding. One timeout was enough to throw an established user out of
+    // whatever they were doing. PGRST116 is the only code that actually means
+    // "no row"; anything else is the network or the server, so retry once and
+    // then leave the session alone.
+    if (profileErr && profileErr.code !== 'PGRST116') {
+      ({ data: dbUser, error: profileErr } = await supabase.from('profile').select('id, nickname').eq('id', session.user.id).single());
+    }
+    if (profileErr && profileErr.code !== 'PGRST116') {
+      // Still failing. Keep them signed in with what the session already knows
+      // rather than redirecting: the gate below will run again on the next
+      // navigation, and a missing nickname in the store is a cosmetic problem
+      // next to being sent to a form you completed months ago.
+      userRecord = {
+        id: session.user.id,
+        email: session?.user?.email ?? '',
+        avatarUrl: session?.user?.user_metadata?.avatar_url || null
+      };
+      userStore.set(userRecord);
+      return { supabase, session, user: userRecord };
+    }
     // If not found, redirect to performer creation
     if (!dbUser || !dbUser.nickname) {
       userRecord = {

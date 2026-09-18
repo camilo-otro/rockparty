@@ -810,7 +810,38 @@
   // can refresh it live without re-fetching the whole party. Never touches
   // editMode / expandedApprovals, so an in-progress interaction isn't clobbered.
   let perfIdSet = new Set<number>(); // this party's performance ids, for filtering
-  async function loadSetlist(pid: number) {
+  // Every load takes a ticket. Three sequential waves of queries sit between
+  // reading the order and painting it — half a second or so — and nothing used
+  // to stop an older load from finishing last and repainting a stale setlist
+  // over a newer one. Whoever holds the newest ticket wins, regardless of who
+  // finishes first.
+  let loadSeq = 0;
+
+  // `fromRealtime` marks a load nobody asked for: somebody else changed the
+  // night. Those must NOT land while you are mid-edit — the deferral in
+  // scheduleReload only stops such a load from STARTING, and one already in
+  // flight when you open edit mode would still land on top of your reorder with
+  // a snapshot taken before it. Reloads we request ourselves (after a refused
+  // nudge, after moving a block) are exactly the ones that must land, because
+  // the screen is knowingly a lie until they do.
+  async function loadSetlist(pid: number, fromRealtime = false) {
+    // Checked BEFORE taking a ticket, not just at the end. A realtime load that
+    // is only going to defer must not cancel a user-initiated one: moveSong,
+    // moveSet and removeSet all run in edit mode and re-read precisely because
+    // the screen is a lie until they do. If such a load took a ticket and then
+    // declined to paint, it would void that correction and leave the lie up
+    // until the user left edit mode.
+    if (fromRealtime && (editMode || confirmDialog)) { pendingReload = true; return; }
+    const seq = ++loadSeq;
+    // Called after every await, before anything is assigned.
+    function stale(): boolean {
+      if (seq !== loadSeq) return true;              // a newer load started
+      if (fromRealtime && (editMode || confirmDialog)) {
+        pendingReload = true;                        // try again when they finish
+        return true;
+      }
+      return false;
+    }
     // Ordered SERVER-side. Without this, PostgREST returns rows in physical
     // order, which an UPDATE changes (a new tuple version lands elsewhere) — so
     // start_show / advance_show visibly reshuffled the setlist. The id tiebreak
@@ -831,6 +862,7 @@
         .order('order', { ascending: true })
         .order('id', { ascending: true })
     ]);
+    if (stale()) return;
     const { data: perfData, error: perfErr } = perfRes;
     if (perfErr) { errorPerformances = perfErr.message; return; }
     if (setRes.error) { errorPerformances = setRes.error.message; return; }
@@ -876,6 +908,8 @@
     const performerUserIds = [...new Set((perfUsers ?? []).map((p) => p.user_id))];
     const allUserIds = [...new Set([...userIds, ...performerUserIds])];
     const { data: userData } = allUserIds.length ? await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', allUserIds) : { data: [] as any[] };
+    // The one that matters: everything below assigns shared state.
+    if (stale()) return;
     songs = songData ?? [];
     users = userData ?? [];
     usersLoaded = true;
@@ -956,11 +990,17 @@
   // list. Defer while the viewer is mid-edit or has a dialog open, then flush.
   let setlistChannel: any = null;
   let pendingReload = false;
+  // Debounced, because one edit is rarely one event: nudge_song used to renumber
+  // a whole block, so a single tap on a ten-song set arrived here ten times and
+  // started ten full reloads. Even with that fixed a burst is normal — a band
+  // adding songs, a signup approved — and a reload is three round trips.
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null;
   function scheduleReload() {
     if (editMode || confirmDialog) { pendingReload = true; return; }
-    loadSetlist(Number(page.params.id));
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => { reloadTimer = null; loadSetlist(Number(page.params.id), true); }, 250);
   }
-  $: if (pendingReload && !editMode && !confirmDialog) { pendingReload = false; loadSetlist(Number(page.params.id)); }
+  $: if (pendingReload && !editMode && !confirmDialog) { pendingReload = false; loadSetlist(Number(page.params.id), true); }
   function subscribeSetlist(pid: number) {
     setlistChannel = supabase
       .channel(`setlist-${pid}`)
@@ -1116,6 +1156,8 @@
   onDestroy(() => {
     if (unsubscribeUser) unsubscribeUser();
     if (setlistChannel) supabase.removeChannel(setlistChannel);
+    // A pending reload would otherwise fire against a page that is gone.
+    if (reloadTimer) clearTimeout(reloadTimer);
   });
 </script>
 
@@ -1420,7 +1462,11 @@
             <div class="flex flex-col gap-[1px] mt-[1px]">
               {#each run.items as perf, i (perf.id)}
                 {@const tally = songTally[perf.id]}
-                <div class="bg-base-900" data-perf-id={perf.id}>
+                <!-- Same reorder cue as an open song (#59). The row already had
+                     data-perf-id, so moveSong's reflow trick found it and the
+                     flash simply never fired: the class binding was missing.
+                     Settles to base-900, which is this row's own background. -->
+                <div class="bg-base-900" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
                   <!-- The clap sits BESIDE the link, never inside it: a button
                        nested in an anchor is invalid and swallows the tap. -->
                   <div class="flex items-center gap-2 pr-3">
