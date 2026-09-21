@@ -66,7 +66,7 @@
     isAuthenticated={isAuthenticated}
     on:submit={async (e) => {
       submitting = true;
-      const { title, description, date, venue, admins, performerApproval, visibility, isTest } = e.detail;
+      const { title, description, date, venue, admins, performerApproval, visibility, invites, isTest } = e.detail;
       try {
         const { data, error: dbError } = await supabase
           .from('party')
@@ -90,6 +90,23 @@
                   ignoreDuplicates: true
                 });
               if (adminErr) reportError(adminErr);
+            }
+          }
+
+          // Guests of a private toque. A new toque has no RSVPs yet, so there is
+          // nothing for keep_rsvps_as_invites to have converted and this is the
+          // whole list. Organisers are skipped: they see it regardless, and the
+          // form says so.
+          if (newId && invites && invites.length > 0) {
+            const guests = invites.filter((u: string) => u !== userId && !admins.includes(u));
+            if (guests.length > 0) {
+              const { error: inviteErr } = await supabase
+                .from('party_invite')
+                .upsert(guests.map((u: string) => ({ party_id: newId, user_id: u, invited_by: userId })), {
+                  onConflict: 'party_id,user_id',
+                  ignoreDuplicates: true
+                });
+              if (inviteErr) reportError(inviteErr);
             }
           }
           toastSuccess('Borrador creado — revísalo y publícalo.');

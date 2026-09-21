@@ -1200,6 +1200,16 @@
       <div class="flex flex-col gap-1">
         <h2 class="text-4xl text-yellow font-medium">{party.title}</h2>
         {#if party.is_test}<span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-warm-base text-warm-base">Datos de prueba</span>{/if}
+        <!-- A restricted toque has to SAY it is restricted (#113 part B). Without
+             this the only way to know is to open the edit form, and a guest has
+             no way at all — the same reason the venue page explains an absent
+             address instead of leaving a blank. Public is the normal case and
+             says nothing, exactly like the "Confirmado" status badge below. -->
+        {#if party.visibility === 'private'}
+          <span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-cold-light text-cold-light">Solo por invitación</span>
+        {:else if party.visibility === 'unlisted'}
+          <span class="self-start text-[0.65rem] uppercase tracking-wide px-2 py-0.5 rounded-full border border-cold-light text-cold-light">No listado</span>
+        {/if}
       </div>
       <!-- "Confirmado" tells a visitor nothing they can't already infer from being
            here — a confirmed toque is just the normal case. Every other status

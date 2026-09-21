@@ -22,6 +22,7 @@
   // client keeping it out of browse lists, because RLS cannot know whether
   // somebody arrived with a link.
   export let initialVisibility: string = 'public';
+  export let initialInvites: string[] = [];
   export let submitLabel: string = 'Crear Toque';
   export let submittingLabel: string = 'Creando...';
   // When editing, the toque being edited shouldn't flag itself as a conflict.
@@ -63,15 +64,21 @@
   let admins: any[] = [];
   let adminInput = '';
   let filteredOptions: any[] = [];
+  // Guests of a `private` toque (#113 part B). Same shape as admins on purpose —
+  // same search, same chips — because it is the same act: naming someone.
+  let invites: any[] = [];
+  let inviteInput = '';
+  let inviteOptions: any[] = [];
 
   onMount(async () => {
     // Neither of these needs the other — one wave (#91, see #84). This form
     // mounts on every party create/edit page, so the chain was paid four times
     // over.
-    const [existingAdmins, { data: sched }] = await Promise.all([
+    const [existingAdmins, existingInvites, { data: sched }] = await Promise.all([
       // Only the admins already on this toque — the autocomplete now searches
       // server-side instead of holding the whole user table (#92).
       peopleByIds(initialAdmins ?? []),
+      peopleByIds(initialInvites ?? []),
       // Upcoming toques that occupy a venue, for the conflict warning (#54).
       supabase.from('party')
         .select('id, venue, date')
@@ -81,6 +88,7 @@
     // Pre-fill from their own lookup: filtering a bounded search result would
     // silently drop an existing admin who is not in the first page of matches.
     admins = existingAdmins;
+    invites = existingInvites;
     scheduled = sched ?? [];
   });
 
@@ -99,6 +107,33 @@
       if (seq !== adminSearchSeq) return;   // a newer keystroke superseded this
       filteredOptions = found.filter((u) => !admins.some((a) => a.id === u.id));
     }, 250);
+  }
+
+  // Its own timer and sequence: two independent searches on one form, and
+  // sharing either would let one field's keystroke cancel the other's result.
+  let inviteSearchTimer: ReturnType<typeof setTimeout>;
+  let inviteSearchSeq = 0;
+  function handleInviteInput(e: Event) {
+    inviteInput = (e.target as HTMLInputElement).value;
+    clearTimeout(inviteSearchTimer);
+    const term = inviteInput;
+    if (term.trim().length < 2) { inviteOptions = []; return; }
+    inviteSearchTimer = setTimeout(async () => {
+      const seq = ++inviteSearchSeq;
+      const found = await searchPeople(term);
+      if (seq !== inviteSearchSeq) return;
+      inviteOptions = found.filter((u) => !invites.some((i) => i.id === u.id));
+    }, 250);
+  }
+
+  function addInvite(user: any) {
+    invites = [...invites, user];
+    inviteInput = '';
+    inviteOptions = [];
+  }
+
+  function removeInvite(userId: string) {
+    invites = invites.filter((i) => i.id !== userId);
   }
 
   function addAdmin(user: any) {
@@ -128,6 +163,7 @@
       admins: admins.map(a => a.id),
       performerApproval,
       visibility,
+      invites: invites.map((i) => i.id),
       // Non-devs can never create test data, regardless of local state.
       isTest: $isDev ? isTest : false
     });
@@ -186,6 +222,35 @@
         Solo quienes invites pueden verlo. Quienes ya confirmaron asistencia mantienen el acceso.
       {/if}
     </span>
+
+    <!-- Only when it is actually private: on a public or unlisted toque an
+         invite grants nothing anyone does not already have, so offering the
+         field would imply a control that is not doing anything. `visibility` is
+         named here, so legacy-mode reactivity shows and hides this correctly. -->
+    {#if visibility === 'private'}
+      <label for="invites" class="mb-1 mt-4">¿Quién está invitado?</label>
+      <div class="mb-2">
+        <input id="invites" type="text" bind:value={inviteInput} on:input={handleInviteInput} placeholder="Buscar usuario..." class="p-2 mb-1 border rounded-lg w-full" />
+        {#if inviteInput && inviteOptions.length > 0}
+          <ul class="bg-base-950 border rounded-lg shadow mt-1">
+            {#each inviteOptions as option}
+              <li class="p-2 cursor-pointer hover:bg-base-900" on:click={() => addInvite(option)}>{option.nickname}</li>
+            {/each}
+          </ul>
+        {/if}
+        <div class="flex flex-wrap gap-2 mt-2">
+          {#each invites as guest}
+            <span class="bg-cold-base text-white rounded-lg px-2 py-1 flex items-center gap-1">
+              {guest.nickname}
+              <button type="button" class="ml-1 text-yellow" on:click={() => removeInvite(guest.id)}>✕</button>
+            </span>
+          {/each}
+        </div>
+        <span class="text-sm text-cold-light mt-2 block">
+          Los administradores del toque siempre lo ven, no hace falta invitarlos.
+        </span>
+      </div>
+    {/if}
 
     <label for="admins" class="mb-1 mt-4">Administradores del toque</label>
     <div class="mb-2">

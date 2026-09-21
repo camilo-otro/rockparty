@@ -16,6 +16,7 @@ let loadingVenues = true;
 let errorVenues: string | null = null;
 let submitting = false;
 let partyAdmins: string[] = [];
+let partyInvites: string[] = [];
 let currentUserId: string | null = null;
 // How organizers are PRESENTED on the detail page (order + who opted out). The
 // creator is pinned first and always visible, so they're shown here as a fixed
@@ -103,17 +104,21 @@ onMount(async () => {
   // null user (which flashed "No tienes permiso" before the check settled).
   user.subscribe(u => { currentUserId = u?.id ?? null; })();
 
-  const [{ data: partyData }, { data: venueData, error: venueErr }, { data: adminData }] =
+  const [{ data: partyData }, { data: venueData, error: venueErr }, { data: adminData }, { data: inviteData }] =
     await Promise.all([
       // Both created_by and party_admin.user_id have FKs to public.profile, so
       // the names/avatars ride along instead of costing a second hop (#91, #84).
       supabase.from('party').select('*, creator:created_by ( id, nickname, avatarUrl:avatar_url )').eq('id', Number(id)).single(),
       supabase.from('venue').select('id, name'),
-      supabase.from('party_admin').select('user_id, display_order, hidden, profile:user_id ( id, nickname, avatarUrl:avatar_url )').eq('party_id', Number(id))
+      supabase.from('party_admin').select('user_id, display_order, hidden, profile:user_id ( id, nickname, avatarUrl:avatar_url )').eq('party_id', Number(id)),
+      // Only organisers can read these (party_invite's policy), which is exactly
+      // who reaches this page.
+      supabase.from('party_invite').select('user_id').eq('party_id', Number(id))
     ]);
   venues = venueData ?? [];
   if (venueErr) errorVenues = venueErr.message;
   partyAdmins = adminData ? adminData.map(a => a.user_id) : [];
+  partyInvites = (inviteData ?? []).map((i: any) => i.user_id);
   // The creator often has a party_admin row of their own. They're rendered as the
   // pinned row below, so drop them here or they'd appear twice.
   organizers = [...(adminData ?? [])]
@@ -151,6 +156,7 @@ onMount(async () => {
     initialDate={party.date}
     initialVenue={party.venue}
     initialAdmins={partyAdmins}
+    initialInvites={partyInvites}
     initialPerformerApproval={party.performer_approval}
     initialVisibility={party.visibility}
     initialIsTest={party.is_test}
@@ -162,7 +168,7 @@ onMount(async () => {
     isAuthenticated={true}
     on:submit={async (e) => {
       submitting = true;
-      const { title, description, date, venue, admins, performerApproval, visibility, isTest } = e.detail;
+      const { title, description, date, venue, admins, performerApproval, visibility, invites, isTest } = e.detail;
       try {
         const { error: dbError } = await supabase
           .from('party')
@@ -183,6 +189,26 @@ onMount(async () => {
           }
           if (toAdd.length > 0) {
             await supabase.from('party_admin').insert(toAdd.map((a: string) => ({ party_id: party.id, user_id: a })));
+          }
+
+          // Guests, same diff. Runs AFTER the party update, so if this edit is
+          // the one turning the toque private, keep_rsvps_as_invites has already
+          // converted the existing RSVPs — and upsert-ignore leaves those alone
+          // rather than colliding on the primary key and dropping the batch.
+          const inviteWas = new Set(partyInvites);
+          const inviteNow = new Set<string>(invites ?? []);
+          const invitesToDrop = partyInvites.filter((u) => !inviteNow.has(u));
+          const invitesToAdd = (invites ?? []).filter((u: string) => !inviteWas.has(u));
+          if (invitesToDrop.length > 0) {
+            const { error: e1 } = await supabase.from('party_invite')
+              .delete().eq('party_id', party.id).in('user_id', invitesToDrop);
+            if (e1) reportError(e1);
+          }
+          if (invitesToAdd.length > 0) {
+            const { error: e2 } = await supabase.from('party_invite')
+              .upsert(invitesToAdd.map((u: string) => ({ party_id: party.id, user_id: u, invited_by: currentUserId })),
+                      { onConflict: 'party_id,user_id', ignoreDuplicates: true });
+            if (e2) reportError(e2);
           }
           toastSuccess('¡Toque actualizado!');
           setTimeout(() => {
