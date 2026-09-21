@@ -2036,9 +2036,11 @@ create policy "select party: public statuses or owner/admins" on public.party
   using (
     (
       status in ('confirmed', 'live', 'completed')
-      or created_by = (select auth.uid())
-      or exists (select 1 from public.party_admin pa
-                 where pa.party_id = party.id and pa.user_id = (select auth.uid()))
+      -- is_party_admin IS `created_by = auth.uid() or exists(party_admin ...)`.
+      -- Inlining it here closed a cycle once party_admin gained its own policy
+      -- (which calls can_see_party, which reads party) — see
+      -- migrations/20260921_party_policy_no_inline_subquery.sql.
+      or public.is_party_admin(id)
       or public.is_venue_admin(party.venue)
     )
     and (is_test = false or public.is_dev())
@@ -2050,13 +2052,10 @@ create policy "allow insert to authenticated users" on public.party
 -- checked explicitly because venue creators aren't auto-added to venue_admin.
 create policy "allow update to party admins" on public.party
   for update to authenticated using (
-    (created_by = (select auth.uid()))
-    or exists (
-      select 1 from public.party_admin
-      where party_admin.party_id = party.id and party_admin.user_id = (select auth.uid())
-    )
+    public.is_party_admin(id)
     or public.is_venue_admin(party.venue)
-  ) with check (true);
+  ) with check (true);  -- deliberately `true`, not the USING clause: see
+                        -- migrations/20260921_party_update_restore_with_check.sql
 
 -- ---- party_admin ------------------------------------------------------------
 -- `hidden` is an organiser's choice not to be listed on the page (#113). It was
