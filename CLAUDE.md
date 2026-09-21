@@ -78,8 +78,14 @@ carry the deeper detail; this is the at-a-glance map.
   `SUPABASE_ANON_KEY`. GitHub disables it after ~60 days of no repo activity —
   use an external monitor (UptimeRobot / cron-job.org) for long idle stretches.
 - **Realtime:** the `supabase_realtime` publication includes `notification`,
-  `performance`, and `performance_user` — drives the live bell + setlist (#63).
-  RLS still applies, so subscribers only receive rows they can `SELECT`.
+  `party`, `party_set`, `performance` and `performance_user` — drives the live
+  bell + setlist (#63) and the live console. RLS still applies, so subscribers
+  only receive rows they can `SELECT`.
+  **A table not in this list broadcasts nothing**, and the symptom is a page that
+  silently stops updating rather than an error. `party_set` was missing until
+  2026-09-21: moving a band's block writes only that table, so the running order
+  never reached anyone until they reloaded — found at the first live show (#115).
+  Adding a table that carries state a page renders? Add it here too.
 - **Search:** `pg_trgm` (installed) backs song/toque search (#26).
 - **Edge Functions:** `supabase/functions/*` — the app's only server-side code.
   So far: **`spotify-track`** (#80) resolves a pasted Spotify link to song

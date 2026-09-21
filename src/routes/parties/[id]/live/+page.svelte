@@ -73,7 +73,15 @@
     loading = false;
   }
 
+  // Same guard as the detail page (#115, and the race fixed in 5db89be): three
+  // sequential waves sit between reading the order and painting it, and an older
+  // load must not finish last and repaint a stale show. It matters MORE here —
+  // `advance_show` changes two rows, so one tap produces two realtime events and
+  // two reloads on top of exec's own, and the person reading the result is on
+  // stage.
+  let loadSeq = 0;
   async function loadSetlist() {
+    const seq = ++loadSeq;
     // The night is a sequence of SETS and a set is a sequence of songs (#110),
     // so `performance."order"` is a position WITHIN its block — never within the
     // night. Ordering by it alone interleaves every band, one song each, which
@@ -92,6 +100,7 @@
         .order('id', { ascending: true }),
       supabase.from('party_set').select('id, "order"').eq('party_id', partyId)
     ]);
+    if (seq !== loadSeq) return;
     const { data, error: e } = perfRes;
     if (e) { error = e.message; return; }
     if (setRes.error) { error = setRes.error.message; return; }
@@ -106,6 +115,7 @@
       bandIds.length ? supabase.from('band').select('id, name').in('id', bandIds) : Promise.resolve({ data: [] as any[] }),
       perfs.length ? supabase.from('performance_user').select('performance_id, user_id, status').in('performance_id', perfs.map((p) => p.id)) : Promise.resolve({ data: [] as any[] })
     ]);
+    if (seq !== loadSeq) return;
     songsById = Object.fromEntries((songsRes.data ?? []).map((s: any) => [s.id, s]));
     bandsById = Object.fromEntries((bandsRes.data ?? []).map((b: any) => [b.id, b]));
     const lineup: Record<number, string[]> = {};
@@ -118,6 +128,7 @@
     const ids = [...new Set(Object.values(lineup).flat())];
     if (ids.length) {
       const { data: profs } = await supabase.from('profile').select('id, nickname, avatarUrl: avatar_url').in('id', ids);
+      if (seq !== loadSeq) return;
       usersById = Object.fromEntries((profs ?? []).map((u: any) => [u.id, u]));
     }
   }
