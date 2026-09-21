@@ -327,7 +327,12 @@
               {#each upcomingBlocks as blk (blk.setId)}
                 {@const band = blk.bandId ? bandsById[blk.bandId] : null}
                 {@const onStage = nowPlaying?.set_id === blk.setId}
-                <div class="rounded-lg overflow-clip {onStage ? 'border-l-2 border-warm-base' : ''}">
+                <!-- cold-base on the left edge means "this is a band's block",
+                     exactly as on the detail page — one token, one meaning. Being
+                     ON STAGE is said in the header instead, because the console
+                     lifts the playing song out into its own card, so no row in
+                     this queue is ever the one sounding. -->
+                <div class="rounded-lg overflow-clip {band ? 'border-l-2 border-cold-base' : ''}">
                   {#if band}
                     <div class="bg-base-900 px-4 py-2 flex items-center gap-3 border-b border-base-950">
                       {#if band.avatar_url}

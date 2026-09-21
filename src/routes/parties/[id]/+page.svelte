@@ -1474,7 +1474,15 @@
                      data-perf-id, so moveSong's reflow trick found it and the
                      flash simply never fired: the class binding was missing.
                      Settles to base-900, which is this row's own background. -->
-                <div class="bg-base-900" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}>
+                <!-- The playing song is marked the same way inside a band's block
+                     as in an open one (#37). It never was: the block wrapper has a
+                     permanent cold-base border for band IDENTITY, and that is not
+                     a live marker — so while a band was on stage nothing said
+                     WHICH of its songs was sounding. The two stripes read as what
+                     they are: purple "this is a band", warm "this one is playing". -->
+                <div class="bg-base-900" data-perf-id={perf.id} class:flash-move={justMovedId === perf.id}
+                     class:border-l-2={isLive && perf.live_state === 'playing'}
+                     class:border-warm-base={isLive && perf.live_state === 'playing'}>
                   <!-- The clap sits BESIDE the link, never inside it: a button
                        nested in an anchor is invalid and swallows the tap. -->
                   <div class="flex items-center gap-2 pr-3">
