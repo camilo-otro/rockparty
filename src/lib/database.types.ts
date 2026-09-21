@@ -500,6 +500,42 @@ export type Database = {
           },
         ]
       }
+      party_invite_link: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          party_id: number
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          party_id: number
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          party_id?: number
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_invite_link_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_invite_link_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: true
+            referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       party_requirement: {
         Row: {
           assigned_label: string | null
@@ -1173,6 +1209,7 @@ export type Database = {
       can_see_venue_contact: { Args: { vid: number }; Returns: boolean }
       can_sign_up_band: { Args: { bid: number }; Returns: boolean }
       claim_band_member: { Args: { p_token: string }; Returns: number }
+      claim_party_invite: { Args: { p_token: string }; Returns: number }
       confirm_requirement: {
         Args: { p_confirmed: boolean; p_id: number }
         Returns: undefined
@@ -1205,6 +1242,10 @@ export type Database = {
         Args: { p_dir: number; p_performance: number }
         Returns: undefined
       }
+      party_invite_link_token: {
+        Args: { p_party: number; p_regenerate?: boolean }
+        Returns: string
+      }
       party_rsvp_count: { Args: { p_party: number }; Returns: number }
       peek_band_claim: {
         Args: { p_token: string }
@@ -1213,6 +1254,17 @@ export type Database = {
           band_name: string
           display_name: string
           instruments: string[]
+        }[]
+      }
+      peek_party_invite: {
+        Args: { p_token: string }
+        Returns: {
+          is_test: boolean
+          party_date: string
+          party_id: number
+          title: string
+          venue_area: string
+          venue_name: string
         }[]
       }
       purge_stale_test_parties: { Args: never; Returns: number }

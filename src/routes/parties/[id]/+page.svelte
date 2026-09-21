@@ -51,6 +51,39 @@
   let expandedApprovals = new Set<number>();
   let myInstrumentIds: number[] = []; // instruments the viewer plays (#32)
   let showShareModal = false;
+  // The invite link for a private toque (#113 part B). Fetched on demand, not on
+  // load: most toques are public, and minting a link nobody asked for would put
+  // a bearer credential in the database for every event in the app.
+  let inviteLink: string | null = null;
+  let inviteLinkBusy = false;
+  let inviteLinkCopied = false;
+
+  async function getInviteLink(regenerate = false) {
+    if (inviteLinkBusy) return;
+    inviteLinkBusy = true;
+    const { data, error: e } = await supabase.rpc('party_invite_link_token', {
+      p_party: party.id,
+      p_regenerate: regenerate
+    });
+    if (e) { reportError(e); inviteLinkBusy = false; return; }
+    inviteLink = `${window.location.origin}/parties/claim/${data}`;
+    inviteLinkCopied = false;
+    if (regenerate) toastSuccess('Enlace nuevo. El anterior dejó de servir.');
+    inviteLinkBusy = false;
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      inviteLinkCopied = true;
+      toastSuccess('Enlace copiado. Compártelo por WhatsApp.');
+    } catch {
+      // Clipboard can be refused (insecure context, permissions). The input
+      // below is selectable, so there is still a way through.
+      toastError('No se pudo copiar. Selecciona el enlace y cópialo a mano.');
+    }
+  }
   let partyAdmins: string[] = [];
   // Co-organizers as PRESENTED (order + who opted out), separate from the
   // permission list above. The creator is pinned first and isn't in this table,
@@ -1364,6 +1397,38 @@
         <Share2 class="w-5 h-5" />
       </button>
     </div>
+
+    <!-- Organisers only, and only while it is private: on a public toque the
+         flyer link above already works for everyone, so a second link would be
+         a credential handed out for nothing (#113 part B). -->
+    {#if canAdmin && party.visibility === 'private'}
+      <div class="mt-3 bg-base-900 rounded-lg p-4 flex flex-col gap-2">
+        <div class="text-white text-sm">Invitar por enlace</div>
+        <p class="text-cold-light text-sm leading-snug">
+          Para quienes aún no tienen cuenta. Quien abra el enlace e ingrese
+          quedará invitado — compártelo solo con quien quieras que venga.
+        </p>
+        {#if inviteLink}
+          <input readonly value={inviteLink} on:focus={(e) => e.currentTarget.select()}
+                 class="p-2 border rounded-lg text-sm w-full bg-base-950 text-white" />
+          <div class="flex flex-wrap gap-2">
+            <button type="button" on:click={copyInviteLink}
+                    class="bg-cold-base text-white rounded-lg px-4 py-2 text-sm inline-flex items-center gap-2">
+              <Copy size={15} /> {inviteLinkCopied ? 'Copiado' : 'Copiar enlace'}
+            </button>
+            <button type="button" on:click={() => getInviteLink(true)} disabled={inviteLinkBusy}
+                    class="border border-cold-light/40 text-cold-light hover:border-cold-light rounded-lg px-4 py-2 text-sm disabled:opacity-60">
+              Generar uno nuevo
+            </button>
+          </div>
+        {:else}
+          <button type="button" on:click={() => getInviteLink(false)} disabled={inviteLinkBusy}
+                  class="self-start border border-cold-light/40 text-cold-light hover:border-cold-light rounded-lg px-4 py-2 text-sm disabled:opacity-60">
+            {inviteLinkBusy ? 'Generando…' : 'Ver el enlace de invitación'}
+          </button>
+        {/if}
+      </div>
+    {/if}
     <div bind:this={setlistEl} class="flex items-center justify-between mt-4 mb-2 scroll-mt-4">
       <div>
         <h3 class="text-3xl text-white font-medium tracking-widest">SETLIST</h3>
