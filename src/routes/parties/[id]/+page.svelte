@@ -1009,6 +1009,10 @@
     setlistChannel = supabase
       .channel(`setlist-${pid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'performance', filter: `party=eq.${pid}` }, () => scheduleReload())
+      // party_set carries the RUNNING ORDER of the night (#110). Moving a block
+      // touches nothing else, so this page had the same blind spot as the live
+      // console (#115) — the blocks simply stayed where they were.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_set', filter: `party_id=eq.${pid}` }, () => scheduleReload())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'performance_user' }, (payload: any) => {
         const rid = payload.new?.performance_id ?? payload.old?.performance_id;
         if (rid && perfIdSet.has(rid)) scheduleReload();

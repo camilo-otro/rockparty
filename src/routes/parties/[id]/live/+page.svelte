@@ -15,6 +15,7 @@
   let partyId = 0;
   let party: any = null;
   let perfs: any[] = [];
+  let setOrderById: Record<number, number> = {};
   let songsById: Record<number, any> = {};
   let bandsById: Record<number, any> = {};
   let lineupByPerf: Record<number, string[]> = {};
@@ -36,7 +37,15 @@
   let pendingJump: number | null = null;
 
   $: canAdmin = !!currentUserId && (party?.created_by === currentUserId || partyAdmins.includes(currentUserId));
-  $: ordered = [...perfs].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.id - b.id);
+  // Named textually so legacy-mode reactivity follows BOTH: sorting by set
+  // needs setOrderById, and a `$:` that only mentions `perfs` would not re-run
+  // when the sets arrive.
+  $: ordered = [...perfs].sort(
+    (a, b) =>
+      (setOrderById[a.set_id] ?? 9999) - (setOrderById[b.set_id] ?? 9999) ||
+      (a.order ?? 9999) - (b.order ?? 9999) ||
+      a.id - b.id
+  );
   $: nowPlaying = ordered.find((p) => p.live_state === 'playing') ?? null;
   $: upcoming = ordered.filter((p) => p.live_state === 'queued');
   $: donePerfs = ordered.filter((p) => p.live_state === 'played' || p.live_state === 'skipped');
@@ -65,15 +74,30 @@
   }
 
   async function loadSetlist() {
-    const { data, error: e } = await supabase
-      .from('performance')
-      .select('id, song, order, band_id, live_state, started_at, ended_at')
-      .eq('party', partyId)
-      // Same reason as the detail page: physical row order shifts on every
-      // UPDATE, and the console updates rows constantly.
-      .order('order', { ascending: true, nullsFirst: false })
-      .order('id', { ascending: true });
+    // The night is a sequence of SETS and a set is a sequence of songs (#110),
+    // so `performance."order"` is a position WITHIN its block — never within the
+    // night. Ordering by it alone interleaves every band, one song each, which
+    // is what the console did through the first live show (#115).
+    //
+    // This is the same ordering start_show / advance_show / skip_song already
+    // use, so the console and the database now agree on what comes next.
+    const [perfRes, setRes] = await Promise.all([
+      supabase
+        .from('performance')
+        .select('id, song, order, band_id, set_id, live_state, started_at, ended_at')
+        .eq('party', partyId)
+        // Same reason as the detail page: physical row order shifts on every
+        // UPDATE, and the console updates rows constantly.
+        .order('order', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true }),
+      supabase.from('party_set').select('id, "order"').eq('party_id', partyId)
+    ]);
+    const { data, error: e } = perfRes;
     if (e) { error = e.message; return; }
+    if (setRes.error) { error = setRes.error.message; return; }
+    // `nulls last` in SQL terms: a row whose set somehow did not come back sorts
+    // after everything else rather than jumping to the front of the show.
+    setOrderById = Object.fromEntries((setRes.data ?? []).map((st: any) => [st.id, st.order]));
     perfs = data ?? [];
     const songIds = [...new Set(perfs.map((p) => p.song).filter(Boolean))] as number[];
     const bandIds = [...new Set(perfs.map((p) => p.band_id).filter(Boolean))] as number[];
@@ -146,6 +170,9 @@
     channel = supabase
       .channel('live-console-' + partyId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'performance', filter: 'party=eq.' + partyId }, () => { if (!busy) loadSetlist(); })
+      // Moving a band's block writes ONLY party_set, so without this the console
+      // never hears about it and keeps showing the old running order (#115).
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_set', filter: 'party_id=eq.' + partyId }, () => { if (!busy) loadSetlist(); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'party', filter: 'id=eq.' + partyId }, (payload: any) => { if (!busy) party = { ...party, ...payload.new }; })
       .subscribe();
   });
