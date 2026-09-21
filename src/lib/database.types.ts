@@ -365,6 +365,7 @@ export type Database = {
           status_changed_at: string
           title: string | null
           venue: number | null
+          visibility: Database["public"]["Enums"]["party_visibility"]
         }
         Insert: {
           approved_by_venue?: boolean
@@ -381,6 +382,7 @@ export type Database = {
           status_changed_at?: string
           title?: string | null
           venue?: number | null
+          visibility?: Database["public"]["Enums"]["party_visibility"]
         }
         Update: {
           approved_by_venue?: boolean
@@ -397,6 +399,7 @@ export type Database = {
           status_changed_at?: string
           title?: string | null
           venue?: number | null
+          visibility?: Database["public"]["Enums"]["party_visibility"]
         }
         Relationships: [
           {
@@ -447,6 +450,49 @@ export type Database = {
           },
           {
             foreignKeyName: "party_admin_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      party_invite: {
+        Row: {
+          created_at: string
+          invited_by: string | null
+          party_id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          invited_by?: string | null
+          party_id: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          invited_by?: string | null
+          party_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_invite_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_invite_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "party"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_invite_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profile"
@@ -1135,8 +1181,9 @@ export type Database = {
       end_show: { Args: { p_party: number }; Returns: undefined }
       is_band_manager: { Args: { bid: number }; Returns: boolean }
       is_dev: { Args: never; Returns: boolean }
-      is_song_moderator: { Args: never; Returns: boolean }
       is_party_admin: { Args: { pid: number }; Returns: boolean }
+      is_party_invited: { Args: { pid: number }; Returns: boolean }
+      is_song_moderator: { Args: never; Returns: boolean }
       jump_to_song: {
         Args: { p_party: number; p_performance: number }
         Returns: number
@@ -1255,6 +1302,7 @@ export type Database = {
         | "live"
         | "completed"
         | "cancelled"
+      party_visibility: "public" | "unlisted" | "private"
       performance_live_state: "queued" | "playing" | "played" | "skipped"
       performer_approval: "auto" | "organizer" | "proponent" | "invite_only"
       requirement_kind: "equipment" | "role"
@@ -1411,6 +1459,7 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      party_visibility: ["public", "unlisted", "private"],
       performance_live_state: ["queued", "playing", "played", "skipped"],
       performer_approval: ["auto", "organizer", "proponent", "invite_only"],
       requirement_kind: ["equipment", "role"],

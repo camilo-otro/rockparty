@@ -53,6 +53,10 @@ create type public.engagement_model as enum
 create type public.performer_approval as enum ('auto', 'organizer', 'proponent', 'invite_only');
 create type public.signup_status as enum ('pending', 'approved', 'declined');
 create type public.band_role as enum ('manager', 'member');
+-- Event visibility (#113 part B). `unlisted` is NOT an RLS concept — RLS
+-- cannot know whether you arrived with a link, so the database treats it like
+-- public and the CLIENT keeps it out of browse lists. `private` is the boundary.
+create type public.party_visibility as enum ('public', 'unlisted', 'private');
 
 -- ============================ LOOKUP TABLES ==================================
 
@@ -182,7 +186,8 @@ create table if not exists public.party (
   cancel_reason     text,           -- coded: 'venue_declined' / 'organizer'
   cancel_note       text,           -- optional free-text reason (shown to organizer)
   performer_approval public.performer_approval not null default 'auto',  -- who approves players (#29)
-  is_test           boolean not null default false  -- test data, dev-only (#67)
+  is_test           boolean not null default false,  -- test data, dev-only (#67)
+  visibility        public.party_visibility not null default 'public'  -- #113 part B
 );
 
 -- party_admin — who may administer a party (besides its creator), and how those
@@ -377,6 +382,31 @@ create table if not exists public.party_rsvp (
   primary key (party_id, user_id)
 );
 create index if not exists idx_party_rsvp_user on public.party_rsvp (user_id);
+
+-- is_party_invited (#113 part B): DEFINER, because a policy on `party` that read
+-- party_invite under RLS would send party_invite's policy back through
+-- is_party_admin -> party. Must be anon-executable: party's SELECT applies `to
+-- anon`, and a policy calling a function the caller cannot execute raises
+-- permission denied rather than evaluating false.
+--   is_party_invited(pid) -> boolean
+--
+-- keep_rsvps_as_invites (#113 part B): AFTER UPDATE OF visibility on party.
+-- Flipping to private converts existing RSVPs into invites, so nobody who was
+-- told they were going is silently dropped. Idempotent; does not revoke on the
+-- way back to public. See migrations/20260921_private_keeps_existing_rsvps.sql.
+
+-- party_invite — who may see a `private` toque (#113 part B). NO claim_token
+-- here on purpose: one shareable link per toque is a separate concern, because a
+-- token per invite row means every roster edit mints new links the organizer
+-- cannot tell apart (band-claim-link.md records that).
+create table if not exists public.party_invite (
+  party_id   bigint not null references public.party (id) on delete cascade,
+  user_id    uuid   not null references public.profile (id) on delete cascade,
+  invited_by uuid            references public.profile (id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (party_id, user_id)
+);
+create index if not exists idx_party_invite_user on public.party_invite (user_id);
 
 -- dev_user — developer accounts (#67). Members see test data (party/venue with
 -- is_test = true). NO insert/update/delete policy, so a user cannot self-escalate;
@@ -1906,6 +1936,7 @@ alter table public.equipment_suggestion enable row level security;
 alter table public.venue_equipment    enable row level security;
 alter table public.notification       enable row level security;
 alter table public.party_rsvp         enable row level security;
+alter table public.party_invite       enable row level security;
 alter table public.dev_user           enable row level security;
 alter table public.song_moderator     enable row level security;
 alter table public.band                   enable row level security;
@@ -2035,13 +2066,18 @@ create policy "select party: public statuses or owner/admins" on public.party
   for select to anon, authenticated
   using (
     (
-      status in ('confirmed', 'live', 'completed')
       -- is_party_admin IS `created_by = auth.uid() or exists(party_admin ...)`.
       -- Inlining it here closed a cycle once party_admin gained its own policy
       -- (which calls can_see_party, which reads party) — see
       -- migrations/20260921_party_policy_no_inline_subquery.sql.
-      or public.is_party_admin(id)
+      public.is_party_admin(id)
       or public.is_venue_admin(party.venue)
+      -- #113 part B. can_see_party is INVOKER and selects from here, so every
+      -- table gated on it inherits this rule without its own clause.
+      or (
+        status in ('confirmed', 'live', 'completed')
+        and (visibility <> 'private' or public.is_party_invited(id))
+      )
     )
     and (is_test = false or public.is_dev())
   );
@@ -2350,8 +2386,36 @@ $$;
 revoke all on function public.party_rsvp_count(bigint) from public;
 grant execute on function public.party_rsvp_count(bigint) to anon, authenticated;
 
-create policy "rsvp insert self" on public.party_rsvp
-  for insert to authenticated with check (user_id = (select auth.uid()));
+-- #114: this had NO condition on party_id, so anyone signed in could RSVP to
+-- anything — and can_see_venue_contact grants a private venue's address to
+-- whoever RSVP'd. The entitlement was self-granted. can_see_party is INVOKER, so
+-- this asks the caller's own view; for a private toque that means an invite.
+create policy "rsvp insert self, to a toque you can see" on public.party_rsvp
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and public.can_see_party(party_id)
+  );
+-- party_invite (#113 part B). is_party_admin is DEFINER, so none of these read
+-- `party` under RLS — which matters, because party's own SELECT policy calls
+-- is_party_invited and would otherwise close a cycle.
+create policy "party_invite: yours, or you run the toque" on public.party_invite
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    or public.is_party_admin(party_id)
+  );
+create policy "party_invite: organisers invite" on public.party_invite
+  for insert to authenticated with check (public.is_party_admin(party_id));
+-- A guest can also withdraw themselves; that is not the same act as an organizer
+-- removing them, but both end the same way.
+create policy "party_invite: organisers or the guest withdraw" on public.party_invite
+  for delete to authenticated
+  using (
+    user_id = (select auth.uid())
+    or public.is_party_admin(party_id)
+  );
+
 create policy "rsvp delete self" on public.party_rsvp
   for delete to authenticated using (user_id = (select auth.uid()));
 
