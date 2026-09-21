@@ -59,8 +59,10 @@
     const uid = currentUserId;
     const skipped = { data: [] as any[], count: null, error: null };
     const w1: any[] = await Promise.all([
+      // `unlisted` is hidden from BROWSE lists only — RLS treats it like public,
+      // because it cannot know whether you arrived with a link (#113 part B).
       supabase.from('party').select('id, title, date, venue, status, is_test')
-        .in('status', ['confirmed', 'live']).order('date', { ascending: true }),
+        .in('status', ['confirmed', 'live']).neq('visibility', 'unlisted').order('date', { ascending: true }),
       supabase.from('venue').select('id, name, area, is_test'),
       uid ? supabase.from('venue').select('id').eq('created_by', uid) : skipped,
       uid ? supabase.from('venue_admin').select('venue_id').eq('user_id', uid) : skipped,

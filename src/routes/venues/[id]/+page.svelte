@@ -59,10 +59,14 @@
       supabase.from('venue').select('*, type_ref:venue_type(name), contact_ref:venue_contact(address, whatsapp, contact_name, contact)').eq('id', Number(id)).single(),
       supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id)),
       supabase.from('venue_equipment').select('quantity, notes, equipment(name)').eq('venue_id', Number(id)),
+      // Browse list, so `unlisted` is filtered out (#113 part B). The pending
+      // queue below is NOT — a venue admin approving a toque has to see it
+      // whatever its listing.
       supabase.from('party')
         .select('id, title, date, venue, is_test')
         .eq('venue', Number(id))
         .in('status', ['confirmed', 'live'])
+        .neq('visibility', 'unlisted')
         .gte('date', todayStr)
         .order('date', { ascending: true }),
       // Pending-approval queue (only venue admins can read pending_venue toques

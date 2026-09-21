@@ -18,6 +18,10 @@
   export let isAuthenticated: boolean = false;
   export let initialAdmins: string[] = [];
   export let initialPerformerApproval: string = 'auto';
+  // #113 part B. `private` is the only one RLS enforces; `unlisted` is the
+  // client keeping it out of browse lists, because RLS cannot know whether
+  // somebody arrived with a link.
+  export let initialVisibility: string = 'public';
   export let submitLabel: string = 'Crear Toque';
   export let submittingLabel: string = 'Creando...';
   // When editing, the toque being edited shouldn't flag itself as a conflict.
@@ -54,6 +58,7 @@
   let date = initialDate;
   let selectedVenue = initialVenue;
   let performerApproval = initialPerformerApproval;
+  let visibility = initialVisibility;
   let isTest = initialIsTest ?? true;
   let admins: any[] = [];
   let adminInput = '';
@@ -122,6 +127,7 @@
       venue: selectedVenue,
       admins: admins.map(a => a.id),
       performerApproval,
+      visibility,
       // Non-devs can never create test data, regardless of local state.
       isTest: $isDev ? isTest : false
     });
@@ -161,6 +167,25 @@
       {/each}
     </select>
     <span class="text-sm text-cold-light mb-4">Los administradores del toque siempre pueden aprobar y sumar músicos.</span>
+
+    <label for="visibility" class="mb-1 mt-4">¿Quién puede ver este toque?</label>
+    <select id="visibility" bind:value={visibility} class="p-2 mb-1 border rounded-lg">
+      <option value="public">Público — aparece en la lista de toques</option>
+      <option value="unlisted">No listado — solo quien tenga el enlace</option>
+      <option value="private">Privado — solo por invitación</option>
+    </select>
+    <!-- Stated as a consequence rather than a setting name, the same way the
+         venue privacy checkbox is (#113): someone choosing this needs to know
+         what changes, not what it is called. -->
+    <span class="text-sm text-cold-light mb-4">
+      {#if visibility === 'public'}
+        Cualquiera puede verlo y confirmar asistencia.
+      {:else if visibility === 'unlisted'}
+        No aparece en las listas, pero cualquiera con el enlace puede verlo y confirmar asistencia.
+      {:else}
+        Solo quienes invites pueden verlo. Quienes ya confirmaron asistencia mantienen el acceso.
+      {/if}
+    </span>
 
     <label for="admins" class="mb-1 mt-4">Administradores del toque</label>
     <div class="mb-2">
