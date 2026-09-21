@@ -65,10 +65,13 @@ carry the deeper detail; this is the at-a-glance map.
   Google OAuth **authorized redirect URIs** must include
   `https://rockthehouse.app` (plus `http://localhost:5173` for local dev).
   Re-check these after any Supabase project restore.
-- **Scheduled jobs:** `pg_cron` (installed) runs the daily jobs — the day-before
-  toque reminder (#35 / #57) at 14:00, and `purge-stale-test-parties` at 15:00,
+- **Scheduled jobs:** `pg_cron` (installed) runs three — the day-before toque
+  reminder (#35 / #57) daily at 14:00; `purge-stale-test-parties` daily at 15:00,
   which **hard-deletes** test toques that are cancelled (>1 day) or past-dated,
-  cascading to their setlists, signups, RSVPs and applause. Definitions live in
+  cascading to their setlists, signups, RSVPs and applause; and
+  `auto-end-stale-shows` **hourly**, which completes a toque left `live` for more
+  than 12 hours (ending the show is the last thing anyone remembers to tap — one
+  real toque had been live for 351 hours). Definitions live in
   `supabase/migrations/`. Gotcha learned the hard way: for a `SECURITY DEFINER`
   function, `revoke ... from anon, authenticated` is a **no-op** — those roles
   inherit EXECUTE from `PUBLIC`. Revoke from `PUBLIC`.

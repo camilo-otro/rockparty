@@ -1821,6 +1821,20 @@ create trigger party_status_notify
 -- bulk delete callable by anon. See migrations/20260907_purge_revoke_from_public.sql.
 --   purge_stale_test_parties() -> integer  (rows deleted)
 
+-- auto_end_stale_shows (#37 follow-up): closes a show nobody ended. Twelve hours
+-- after a toque went live — measured from status_changed_at, which the
+-- party_status_changed trigger sets, NOT from party.date, which has no time of
+-- day. Does exactly what end_show does minus the person: closes the song left
+-- `playing` and sets the toque `completed`. Leaves `queued` songs alone — a set
+-- that never played did not play, and inventing history to tidy the row would be
+-- worse than the untidy row.
+-- Silent by construction: notify_party_status fires on confirmed / cancelled /
+-- pending_venue / live, never on completed, so this cannot wake a room at 4am.
+-- Scheduled HOURLY via pg_cron ('auto-end-stale-shows') — daily would let a show
+-- run up to 36 hours and make "12 hours" meaningless.
+-- Found because a real toque had been live for 351 hours.
+--   auto_end_stale_shows() -> integer  (toques closed)
+
 -- notify_upcoming_toques (#51): day-before reminder for confirmed toques →
 -- organizer + approved performers. Scheduled daily via pg_cron (job
 -- 'daily-toque-reminders'); see migrations/20260825_notification_producers.sql.
