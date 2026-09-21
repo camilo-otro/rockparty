@@ -49,6 +49,19 @@
   $: nowPlaying = ordered.find((p) => p.live_state === 'playing') ?? null;
   $: upcoming = ordered.filter((p) => p.live_state === 'queued');
   $: donePerfs = ordered.filter((p) => p.live_state === 'played' || p.live_state === 'skipped');
+  // The queue, grouped into the blocks it is already ordered by, so a band's
+  // name is said once instead of on every row. Consecutive runs rather than a
+  // group-by: a band can hold two blocks in one night (#110), and those are two
+  // turns on stage, not one.
+  $: upcomingBlocks = upcoming.reduce((acc: any[], p: any) => {
+    const last = acc[acc.length - 1];
+    if (last && last.setId === p.set_id) last.items.push(p);
+    else acc.push({ setId: p.set_id, bandId: p.band_id ?? null, items: [p] });
+    return acc;
+  }, []);
+  // "How many from now", counted across the whole queue — the number has to keep
+  // running through the blocks, so it cannot be the index inside one.
+  $: upcomingIndexById = Object.fromEntries(upcoming.map((p, i) => [p.id, i + 1]));
   $: isLive = party?.status === 'live';
   $: isOver = party?.status === 'completed';
 
@@ -112,7 +125,7 @@
     const bandIds = [...new Set(perfs.map((p) => p.band_id).filter(Boolean))] as number[];
     const [songsRes, bandsRes, puRes] = await Promise.all([
       songIds.length ? supabase.from('song').select('id, title, artist').in('id', songIds) : Promise.resolve({ data: [] as any[] }),
-      bandIds.length ? supabase.from('band').select('id, name').in('id', bandIds) : Promise.resolve({ data: [] as any[] }),
+      bandIds.length ? supabase.from('band').select('id, name, avatar_url').in('id', bandIds) : Promise.resolve({ data: [] as any[] }),
       perfs.length ? supabase.from('performance_user').select('performance_id, user_id, status').in('performance_id', perfs.map((p) => p.id)) : Promise.resolve({ data: [] as any[] })
     ]);
     if (seq !== loadSeq) return;
@@ -305,8 +318,33 @@
             {upcoming.length ? 'Faltan ' + upcoming.length + ' · toca una para adelantarla' : 'No queda nada por tocar'}
           </span>
           {#if upcoming.length}
-            <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip">
-              {#each upcoming as p, i (p.id)}
+            <!-- Blocks are ALWAYS open here. The detail page can collapse one,
+                 but it already refuses to collapse the set holding the pointer —
+                 "a closed box while the band is on stage is the opposite of what
+                 live mode is for". On the console every block is that case, and
+                 a chevron would compete with tapping a row to jump to it. -->
+            <div class="flex flex-col gap-2">
+              {#each upcomingBlocks as blk (blk.setId)}
+                {@const band = blk.bandId ? bandsById[blk.bandId] : null}
+                {@const onStage = nowPlaying?.set_id === blk.setId}
+                <div class="rounded-lg overflow-clip {onStage ? 'border-l-2 border-warm-base' : ''}">
+                  {#if band}
+                    <div class="bg-base-900 px-4 py-2 flex items-center gap-3 border-b border-base-950">
+                      {#if band.avatar_url}
+                        <img src={band.avatar_url} alt="" class="w-8 h-8 rounded-full object-cover border border-cold-base shrink-0" />
+                      {:else}
+                        <span class="w-8 h-8 rounded-full bg-base-950 border border-cold-base flex items-center justify-center shrink-0"><Users size={15} class="text-cold-light" /></span>
+                      {/if}
+                      <div class="min-w-0 flex-1">
+                        <div class="text-white truncate">{band.name}</div>
+                        <div class="text-xs uppercase tracking-wide {onStage ? 'text-warm-base' : 'text-cold-light'}">
+                          {#if onStage}En escena · {/if}Quedan {blk.items.length}
+                        </div>
+                      </div>
+                    </div>
+                  {/if}
+            <ul class="flex flex-col gap-[1px]">
+              {#each blk.items as p (p.id)}
                 <!-- What actually plays after this one: the lowest-order song still
                      queued, i.e. the first upcoming that isn't this one. Naming it
                      beats describing the rule. `upcoming` is referenced here so the
@@ -320,7 +358,7 @@
                         <p class="text-cold-light text-xs leading-snug mt-1">
                           {#if !nextUp}
                             Suena ahora. Es la última que queda pendiente.
-                          {:else if i === 0}
+                          {:else if upcomingIndexById[p.id] === 1}
                             Suena ahora — es la que seguía de todos modos.
                           {:else}
                             Suena ahora. Al terminar sigue «{songTitle(nextUp)}» — las anteriores no se pierden.
@@ -339,18 +377,20 @@
                   {:else}
                     <button type="button" on:click={() => (pendingJump = p.id)} disabled={busy}
                             class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-base-950 transition disabled:opacity-60">
-                      <span class="text-gray-400 text-xl w-6 shrink-0">{i + 1}</span>
+                      <span class="text-gray-400 text-xl w-6 shrink-0">{upcomingIndexById[p.id]}</span>
                       <div class="min-w-0 flex-1">
                         <div class="text-yellow truncate">{songTitle(p)}</div>
-                        <div class="text-sm text-cold-light truncate">
-                          {songArtist(p)}{#if bandName(p)} · {bandName(p)}{/if}
-                        </div>
+                        <!-- The band is named once, in the block header above. -->
+                        <div class="text-sm text-cold-light truncate">{songArtist(p)}</div>
                       </div>
                     </button>
                   {/if}
                 </li>
               {/each}
             </ul>
+                </div>
+              {/each}
+            </div>
           {/if}
         </div>
 
