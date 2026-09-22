@@ -394,6 +394,19 @@ create index if not exists idx_party_rsvp_user on public.party_rsvp (user_id);
 -- Flipping to private converts existing RSVPs into invites, so nobody who was
 -- told they were going is silently dropped. Idempotent; does not revoke on the
 -- way back to public. See migrations/20260921_private_keeps_existing_rsvps.sql.
+--
+-- The invite-link RPCs (#113 part B), all DEFINER — see
+-- migrations/20260921_party_invite_link.sql:
+--   peek_party_invite(token) -> title, date, venue NAME and AREA, is_test.
+--     Deliberately thin and anon-executable: a private toque is usually somebody's
+--     house, so this never touches venue_contact. Returns nothing for an unknown
+--     token, so a guesser cannot tell "wrong" from "revoked".
+--   claim_party_invite(token) -> party_id. Writes the party_invite row an
+--     organizer would have written, crediting the link's creator. Idempotent.
+--     authenticated only; raises if not signed in.
+--   party_invite_link_token(party, regenerate default false) -> uuid. Mints on
+--     first ask, returns the same token after, and replaces it when regenerate
+--     is true. Guarded by is_party_admin. authenticated only.
 
 -- party_invite — who may see a `private` toque (#113 part B). NO claim_token
 -- here on purpose: one shareable link per toque is a separate concern, because a
@@ -407,6 +420,25 @@ create table if not exists public.party_invite (
   primary key (party_id, user_id)
 );
 create index if not exists idx_party_invite_user on public.party_invite (user_id);
+
+-- party_invite_link — ONE shareable link per toque (#113 part B), the half named
+-- invites cannot reach: party_invite needs a user_id, so it only works for
+-- someone who already has an account, and the scene runs on WhatsApp. Opening
+-- the link previews the toque, signing in claims it, and claiming writes the
+-- same party_invite row an organizer would have written by hand.
+--
+-- Its own table, not a column on `party`: a token on a publicly-SELECTable table
+-- would need the column-grant dance from profile.email, and `party`'s column
+-- list is a standing liability that grows. The link is a BEARER credential —
+-- regenerating is the remedy, and the UI says so.
+create table if not exists public.party_invite_link (
+  party_id   bigint primary key references public.party (id) on delete cascade,
+  token      uuid not null default gen_random_uuid(),
+  created_by uuid references public.profile (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists idx_party_invite_link_token
+  on public.party_invite_link (token);
 
 -- dev_user — developer accounts (#67). Members see test data (party/venue with
 -- is_test = true). NO insert/update/delete policy, so a user cannot self-escalate;
@@ -1937,6 +1969,7 @@ alter table public.venue_equipment    enable row level security;
 alter table public.notification       enable row level security;
 alter table public.party_rsvp         enable row level security;
 alter table public.party_invite       enable row level security;
+alter table public.party_invite_link  enable row level security;
 alter table public.dev_user           enable row level security;
 alter table public.song_moderator     enable row level security;
 alter table public.band                   enable row level security;
@@ -2105,21 +2138,14 @@ create policy "party_admin: yours, your co-organisers', or not hidden" on public
     or public.is_party_admin(party_id)
     or (hidden = false and public.can_see_party(party_id))
   );
-create policy "allow Insert to party owner and other party admins" on public.party_admin
-  for insert to authenticated with check (
-    ((select party.created_by from public.party where party.id = party_admin.party_id) = (select auth.uid()))
-    or exists (
-      select 1 from public.party_admin party_admin_1
-      where party_admin_1.party_id = party_admin.party_id and party_admin_1.user_id = (select auth.uid())
-    )
-  );
-create policy "Enable delete for party admins" on public.party_admin
-  for delete to authenticated using (
-    ((select auth.uid()) = user_id)
-    or exists (
-      select 1 from public.party_admin party_admin_1
-      where party_admin_1.party_id = party_admin.party_id and party_admin_1.user_id = auth.uid()
-    )
+create policy "party_admin: organisers add organisers" on public.party_admin
+  for insert to authenticated
+  with check (public.is_party_admin(party_id));
+create policy "party_admin: organisers remove, or you remove yourself" on public.party_admin
+  for delete to authenticated
+  using (
+    user_id = (select auth.uid())
+    or public.is_party_admin(party_id)
   );
 -- Permissive union of both actors; party_admin_presentation_guard (above) decides
 -- which COLUMN each of them may actually touch.
@@ -2190,37 +2216,16 @@ create policy "insert performance: not into another band's block" on public.perf
         and not public.can_sign_up_band(s.band_id)
     )
   );
-create policy "Enable Update for authenticated users only" on public.performance
-  for update to authenticated using (
-    exists (
-      select 1 from public.party p
-      where p.id = performance.party
-        and (
-          p.created_by = (select auth.uid())
-          or exists (
-            select 1 from public.party_admin pa
-            where pa.party_id = p.id and pa.user_id = (select auth.uid())
-          )
-        )
-    )
-  );
+create policy "update performance: party admins" on public.performance
+  for update to authenticated
+  using (public.is_party_admin(performance.party));
 -- Remove a song from a setlist (#62): party creator/admin, OR the song's own
 -- suggester retracting their suggestion (#77 — powers multi-add "remove", incl.
 -- non-admin band managers). Cascades to performance_user (FK ON DELETE CASCADE).
 create policy "delete performance: admins or suggester" on public.performance
   for delete to authenticated using (
     performance.suggested_by = (select auth.uid())
-    or exists (
-      select 1 from public.party p
-      where p.id = performance.party
-        and (
-          p.created_by = (select auth.uid())
-          or exists (
-            select 1 from public.party_admin pa
-            where pa.party_id = p.id and pa.user_id = (select auth.uid())
-          )
-        )
-    )
+    or public.is_party_admin(performance.party)
   );
 
 -- ---- performance_user -------------------------------------------------------
@@ -2235,8 +2240,7 @@ create policy "signup select: approved public, else owner/approvers" on public.p
     or exists (
       select 1 from public.performance perf join public.party pt on pt.id = perf.party
       where perf.id = performance_user.performance_id and (
-        pt.created_by = (select auth.uid())
-        or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+        public.is_party_admin(pt.id)
         or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
       )
     )
@@ -2252,8 +2256,7 @@ create policy "signup insert: self, admin, or proponent" on public.performance_u
       or exists (
         select 1 from public.performance perf join public.party pt on pt.id = perf.party
         where perf.id = performance_user.performance_id and (
-          pt.created_by = (select auth.uid())
-          or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+          public.is_party_admin(pt.id)
           or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
         )
       )
@@ -2267,8 +2270,7 @@ create policy "signup update: self, admin, or proponent" on public.performance_u
       or exists (
         select 1 from public.performance perf join public.party pt on pt.id = perf.party
         where perf.id = performance_user.performance_id and (
-          pt.created_by = (select auth.uid())
-          or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+          public.is_party_admin(pt.id)
           or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
         )
       )
@@ -2282,8 +2284,7 @@ create policy "signup delete: self, admin, or proponent" on public.performance_u
       or exists (
         select 1 from public.performance perf join public.party pt on pt.id = perf.party
         where perf.id = performance_user.performance_id and (
-          pt.created_by = (select auth.uid())
-          or exists (select 1 from public.party_admin pa where pa.party_id = pt.id and pa.user_id = (select auth.uid()))
+          public.is_party_admin(pt.id)
           or (pt.performer_approval = 'proponent' and perf.suggested_by = (select auth.uid()))
         )
       )
@@ -2415,6 +2416,12 @@ create policy "party_invite: organisers or the guest withdraw" on public.party_i
     user_id = (select auth.uid())
     or public.is_party_admin(party_id)
   );
+-- Organizers only, and only here: peek/claim below are DEFINER and take the
+-- token as an argument, so nobody else ever needs to read this table. No
+-- insert/update/delete policy — party_invite_link_token() is the only writer.
+create policy "party_invite_link: organisers only" on public.party_invite_link
+  for select to authenticated
+  using (public.is_party_admin(party_id));
 
 create policy "rsvp delete self" on public.party_rsvp
   for delete to authenticated using (user_id = (select auth.uid()));
