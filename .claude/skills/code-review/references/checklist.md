@@ -19,6 +19,32 @@ security** — only RLS is.
   `created_by = auth.uid()` or membership in `venue_admin`/`party_admin`. Known
   soft spot: `performance` UPDATE has historically been open — scrutinize any new
   open mutation policy.
+- **A policy must never read its own table, and should not inline another's.**
+  CLAUDE.md's rule is that a table referenced in a policy is read AS THE CALLER,
+  so its policies apply again — use the DEFINER helper (`is_party_admin`,
+  `is_venue_admin`, `can_edit_set`, …). A policy that reads its OWN table
+  recurses on its own, with no help from anywhere else. This is not theoretical:
+  on 2026-09-18 narrowing `party_admin`'s SELECT gave a previously trivial policy
+  a body, closed a loop that had been latent for months, and took out toque
+  creation for three days with `42501 infinite recursion detected`. It was
+  invisible until somebody tried to create one.
+  **Do not reason about the chains — ask the database.** One query, one second:
+
+  ```sql
+  -- any policy that reads its own table: these WILL recurse
+  select c.relname, p.polname
+  from pg_policy p join pg_class c on c.oid = p.polrelid
+  where coalesce(pg_get_expr(p.polqual, p.polrelid), '')      ~* ('from\s+(public\.)?' || c.relname || '\M')
+     or coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') ~* ('from\s+(public\.)?' || c.relname || '\M');
+  ```
+
+  Run it after ANY policy change, not just one that looks risky — the change that
+  breaks things is usually to a different table than the one that fails.
+- **Recreating a policy? Diff `polroles` and `polwithcheck` first.** Omitting
+  `with check` does not preserve it: Postgres silently reuses the USING clause,
+  which is a different rule. A "behaviour-preserving" rewrite of `party`'s UPDATE
+  policy quietly tightened it this way, because the original's `with check (true)`
+  was never checked.
 - **Secrets:** only `PUBLIC_`-prefixed env vars belong client-side. The anon key
   is public by design; the **service_role key must never** appear in client code,
   committed files, or `PUBLIC_` vars. Flag any hard-coded key/token.
