@@ -5,6 +5,7 @@
   import { normalizeText } from '$lib/sanitize';
   import { isDev } from '$lib/stores/userFlags';
   import { searchPeople, peopleByIds } from '$lib/peopleSearch';
+  import { groupEquipment, type EquipmentOption } from '$lib/equipment';
   export let submitting = false;
   export let initialName = '';
   // #113. `area` is the coarse location EVERYONE sees; `address` is the exact
@@ -81,6 +82,59 @@
         notes: cur?.notes ?? ''
       };
     });
+  }
+
+  // Two-level catalogue (#106 follow-up): parts stay hidden until their parent
+  // is on. Named in the reactive statement rather than read inside a helper —
+  // legacy mode tracks by NAME, so `$: groups = groupEquipment(equipmentOptions)`
+  // is what makes this re-run when the options land.
+  $: equipmentGroups = groupEquipment(equipmentOptions as EquipmentOption[]);
+  $: rowById = new Map(equipmentRows.map((r) => [r.id, r]));
+  // Parent state by item id, named so legacy mode re-runs the filter below when
+  // a switch flips. Today no venue has a part without its parent, but the form
+  // must not be the thing that creates one.
+  $: parentSelected = new Map(
+    (equipmentOptions as EquipmentOption[]).map((o) => [o.id, !!rowById.get(o.id)?.selected])
+  );
+  $: partOf = new Map((equipmentOptions as EquipmentOption[]).map((o) => [o.id, o.part_of]));
+  $: selectedEquipment = equipmentRows.filter((r) => {
+    if (!r.selected) return false;
+    const parent = partOf.get(r.id);
+    return parent == null || parentSelected.get(parent) === true;
+  });
+
+  // What the parts were the last time the parent was switched off, so switching
+  // it back on restores the answer instead of re-deriving one.
+  const stashedParts = new Map<number, Set<number>>();
+
+  function toggleParent(parentId: number, parts: EquipmentOption[]) {
+    const parent = rowById.get(parentId);
+    if (!parent) return;
+    const turningOn = !parent.selected;
+    toggleEquipment(parent);
+
+    if (!turningOn) {
+      // A part of something the venue does not have is not a claim, so the parts
+      // go off with the parent — but remember them first.
+      stashedParts.set(parentId, new Set(parts.filter((p) => rowById.get(p.id)?.selected).map((p) => p.id)));
+      for (const p of parts) {
+        const row = rowById.get(p.id);
+        if (row) row.selected = false;
+      }
+    } else {
+      // Defaults apply only on a parent that was never on: a venue that already
+      // has a kit opens with the parent ALREADY selected, so editing one can
+      // never reach this branch and can never have parts re-ticked underneath
+      // it. Toggling off and back on restores what was there, not the defaults.
+      const stash = stashedParts.get(parentId);
+      for (const p of parts) {
+        const row = rowById.get(p.id);
+        if (!row) continue;
+        row.selected = stash ? stash.has(p.id) : p.default_on;
+        if (row.selected && (row.quantity ?? 0) < 1) row.quantity = 1;
+      }
+    }
+    equipmentRows = equipmentRows;
   }
   let requiresApproval = initialRequiresApproval;
   let engagementModel = initialEngagementModel;
@@ -196,7 +250,9 @@
       allowsParties,
       allowsRehearsals,
       admins: admins.map(a => a.id),
-      equipment: equipmentRows.filter((r) => r.selected).map((r) => ({
+      // `selectedEquipment`, not a raw filter: a part whose parent is off is not
+      // rendered, so saving it would persist a claim nobody could see or undo.
+      equipment: selectedEquipment.map((r) => ({
         equipment_id: r.id,
         quantity: r.quantity === null || r.quantity === undefined || (r.quantity as any) === '' ? null : Number(r.quantity),
         notes: r.notes && r.notes.trim() ? r.notes.trim() : null
@@ -315,42 +371,88 @@
 
     <!-- Equipo / backline (#30) -->
     <h3 class="text-lg text-yellow mt-4 mb-2">Equipo disponible</h3>
-    <div class="flex flex-col gap-2 mb-2">
-      {#each equipmentRows as row (row.id)}
-        <div class="{row.selected ? 'bg-base-900 rounded-lg p-3' : ''}">
-          <button
-            type="button"
-            on:click={() => toggleEquipment(row)}
-            aria-pressed={row.selected}
-            class="px-3 py-1 rounded-full text-sm transition border {row.selected
-              ? 'bg-cold-base text-white border-cold-base'
-              : 'bg-base-900 text-cold-light border-base-900 hover:border-cold-light'}"
-          >
-            {row.name}
-          </button>
-          {#if row.selected}
-            <div class="mt-3 flex flex-col gap-2">
-              <div class="flex flex-row items-center gap-3">
-                <span class="text-sm text-cold-light">Cantidad</span>
-                <div class="inline-flex items-center rounded-lg border overflow-hidden">
-                  <button type="button" on:click={() => stepQuantity(row, -1)} disabled={(row.quantity ?? 1) <= 1}
-                    class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950 disabled:opacity-40 disabled:hover:bg-transparent"
-                    aria-label="Disminuir cantidad de {row.name}">−</button>
-                  <span class="px-3 min-w-[2.5ch] text-center text-white" aria-live="polite">{row.quantity ?? 1}</span>
-                  <button type="button" on:click={() => stepQuantity(row, 1)}
-                    class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950"
-                    aria-label="Aumentar cantidad de {row.name}">+</button>
-                </div>
+    <div class="flex flex-col gap-4 mb-2">
+      {#each equipmentGroups as group (group.category)}
+        <div class="flex flex-col gap-2">
+          <h4 class="text-xs uppercase tracking-wide text-cold-light/70">{group.label}</h4>
+          {#each group.items as entry (entry.item.id)}
+            {@const row = rowById.get(entry.item.id)}
+            {#if row}
+              <div class="{row.selected ? 'bg-base-900 rounded-lg p-3' : ''}">
+                <button
+                  type="button"
+                  on:click={() => (entry.parts.length ? toggleParent(row.id, entry.parts) : toggleEquipment(row))}
+                  aria-pressed={row.selected}
+                  class="px-3 py-1 rounded-full text-sm transition border {row.selected
+                    ? 'bg-cold-base text-white border-cold-base'
+                    : 'bg-base-900 text-cold-light border-base-900 hover:border-cold-light'}"
+                >
+                  {row.name}
+                </button>
+                {#if row.selected}
+                  <div class="mt-3 flex flex-col gap-2">
+                    <div class="flex flex-row items-center gap-3">
+                      <span class="text-sm text-cold-light">Cantidad</span>
+                      <div class="inline-flex items-center rounded-lg border overflow-hidden">
+                        <button type="button" on:click={() => stepQuantity(row, -1)} disabled={(row.quantity ?? 1) <= 1}
+                          class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950 disabled:opacity-40 disabled:hover:bg-transparent"
+                          aria-label="Disminuir cantidad de {row.name}">−</button>
+                        <span class="px-3 min-w-[2.5ch] text-center text-white" aria-live="polite">{row.quantity ?? 1}</span>
+                        <button type="button" on:click={() => stepQuantity(row, 1)}
+                          class="px-3 py-1 text-lg leading-none text-cold-light hover:bg-base-950"
+                          aria-label="Aumentar cantidad de {row.name}">+</button>
+                      </div>
+                    </div>
+                    <AutocompleteInput
+                      bind:value={row.notes}
+                      suggestions={notesSuggestions[row.id] ?? []}
+                      placeholder="Marca, modelo, tamaño..."
+                      maxlength={200}
+                      ariaLabel={`Descripción de ${row.name}`}
+                    />
+
+                    <!-- Parts, revealed only once the parent is on (#106
+                         follow-up). Indented and rail-marked so they read as
+                         belonging to the item above rather than as siblings. -->
+                    {#if entry.parts.length}
+                      <div class="mt-1 pl-3 border-l border-cold-light/25 flex flex-col gap-2">
+                        <span class="text-xs text-cold-light/70">¿Qué partes tiene?</span>
+                        <div class="flex flex-wrap gap-2">
+                          {#each entry.parts as part (part.id)}
+                            {@const partRow = rowById.get(part.id)}
+                            {#if partRow}
+                              <button
+                                type="button"
+                                on:click={() => toggleEquipment(partRow)}
+                                aria-pressed={partRow.selected}
+                                class="px-3 py-1 rounded-full text-sm transition border {partRow.selected
+                                  ? 'bg-cold-base text-white border-cold-base'
+                                  : 'bg-base-950 text-cold-light border-base-950 hover:border-cold-light'}"
+                              >
+                                {partRow.name}
+                              </button>
+                            {/if}
+                          {/each}
+                        </div>
+                        {#each entry.parts as part (part.id)}
+                          {@const partRow = rowById.get(part.id)}
+                          {#if partRow?.selected}
+                            <AutocompleteInput
+                              bind:value={partRow.notes}
+                              suggestions={notesSuggestions[partRow.id] ?? []}
+                              placeholder="{partRow.name}: marca, modelo, tamaño..."
+                              maxlength={200}
+                              ariaLabel={`Descripción de ${partRow.name}`}
+                            />
+                          {/if}
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
               </div>
-              <AutocompleteInput
-                bind:value={row.notes}
-                suggestions={notesSuggestions[row.id] ?? []}
-                placeholder="Marca, modelo, tamaño..."
-                maxlength={200}
-                ariaLabel={`Descripción de ${row.name}`}
-              />
-            </div>
-          {/if}
+            {/if}
+          {/each}
         </div>
       {/each}
     </div>

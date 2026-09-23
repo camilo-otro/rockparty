@@ -3,6 +3,7 @@
   import { supabase } from '$lib/supabaseClient';
   import { Plus, Trash2, AlertTriangle, Check, Download, X, UserPlus, Square, CheckSquare, History, ChevronDown, ChevronUp } from 'lucide-svelte';
   import { reportError, toastSuccess } from '$lib/stores/toasts';
+  import { EQUIPMENT_COLS, categoryLabel, type EquipmentOption } from '$lib/equipment';
 
   // Event logistics (#95). Stage 1: what this toque needs and where each piece
   // comes from, with the GAP LIST as the headline. Stage 2: a name on it, a
@@ -45,7 +46,7 @@
   let loaded = false;
   let busy = false;
 
-  let equipment: { id: number; name: string; category: string | null; default_quantity: number | null }[] = [];
+  let equipment: EquipmentOption[] = [];
   let roles: { id: number; name: string }[] = [];
   let catalogueLoaded = false;
   let venueEquipment: { equipment_id: number; quantity: number | null; notes: string | null }[] = [];
@@ -119,7 +120,7 @@
   async function loadCatalogue() {
     if (catalogueLoaded) return;
     const [eqRes, roleRes] = await Promise.all([
-      supabase.from('equipment').select('id, name, category, default_quantity').order('id'),
+      supabase.from('equipment').select(EQUIPMENT_COLS).order('sort_order'),
       supabase.from('party_role').select('id, name').order('id')
     ]);
     equipment = eqRes.data ?? [];
@@ -608,8 +609,11 @@
                 <option value="">Selecciona…</option>
                 {#if formKind === 'equipment'}
                   {#each Object.entries(equipmentByCategory) as [category, items]}
-                    <optgroup label={category}>
-                      {#each items as e}<option value={String(e.id)}>{e.name}</option>{/each}
+                    <optgroup label={categoryLabel(category)}>
+                      <!-- A <select> cannot nest optgroups, so a part is marked
+                           with a lead-in instead. The catalogue's sort_order
+                           already places it directly under its parent. -->
+                      {#each items as e}<option value={String(e.id)}>{e.part_of != null ? `  · ${e.name}` : e.name}</option>{/each}
                     </optgroup>
                   {/each}
                 {:else}

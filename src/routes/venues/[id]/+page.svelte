@@ -27,7 +27,7 @@
   let currentUserId: string | null = null;
   let upcomingParties: any[] = [];
   let pendingParties: any[] = [];
-  let equipment: { name: string; quantity: number | null; notes: string | null }[] = [];
+  let equipment: { name: string; quantity: number | null; notes: string | null; isPart: boolean; order: number }[] = [];
 
   $: isVenueAdmin = !!currentUserId && (venue?.created_by === currentUserId || venueAdmins.includes(currentUserId));
 
@@ -58,7 +58,7 @@
       // round trip — and comes back null when the viewer is not entitled to it.
       supabase.from('venue').select('*, type_ref:venue_type(name), contact_ref:venue_contact(address, whatsapp, contact_name, contact)').eq('id', Number(id)).single(),
       supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id)),
-      supabase.from('venue_equipment').select('quantity, notes, equipment(name)').eq('venue_id', Number(id)),
+      supabase.from('venue_equipment').select('quantity, notes, equipment(name, sort_order, part_of)').eq('venue_id', Number(id)),
       // Browse list, so `unlisted` is filtered out (#113 part B). The pending
       // queue below is NOT — a venue admin approving a toque has to see it
       // whatever its listing.
@@ -84,9 +84,20 @@
       venue = venueRes.data;
       venueType = (venueRes.data as any)?.type_ref ?? null;
       venueAdmins = (adminRes.data ?? []).map((a: any) => a.user_id);
+      // Sorted by the catalogue's own order, not by insertion: it is what keeps
+      // the drum parts adjacent to the kit they belong to (#106 follow-up).
+      // Done here rather than in the query because PostgREST orders the EMBED,
+      // not the parent row, when given an embedded column.
       equipment = (equipRes.data ?? [])
-        .map((r: any) => ({ name: r.equipment?.name, quantity: r.quantity, notes: r.notes }))
-        .filter((e: any) => e.name);
+        .map((r: any) => ({
+          name: r.equipment?.name,
+          quantity: r.quantity,
+          notes: r.notes,
+          isPart: r.equipment?.part_of != null,
+          order: r.equipment?.sort_order ?? 0
+        }))
+        .filter((e: any) => e.name)
+        .sort((a: any, b: any) => a.order - b.order);
       upcomingParties = partyRes.data ?? [];
       pendingParties = pendingRes.data ?? [];
     }
@@ -181,8 +192,12 @@
         {:else}
           <ul class="flex flex-col gap-2">
             {#each equipment as item}
-              <li>
-                <span class="px-3 py-1 rounded-full text-sm bg-cold-base text-white inline-block">
+              <!-- A part sits indented under the item it belongs to, so "Ride"
+                   reads as part of the kit rather than as loose gear. -->
+              <li class={item.isPart ? 'pl-4 border-l border-cold-light/25' : ''}>
+                <span class="px-3 py-1 rounded-full text-sm inline-block {item.isPart
+                  ? 'bg-base-900 text-cold-light'
+                  : 'bg-cold-base text-white'}">
                   {item.name}{#if item.quantity} ×{item.quantity}{/if}
                 </span>
                 {#if item.notes}<div class="text-cold-light text-sm mt-1 break-words">{item.notes}</div>{/if}

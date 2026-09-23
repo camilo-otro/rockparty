@@ -4,6 +4,7 @@ import { onMount } from 'svelte';
 import { page } from '$app/state';
 import { supabase } from '$lib/supabaseClient';
 import VenueForm from '$lib/components/VenueForm.svelte';
+import { EQUIPMENT_COLS } from '$lib/equipment';
 import { ChevronLeft } from 'lucide-svelte';
 import { goto } from '$app/navigation';
 import { user } from '$lib/stores/user';
@@ -33,7 +34,7 @@ onMount(async () => {
       supabase.from('venue').select('*, contact_ref:venue_contact(address, whatsapp, contact_name, contact)').eq('id', Number(id)).single(),
       supabase.from('venue_type').select('id, name'),
       supabase.from('venue_admin').select('user_id').eq('venue_id', Number(id)),
-      supabase.from('equipment').select('id, name, category').order('id'),
+      supabase.from('equipment').select(EQUIPMENT_COLS).order('sort_order'),
       supabase.from('venue_equipment').select('equipment_id, quantity, notes').eq('venue_id', Number(id))
     ]);
   venueTypes = typesData ?? [];

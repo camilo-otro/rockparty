@@ -90,7 +90,29 @@ create table if not exists public.equipment (
   -- rather than a hardcoded client list, so the set is tunable from the SQL
   -- editor without a deploy.
   is_basic         boolean not null default false,
-  default_quantity integer
+  default_quantity integer,
+  -- Two-level catalogue (#106 follow-up). A PART belongs to a top-level item —
+  -- the drum kit's kick, snare, hi-hat, toms, crash, ride and pedal. Parts are
+  -- hidden in the forms until the parent is switched on, which is the whole
+  -- reason for the column: eight flat drum switches in a nine-item standard set
+  -- was the concept organizers had to learn with nothing on screen to teach it.
+  --
+  -- Deliberately NOT what drum-kit-cymbals-split.md decided (it put parent/child
+  -- out of scope); that call was made when the split added one row, and it stops
+  -- holding at eight. See migrations/20260923_drum_kit_parts.sql.
+  part_of          bigint references public.equipment (id) on delete cascade,
+  -- For a PART: pre-ticked once the parent is on. Distinct from is_basic, which
+  -- answers "offer this in the quick-start at all" and stays false for every
+  -- part — so a client that knows nothing about parts still shows exactly the
+  -- standard set it always did.
+  default_on       boolean not null default true,
+  -- Display order everywhere (the fetch sites all `order('sort_order')`).
+  -- Backfilled as id*10, which reproduces the old `order by id` exactly and
+  -- leaves gaps for parts to slot in under their parent.
+  sort_order       integer not null,
+  -- The UI renders exactly two levels; a third would vanish from every picker
+  -- rather than fail visibly.
+  constraint equipment_parts_are_flat check (part_of is null or part_of <> id)
 );
 
 -- equipment_suggestion — curated popular brand/model options per equipment type

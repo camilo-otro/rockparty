@@ -248,30 +248,47 @@ export type Database = {
           category: string | null
           code: string
           created_at: string
+          default_on: boolean
           default_quantity: number | null
           id: number
           is_basic: boolean
           name: string
+          part_of: number | null
+          sort_order: number
         }
         Insert: {
           category?: string | null
           code: string
           created_at?: string
+          default_on?: boolean
           default_quantity?: number | null
           id?: number
           is_basic?: boolean
           name: string
+          part_of?: number | null
+          sort_order: number
         }
         Update: {
           category?: string | null
           code?: string
           created_at?: string
+          default_on?: boolean
           default_quantity?: number | null
           id?: number
           is_basic?: boolean
           name?: string
+          part_of?: number | null
+          sort_order?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "equipment_part_of_fkey"
+            columns: ["part_of"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       equipment_suggestion: {
         Row: {

@@ -6,6 +6,7 @@
   import { user } from '$lib/stores/user';
   import { Minus, Plus, Check, ArrowRight } from 'lucide-svelte';
   import { reportError, toastSuccess } from '$lib/stores/toasts';
+  import { EQUIPMENT_COLS, groupEquipment, type EquipmentOption } from '$lib/equipment';
 
   // Logistics quick-start (#97). The list #95 built starts EMPTY, which is why
   // nobody fills it in: eight or nine taps before it reflects a normal rock gig.
@@ -23,6 +24,9 @@
     itemId: number;
     name: string;
     category: string | null;
+    // Set on a PART (#106 follow-up). A part is only offered while its parent is
+    // on, and only counted while its parent is on — see `chosen`.
+    parentId: number | null;
     on: boolean;
     quantity: number;
     fromVenue: boolean;
@@ -46,7 +50,7 @@
     const [partyRes, adminRes, eqRes, roleRes, existingRes] = await Promise.all([
       supabase.from('party').select('id, title, venue, created_by').eq('id', partyId).maybeSingle(),
       supabase.from('party_admin').select('user_id').eq('party_id', partyId),
-      supabase.from('equipment').select('id, name, category, is_basic, default_quantity').eq('is_basic', true).order('id'),
+      supabase.from('equipment').select(EQUIPMENT_COLS).order('sort_order'),
       supabase.from('party_role').select('id, name, is_basic').eq('is_basic', true).order('id'),
       // Idempotency: the step normally runs on an empty list, but a back-button
       // must not be able to duplicate. Same rule seedFromVenue uses.
@@ -69,39 +73,69 @@
     const takenEquipment = new Set((existingRes.data ?? []).map((r: any) => r.equipment_id).filter(Boolean));
     const takenRoles = new Set((existingRes.data ?? []).map((r: any) => r.role_id).filter(Boolean));
 
+    // The catalogue now arrives whole, because parts are not `is_basic` — the
+    // standard set is the basic TOP-LEVEL items plus whatever hangs off them.
+    const catalogue = (eqRes.data ?? []) as EquipmentOption[];
+    const offered = catalogue.filter(
+      (e) => !takenEquipment.has(e.id) && (e.is_basic || (e.part_of != null && catalogue.some((p) => p.id === e.part_of && p.is_basic)))
+    );
+
+    const equipmentRow = (e: EquipmentOption): Row => {
+      const v: any = venueBy.get(e.id);
+      return {
+        key: `e${e.id}`,
+        kind: 'equipment' as const,
+        itemId: e.id,
+        name: e.name,
+        category: e.category,
+        parentId: e.part_of,
+        // Top-level defaults ON: a rock gig needs a PA, mics, drums and amps,
+        // and defaulting off would make this screen a no-op for anyone who just
+        // taps Listo.
+        //
+        // A PART follows its own default — the kick, snare, hi-hat and toms a
+        // house kit actually has, not the cymbals and pedal drummers carry —
+        // EXCEPT when the venue has declared it. A venue that says it owns a
+        // ride has already answered the question, and starting that switch off
+        // would hide gear somebody committed to.
+        on: e.part_of == null ? true : (e.default_on || !!v),
+        quantity: v?.quantity ?? e.default_quantity ?? 1,
+        fromVenue: !!v,
+        venueNotes: v?.notes ?? null
+      };
+    };
+
     rows = [
-      ...(eqRes.data ?? [])
-        .filter((e: any) => !takenEquipment.has(e.id))
-        .map((e: any) => {
-          const v: any = venueBy.get(e.id);
-          return {
-            key: `e${e.id}`,
-            kind: 'equipment' as const,
-            itemId: e.id,
-            name: e.name,
-            category: e.category,
-            // Defaults ON: a rock gig needs a PA, mics, drums and amps, and
-            // defaulting off would make this screen a no-op for anyone who just
-            // taps Listo.
-            on: true,
-            quantity: v?.quantity ?? e.default_quantity ?? 1,
-            fromVenue: !!v,
-            venueNotes: v?.notes ?? null
-          };
-        }),
+      ...groupEquipment(offered).flatMap((g) =>
+        g.items.flatMap((entry) => [equipmentRow(entry.item), ...entry.parts.map(equipmentRow)])
+      ),
       ...(roleRes.data ?? [])
         .filter((r: any) => !takenRoles.has(r.id))
         // No quantity on a role — quantity_is_equipment_only forbids it, so no
         // stepper is rendered for these.
         .map((r: any) => ({
           key: `r${r.id}`, kind: 'role' as const, itemId: r.id, name: r.name,
-          category: null, on: true, quantity: 1, fromVenue: false, venueNotes: null
+          category: null, parentId: null, on: true, quantity: 1, fromVenue: false, venueNotes: null
         }))
     ];
     loading = false;
   });
 
-  $: chosen = rows.filter((r) => r.on);
+  // Parent state, by item id. Named here rather than read inside a helper:
+  // legacy mode tracks `$:` dependencies by NAME, so a function that reached
+  // into `rows` would leave everything downstream stale when a switch flips.
+  // Equipment only. `party_role` and `equipment` have SEPARATE id sequences, so
+  // keying this by itemId across both kinds lets role 6 answer for equipment 6.
+  $: parentOn = new Map(
+    rows.filter((r) => r.kind === 'equipment' && r.parentId == null).map((r) => [r.itemId, r.on])
+  );
+  // A part of something you are not asking for is not a requirement, so a part
+  // whose parent is off never counts and never saves — regardless of its own
+  // switch, which is preserved so turning the parent back on restores the answer.
+  $: chosen = rows.filter((r) => r.on && (r.parentId == null || parentOn.get(r.parentId)));
+  // Parts stay out of sight until the parent is on, so the standard set reads as
+  // the seven-or-so switches #97 asked for instead of fifteen.
+  $: visibleRows = rows.filter((r) => r.parentId == null || parentOn.get(r.parentId));
   $: fromVenueCount = chosen.filter((r) => r.fromVenue).length;
   // What the organizer will have to chase. Per the spec this is the DELIVERABLE,
   // not a shortfall — so it is stated plainly rather than softened.
@@ -162,8 +196,8 @@
       </div>
 
       <ul class="flex flex-col gap-[1px] rounded-lg overflow-clip p-0">
-        {#each rows as r (r.key)}
-          <li class="bg-base-900 px-3 py-3 flex items-center gap-3">
+        {#each visibleRows as r (r.key)}
+          <li class="bg-base-900 px-3 py-3 flex items-center gap-3 {r.parentId != null ? 'pl-9' : ''}">
             <button
               type="button"
               role="switch"

@@ -7,6 +7,7 @@
     import { reportError, toastError, toastSuccess } from '$lib/stores/toasts';
     import { refreshUserFlags } from '$lib/stores/userFlags';
     import VenueForm from '$lib/components/VenueForm.svelte';
+    import { EQUIPMENT_COLS } from '$lib/equipment';
 
     let submitting = false;
     let name = '';
@@ -36,7 +37,7 @@
         const { supabase } = await import('$lib/supabaseClient');
         const [{ data: typesData, error: typesError }, { data: equipData }] = await Promise.all([
             supabase.from('venue_type').select('id, name'),
-            supabase.from('equipment').select('id, name, category').order('id')
+            supabase.from('equipment').select(EQUIPMENT_COLS).order('sort_order')
         ]);
         if (!typesError && typesData) {
             venueTypes = typesData;
